@@ -5,6 +5,8 @@ import { openDb } from "./db.ts";
 import { handleMcpRequest } from "./mcp.ts";
 import { QuestionBank, QuestionError } from "./questions/service.ts";
 import { CitationError } from "./questions/citations.ts";
+import { ExamError, ExamRunner } from "./exams/attempts.ts";
+import { PaperError, PaperService } from "./exams/papers.ts";
 import { NoteIndexer } from "./vault/indexer.ts";
 import { VaultService } from "./vault/service.ts";
 import { resolveInside, VaultPathError } from "./vault/paths.ts";
@@ -20,10 +22,17 @@ export function createApp(deps: AppDeps = {}) {
   const indexer = new NoteIndexer(db, config.vaultPath);
   const vault = new VaultService(db, config.vaultPath, indexer);
   const questions = new QuestionBank(db, vault);
+  const papers = new PaperService(db, vault);
+  const runner = new ExamRunner(db, papers);
   const app = new Hono();
 
   app.onError((err, c) => {
-    if (err instanceof VaultPathError || err instanceof QuestionError) {
+    if (
+      err instanceof VaultPathError ||
+      err instanceof QuestionError ||
+      err instanceof PaperError ||
+      err instanceof ExamError
+    ) {
       return c.json({ error: err.message }, 400);
     }
     if (err instanceof CitationError) return c.json({ error: err.message }, 422);
@@ -111,14 +120,58 @@ export function createApp(deps: AppDeps = {}) {
     return c.json(questions.verify(c.req.param("id"), body.verified !== false));
   });
 
-  app.all("/mcp", (c) => handleMcpRequest(c.req.raw, config, vault, questions));
+  app.post("/api/papers", async (c) => {
+    const body = await c.req.json();
+    return c.json(
+      await papers.create({
+        course: body.course,
+        title: body.title,
+        blueprint: body.blueprint,
+        mode: body.mode,
+        durationSec: body.duration_sec,
+      }),
+      201,
+    );
+  });
+
+  app.get("/api/papers", (c) => c.json(papers.list(c.req.query("course"))));
+
+  app.get("/api/papers/:id", (c) => c.json(papers.get(c.req.param("id"))));
+
+  app.post("/api/attempts", async (c) => {
+    const body = await c.req.json();
+    return c.json(runner.start(body.paper_id), 201);
+  });
+
+  app.get("/api/attempts/:id", (c) => c.json(runner.get(c.req.param("id"))));
+
+  app.post("/api/attempts/:id/answers", async (c) => {
+    const body = await c.req.json();
+    return c.json(
+      runner.save(c.req.param("id"), {
+        questionId: body.question_id,
+        response: body.response,
+        timeSpentSec: body.time_spent_sec,
+        flagged: body.flagged,
+      }),
+    );
+  });
+
+  app.post("/api/attempts/:id/submit", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    return c.json(runner.submit(c.req.param("id"), { auto: body.auto === true }));
+  });
+
+  app.get("/api/attempts/:id/results", (c) => c.json(runner.results(c.req.param("id"))));
+
+  app.all("/mcp", (c) => handleMcpRequest(c.req.raw, config, vault, questions, papers, runner));
 
   app.get("/_design", async (c) => c.html(await Bun.file(paths.uiIndex).text()));
 
   app.use("/*", serveStatic({ root: paths.uiDist }));
   app.get("*", serveStatic({ path: paths.uiIndex }));
 
-  return { app, config, db, vault, indexer, questions };
+  return { app, config, db, vault, indexer, questions, papers, runner };
 }
 
 function zodMessage(err: ZodError): string {

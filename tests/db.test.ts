@@ -7,7 +7,7 @@ describe("db", () => {
     const row = db.query("SELECT value FROM meta WHERE key = ?").get("schema_version") as {
       value: string;
     };
-    expect(row.value).toBe("3");
+    expect(row.value).toBe("4");
     db.close();
   });
 });

@@ -5,6 +5,8 @@ import type { Config } from "./config.ts";
 import type { VaultService } from "./vault/service.ts";
 import type { QuestionBank } from "./questions/service.ts";
 import { questionInputSchema } from "./questions/validation.ts";
+import type { ExamRunner } from "./exams/attempts.ts";
+import type { PaperService } from "./exams/papers.ts";
 
 const INSTRUCTIONS = `This server is the Exam Harness for a medical student.
 The markdown vault is the source of truth; read INDEX.md before notes.
@@ -18,6 +20,8 @@ export function createMcpServer(
   config: Config,
   vault: VaultService,
   questions: QuestionBank,
+  papers: PaperService,
+  runner: ExamRunner,
 ): McpServer {
   const server = new McpServer(
     { name: "exam-harness", version: config.version },
@@ -217,7 +221,7 @@ export function createMcpServer(
       description: "List banked questions, optionally filtered by course, type, topic, text or verified state.",
       inputSchema: {
         course: z.string().optional(),
-        type: z.enum(["tf_multi", "mcq_single", "theory"]).optional(),
+        type: z.enum(["tf_multi", "mcq_single", "theory", "spotter"]).optional(),
         topic: z.string().optional(),
         q: z.string().optional(),
         verified: z.boolean().optional(),
@@ -317,6 +321,85 @@ export function createMcpServer(
     },
   );
 
+  server.registerTool(
+    "create_paper",
+    {
+      description:
+        "Build a paper from the verified question bank using a blueprint of sections. Fails if a section cannot be filled.",
+      inputSchema: {
+        course: z.string(),
+        title: z.string().optional(),
+        mode: z.enum(["strict", "sectioned", "practice"]).optional(),
+        duration_sec: z.number().positive().optional(),
+        blueprint: z.array(
+          z.object({
+            section: z.string(),
+            type: z.enum(["tf_multi", "mcq_single", "theory", "spotter"]),
+            count: z.number().int().positive(),
+            minutes: z.number().positive().optional(),
+            marks_each: z.number().positive().optional(),
+            topics: z.array(z.string()).optional(),
+            negative_marks: z.number().min(0).optional(),
+            scoring: z.enum(["per_statement", "all_or_nothing"]).optional(),
+            seconds_each: z.number().positive().optional(),
+          }),
+        ),
+      },
+    },
+    async (input) => {
+      try {
+        return json(await papers.create(input));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_papers",
+    {
+      description: "List exam papers, newest first, optionally for one course.",
+      inputSchema: { course: z.string().optional() },
+    },
+    async ({ course }) => {
+      try {
+        return json(papers.list(course));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_paper",
+    {
+      description: "Read a paper's blueprint and its question snapshots.",
+      inputSchema: { id: z.string() },
+    },
+    async ({ id }) => {
+      try {
+        return json(papers.get(id));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_attempt_results",
+    {
+      description: "Return deterministic scores, per-section totals and mistakes for a submitted attempt.",
+      inputSchema: { attempt_id: z.string() },
+    },
+    async ({ attempt_id }) => {
+      try {
+        return json(runner.results(attempt_id));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
   server.registerResource(
     "vault-note",
     new ResourceTemplate("vault://{+path}", {
@@ -352,8 +435,10 @@ export async function handleMcpRequest(
   config: Config,
   vault: VaultService,
   questions: QuestionBank,
+  papers: PaperService,
+  runner: ExamRunner,
 ): Promise<Response> {
-  const server = createMcpServer(config, vault, questions);
+  const server = createMcpServer(config, vault, questions, papers, runner);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

@@ -17,6 +17,7 @@ import { Questions } from "./screens/Questions.tsx";
 import { ProgressScreen } from "./screens/Placeholders.tsx";
 import { Settings } from "./screens/Settings.tsx";
 import { DesignGallery } from "./screens/DesignGallery.tsx";
+import { readActiveAttempt } from "./lib/activeAttempt.ts";
 
 type Tab = "study" | "exams" | "notes" | "progress";
 
@@ -58,6 +59,8 @@ function Shell() {
             setTab("notes");
           }
           void openNote(path);
+        } else if (readActiveAttempt()) {
+          setTab("exams");
         }
       })
       .catch((err: unknown) => setError(message(err)))

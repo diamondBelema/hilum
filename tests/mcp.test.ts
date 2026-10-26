@@ -25,12 +25,12 @@ afterEach(async () => {
 });
 
 async function connect() {
-  const { config, vault, indexer, questions } = createApp({
+  const { config, vault, indexer, questions, papers, runner } = createApp({
     config: { vaultPath: root, dbPath: ":memory:" },
   });
   await indexer.reindexAll();
 
-  const server = createMcpServer(config, vault, questions);
+  const server = createMcpServer(config, vault, questions, papers, runner);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
 
@@ -134,6 +134,10 @@ describe("mcp content tools", () => {
       "update_question",
       "verify_question",
       "import_past_paper",
+      "create_paper",
+      "list_papers",
+      "get_paper",
+      "get_attempt_results",
     ]) {
       expect(names).toContain(name);
     }
@@ -193,6 +197,21 @@ describe("mcp content tools", () => {
       arguments: { id: "ana-211-mcp-01" },
     });
     expect(text(verified)).toContain('"verified":true');
+
+    const paper = await client.callTool({
+      name: "create_paper",
+      arguments: {
+        course: "ana-211",
+        title: "MCP paper",
+        mode: "strict",
+        blueprint: [{ section: "A", type: "tf_multi", count: 1, minutes: 5 }],
+      },
+    });
+    expect(paper.isError).not.toBe(true);
+    expect(text(paper)).toContain("MCP paper");
+
+    const papers = await client.callTool({ name: "list_papers", arguments: {} });
+    expect(text(papers)).toContain("MCP paper");
 
     const imported = await client.callTool({
       name: "import_past_paper",

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { Db } from "../db.ts";
 import type { VaultService } from "../vault/service.ts";
 import { resolveInside } from "../vault/paths.ts";
@@ -222,6 +222,7 @@ export class QuestionBank {
     options: { createdBy: string; forceUnverified: boolean },
   ): Promise<Question> {
     const cites = validateCites(this.vault, parsed.cites, { requireQuote: true });
+    if (parsed.type === "spotter") this.validateSpotterImage(cites, parsed.image ?? "");
     const now = Date.now();
     const verified = options.forceUnverified ? false : parsed.verified;
     return {
@@ -235,7 +236,7 @@ export class QuestionBank {
       marks: parsed.marks,
       body: questionBody(parsed),
       cites,
-      sourcePaper: parsed.source_paper ?? null,
+      sourcePaper: parsed.source_paper ? this.resolveSource(course, parsed.source_paper) : null,
       verified,
       unverified: verified ? false : (parsed.unverified ?? true),
       createdBy: options.createdBy,
@@ -282,6 +283,31 @@ export class QuestionBank {
     }
     if (!existsSync(join(this.vault.root, "courses", course))) {
       throw new QuestionError(`course does not exist: ${course}`);
+    }
+  }
+
+  private validateSpotterImage(cites: { note: string }[], image: string): void {
+    const clean = image.trim();
+    if (/^(https?:|data:)/i.test(clean)) {
+      throw new QuestionError("spotter image must be a local vault asset");
+    }
+    if (clean.startsWith("/")) {
+      throw new QuestionError("spotter image must be a vault-relative path");
+    }
+    const relative = clean.startsWith("courses/")
+      ? clean
+      : join(dirname(cites[0]?.note ?? ""), clean).split("\\").join("/");
+    if (!/\.(png|jpe?g|webp|svg|gif)$/i.test(relative)) {
+      throw new QuestionError(`spotter image must be an image file: ${relative}`);
+    }
+    let absolute: string;
+    try {
+      absolute = resolveInside(this.vault.root, relative);
+    } catch {
+      throw new QuestionError(`spotter image escapes the vault: ${clean}`);
+    }
+    if (!existsSync(absolute)) {
+      throw new QuestionError(`spotter image not found: ${relative}`);
     }
   }
 

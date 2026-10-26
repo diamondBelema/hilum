@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const QUESTION_TYPES = ["tf_multi", "mcq_single", "theory"] as const;
+export const QUESTION_TYPES = ["tf_multi", "mcq_single", "theory", "spotter"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
 const citeSchema = z.object({
@@ -24,7 +24,10 @@ export const questionInputSchema = z
       .optional(),
     options: z.record(z.string().min(1)).optional(),
     answer: z.string().min(1).optional(),
+    accepted: z.array(z.string().min(1)).optional(),
+    image: z.string().min(1).optional(),
     explanation: z.string().optional(),
+    scoring: z.enum(["per_statement", "all_or_nothing"]).optional(),
     prompt: z.string().min(1).optional(),
     model_answer: z.string().optional(),
     rubric: z.string().optional(),
@@ -82,13 +85,36 @@ export const questionInputSchema = z
         });
       }
     }
+    if (value.type === "spotter") {
+      if (!value.prompt) {
+        ctx.addIssue({ code: "custom", message: "spotter needs a prompt", path: ["prompt"] });
+      }
+      if (!value.image) {
+        ctx.addIssue({ code: "custom", message: "spotter needs an image", path: ["image"] });
+      }
+      if (!value.answer) {
+        ctx.addIssue({ code: "custom", message: "spotter needs an answer", path: ["answer"] });
+      }
+    }
   });
 
 export type QuestionInput = z.infer<typeof questionInputSchema>;
 
 export type QuestionBody =
-  | { stem: string; statements: { text: string; answer: boolean }[]; explanation?: string }
+  | {
+      stem: string;
+      statements: { text: string; answer: boolean }[];
+      explanation?: string;
+      scoring?: "per_statement" | "all_or_nothing";
+    }
   | { stem: string; options: Record<string, string>; answer: string; explanation?: string }
+  | {
+      prompt: string;
+      image: string;
+      answer: string;
+      accepted?: string[];
+      explanation?: string;
+    }
   | { prompt: string; model_answer?: string; rubric?: string };
 
 export function questionBody(input: QuestionInput): QuestionBody {
@@ -97,6 +123,7 @@ export function questionBody(input: QuestionInput): QuestionBody {
       stem: input.stem ?? "",
       statements: input.statements ?? [],
       explanation: input.explanation,
+      scoring: input.scoring ?? "per_statement",
     };
   }
   if (input.type === "mcq_single") {
@@ -104,6 +131,15 @@ export function questionBody(input: QuestionInput): QuestionBody {
       stem: input.stem ?? "",
       options: input.options ?? {},
       answer: (input.answer ?? "").trim().toUpperCase(),
+      explanation: input.explanation,
+    };
+  }
+  if (input.type === "spotter") {
+    return {
+      prompt: input.prompt ?? "",
+      image: input.image ?? "",
+      answer: input.answer ?? "",
+      accepted: input.accepted,
       explanation: input.explanation,
     };
   }

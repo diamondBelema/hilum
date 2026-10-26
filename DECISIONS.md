@@ -18,3 +18,8 @@
 - **Import never auto-verifies.** `import_past_paper` forces `verified=false, unverified=true`, derives ids from course + paper + index, and rolls back the whole batch on any citation failure.
 - **Verification is explicit.** `update_question` edits content only; only `verify_question` (or the UI action) flips `verified`/`unverified`.
 - **Citation validation:** anchors may be explicit `{#id}` or heading slugs; quotes are compared whitespace-normalized inside that section. Banked items require at least one quoted cite.
+- **Papers snapshot the bank.** `paper_items` stores question ids at build time; a paper is a stable set even if the bank is edited later.
+- **Papers draw only verified questions.** Selection is restricted to `verified = 1 AND unverified = 0`; a shortfall fails the build instead of padding silently.
+- **Scoring is deterministic and server-side.** TF uses `per_statement` by default (or `all_or_nothing`); MCQ can carry negative marks per section; spotter compares normalized text against `answer` plus `accepted`; theory always queues for grading.
+- **Active attempt survives reload.** `eh-attempt` stores `{id, course}`; the app routes back to the runner and the timer is derived from the attempt's `started_at`, never from a client-side counter.
+- **Spotter images are vault assets.** Paths resolve relative to the first cited note (or from `courses/`); remote/data URLs are rejected and the file must exist inside the vault.

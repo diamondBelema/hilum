@@ -25,14 +25,17 @@ export type NoteDetail = {
   body: string;
 };
 
-export type QuestionType = "tf_multi" | "mcq_single" | "theory";
+export type QuestionType = "tf_multi" | "mcq_single" | "theory" | "spotter";
 
 export type QuestionBody = {
   stem?: string;
   statements?: { text: string; answer: boolean }[];
   options?: Record<string, string>;
   answer?: string;
+  accepted?: string[];
+  image?: string;
   explanation?: string;
+  scoring?: "per_statement" | "all_or_nothing";
   prompt?: string;
   model_answer?: string;
   rubric?: string;
@@ -59,6 +62,77 @@ export type Question = {
   updatedAt: number;
 };
 
+export type BlueprintSection = {
+  section: string;
+  type: QuestionType;
+  count: number;
+  minutes?: number;
+  marks_each?: number;
+  topics?: string[];
+  negative_marks?: number;
+  scoring?: "per_statement" | "all_or_nothing";
+  seconds_each?: number;
+};
+
+export type Paper = {
+  id: string;
+  course: string;
+  title: string;
+  blueprint: BlueprintSection[];
+  mode: "strict" | "sectioned" | "practice";
+  durationSec: number;
+  createdAt: number;
+  items: { question: Question; section: string; position: number }[];
+};
+
+export type AttemptSession = {
+  attempt: {
+    id: string;
+    paperId: string;
+    startedAt: number;
+    submittedAt: number | null;
+    status: "in_progress" | "submitted";
+    durationUsedSec: number | null;
+  };
+  paper: Paper;
+  answers: {
+    questionId: string;
+    response: unknown;
+    timeSpentSec: number;
+    flagged: boolean;
+    autoScore: number | null;
+    status: string;
+  }[];
+  remainingSec: number;
+  expired: boolean;
+};
+
+export type ResultItem = {
+  questionId: string;
+  section: string;
+  position: number;
+  type: QuestionType;
+  topics: string[];
+  marks: number;
+  response: unknown;
+  autoScore: number | null;
+  status: string;
+  correct: boolean | null;
+  flagged: boolean;
+  timeSpentSec: number;
+};
+
+export type AttemptResults = {
+  attempt: AttemptSession["attempt"];
+  paper: { id: string; course: string; title: string; mode: string };
+  items: ResultItem[];
+  score: { awarded: number; max: number; pending: number };
+  bySection: { section: string; awarded: number; max: number; pending: number }[];
+  flaggedAccuracy: { flagged: number; correct: number } | null;
+  mistakes: { questionId: string; section: string; topics: string[]; tags: string[] }[];
+  durationUsedSec: number;
+};
+
 export type QuestionInput = {
   id?: string;
   type: QuestionType;
@@ -71,7 +145,10 @@ export type QuestionInput = {
   statements?: { text: string; answer: boolean }[];
   options?: Record<string, string>;
   answer?: string;
+  accepted?: string[];
+  image?: string;
   explanation?: string;
+  scoring?: "per_statement" | "all_or_nothing";
   prompt?: string;
   model_answer?: string;
   rubric?: string;
@@ -136,6 +213,31 @@ export const api = {
     sendJson<Question>(`/api/questions/${encodeURIComponent(id)}`, "PATCH", input),
   verifyQuestion: (id: string, verified = true) =>
     sendJson<Question>(`/api/questions/${encodeURIComponent(id)}/verify`, "POST", { verified }),
+  papers: (course?: string) =>
+    getJson<Paper[]>(`/api/papers${course ? `?course=${encodeURIComponent(course)}` : ""}`),
+  paper: (id: string) => getJson<Paper>(`/api/papers/${encodeURIComponent(id)}`),
+  createPaper: (input: {
+    course: string;
+    title?: string;
+    blueprint: BlueprintSection[];
+    mode: "strict" | "sectioned" | "practice";
+  }) => sendJson<Paper>("/api/papers", "POST", input),
+  startAttempt: (paperId: string) =>
+    sendJson<AttemptSession>("/api/attempts", "POST", { paper_id: paperId }),
+  attempt: (id: string) => getJson<AttemptSession>(`/api/attempts/${encodeURIComponent(id)}`),
+  saveAnswer: (
+    attemptId: string,
+    input: {
+      question_id: string;
+      response: unknown;
+      time_spent_sec?: number;
+      flagged?: boolean;
+    },
+  ) => sendJson(`/api/attempts/${encodeURIComponent(attemptId)}/answers`, "POST", input),
+  submitAttempt: (attemptId: string, auto = false) =>
+    sendJson<AttemptResults>(`/api/attempts/${encodeURIComponent(attemptId)}/submit`, "POST", { auto }),
+  results: (attemptId: string) =>
+    getJson<AttemptResults>(`/api/attempts/${encodeURIComponent(attemptId)}/results`),
 };
 
 export function assetUrl(notePath: string, src: string): string {
@@ -146,4 +248,12 @@ export function assetUrl(notePath: string, src: string): string {
     else if (part !== ".") base.push(part);
   }
   return `/api/asset?path=${encodeURIComponent(base.join("/"))}`;
+}
+
+export function spotterImageUrl(question: Question): string {
+  const src = question.body.image ?? "";
+  if (!src) return "";
+  if (/^(https?:|data:|\/)/.test(src)) return src;
+  if (src.startsWith("courses/")) return `/api/asset?path=${encodeURIComponent(src)}`;
+  return assetUrl(question.cites[0]?.note ?? `courses/${question.course}/course.md`, src);
 }

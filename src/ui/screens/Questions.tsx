@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   api,
+  assetUrl,
   type Course,
   type NoteDetail,
   type Question,
@@ -22,24 +23,29 @@ import { Banner, Chip, EmptyState, ProgressBar, Skeleton } from "../components/u
 import { Sheet } from "../components/Sheet.tsx";
 import { Markdown } from "../Markdown.tsx";
 import { plural } from "../lib/format.ts";
+import { readActiveAttempt } from "../lib/activeAttempt.ts";
+import { Papers } from "./Papers.tsx";
 
 const TYPE_LABEL: Record<QuestionType, string> = {
   tf_multi: "True / false",
   mcq_single: "MCQ",
   theory: "Theory",
+  spotter: "Spotter",
 };
 
 const field =
   "min-h-11 w-full rounded-control border border-border-strong bg-bg px-3 py-2 text-sm text-text placeholder:text-text-muted";
 const label = "mb-1.5 block text-xs font-semibold text-text";
 
-type Mode = "bank" | "review";
+type Mode = "bank" | "review" | "papers";
 
 export function Questions({ courses }: { courses: Course[] }) {
-  const [courseCode, setCourseCode] = useState(courses[0]?.code ?? "");
+  const [courseCode, setCourseCode] = useState(
+    () => readActiveAttempt()?.course ?? courses[0]?.code ?? "",
+  );
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>("bank");
+  const [mode, setMode] = useState<Mode>(() => (readActiveAttempt() ? "papers" : "bank"));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -47,7 +53,13 @@ export function Questions({ courses }: { courses: Course[] }) {
   const [type, setType] = useState<"all" | QuestionType>("all");
 
   useEffect(() => {
-    if (!courseCode && courses[0]) setCourseCode(courses[0].code);
+    if (courseCode) return;
+    const active = readActiveAttempt();
+    const next =
+      active && courses.some((course) => course.code === active.course)
+        ? active.course
+        : courses[0]?.code;
+    if (next) setCourseCode(next);
   }, [courses, courseCode]);
 
   useEffect(() => {
@@ -130,6 +142,12 @@ export function Questions({ courses }: { courses: Course[] }) {
     );
   }
 
+  const activeCourse = courses.find((course) => course.code === courseCode) ?? courses[0];
+
+  if (mode === "papers") {
+    return <Papers course={activeCourse} onBack={() => setMode("bank")} />;
+  }
+
   return (
     <div className={mode === "review" ? "max-w-6xl" : "max-w-4xl"}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -141,25 +159,31 @@ export function Questions({ courses }: { courses: Course[] }) {
               : "The question bank and past-paper verification."}
           </p>
         </div>
-        <label className="block min-w-48">
-          <span className="sr-only">Course</span>
-          <select
-            value={courseCode}
-            onChange={(event) => {
-              setCourseCode(event.target.value);
-              setMode("bank");
-              setQuery("");
-              setSelectedId(null);
-            }}
-            className={field}
-          >
-            {courses.map((course) => (
-              <option key={course.code} value={course.code}>
-                {course.title} ({course.code})
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-wrap items-stretch gap-2">
+          <label className="block min-w-48 flex-1">
+            <span className="sr-only">Course</span>
+            <select
+              value={courseCode}
+              onChange={(event) => {
+                setCourseCode(event.target.value);
+                setMode("bank");
+                setQuery("");
+                setSelectedId(null);
+              }}
+              className={field}
+            >
+              {courses.map((course) => (
+                <option key={course.code} value={course.code}>
+                  {course.title} ({course.code})
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button variant="secondary" onClick={() => setMode("papers")}>
+            <FileText aria-hidden="true" className="size-4" />
+            Exam papers
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -308,6 +332,7 @@ function BankView({
             <option value="tf_multi">True / false</option>
             <option value="mcq_single">MCQ</option>
             <option value="theory">Theory</option>
+            <option value="spotter">Spotter</option>
           </select>
         </label>
         <div>
@@ -664,6 +689,7 @@ function QuestionEditor({
           answer: statement.answer,
         })),
         explanation: draft.explanation.trim() || undefined,
+        scoring: question.body.scoring,
       };
     }
     if (question.type === "mcq_single") {
@@ -672,6 +698,16 @@ function QuestionEditor({
         stem: draft.stem.trim(),
         options: Object.fromEntries(draft.options.map((option) => [option.key, option.text.trim()])),
         answer: draft.answer,
+        explanation: draft.explanation.trim() || undefined,
+      };
+    }
+    if (question.type === "spotter") {
+      return {
+        ...common,
+        prompt: draft.prompt.trim(),
+        image: draft.image.trim(),
+        answer: draft.answer.trim(),
+        accepted: splitList(draft.accepted),
         explanation: draft.explanation.trim() || undefined,
       };
     }
@@ -704,6 +740,11 @@ function QuestionEditor({
     if (question.type === "theory") {
       if (!draft.prompt.trim()) return "Add the prompt.";
       if (!draft.questionKind.trim()) return "Theory questions need a question kind.";
+    }
+    if (question.type === "spotter") {
+      if (!draft.prompt.trim()) return "Add the spotter prompt.";
+      if (!draft.image.trim()) return "Add the image path.";
+      if (!draft.answer.trim()) return "Add the expected answer.";
     }
     return null;
   }
@@ -880,6 +921,50 @@ function QuestionEditor({
         </>
       )}
 
+      {question.type === "spotter" && (
+        <>
+          <TextField
+            label="Prompt"
+            value={draft.prompt}
+            onChange={(value) => patchDraft({ prompt: value })}
+            multiline
+            hint="e.g. Identify the structure marked with an arrow."
+          />
+          <TextField
+            label="Image"
+            value={draft.image}
+            onChange={(value) => patchDraft({ image: value })}
+            hint="Relative to the cited note, or a vault path starting with courses/"
+          />
+          {draft.image.trim() && (
+            <img
+              src={spotterPreview(question, draft.image.trim())}
+              alt="Spotter image preview"
+              className="max-h-80 w-full rounded-control border border-border-subtle object-contain"
+            />
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              label="Expected answer"
+              value={draft.answer}
+              onChange={(value) => patchDraft({ answer: value })}
+            />
+            <TextField
+              label="Also accept"
+              value={draft.accepted}
+              onChange={(value) => patchDraft({ accepted: value })}
+              hint="Comma separated"
+            />
+          </div>
+          <TextField
+            label="Explanation (optional)"
+            value={draft.explanation}
+            onChange={(value) => patchDraft({ explanation: value })}
+            multiline
+          />
+        </>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-[1fr_7rem]">
         <TextField
           label="Topics"
@@ -1040,6 +1125,8 @@ type Draft = {
   statements: { text: string; answer: boolean }[];
   options: { key: string; text: string }[];
   answer: string;
+  accepted: string;
+  image: string;
 };
 
 function toDraft(question: Question): Draft {
@@ -1056,7 +1143,16 @@ function toDraft(question: Question): Draft {
     statements: body.statements ?? [],
     options: Object.entries(body.options ?? {}).map(([key, text]) => ({ key, text })),
     answer: body.answer ?? "",
+    accepted: (body.accepted ?? []).join(", "),
+    image: body.image ?? "",
   };
+}
+
+function spotterPreview(question: Question, image: string): string {
+  if (!image) return "";
+  if (/^(https?:|data:|\/)/.test(image)) return image;
+  if (image.startsWith("courses/")) return `/api/asset?path=${encodeURIComponent(image)}`;
+  return assetUrl(question.cites[0]?.note ?? `courses/${question.course}/course.md`, image);
 }
 
 function splitList(value: string): string[] {

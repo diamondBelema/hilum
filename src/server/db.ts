@@ -69,10 +69,53 @@ function migrate(db: Db): void {
 
     CREATE INDEX IF NOT EXISTS questions_course ON questions(course);
     CREATE INDEX IF NOT EXISTS questions_verified ON questions(course, verified);
+
+    CREATE TABLE IF NOT EXISTS papers (
+      id TEXT PRIMARY KEY,
+      course TEXT NOT NULL,
+      title TEXT NOT NULL,
+      blueprint_json TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      duration_sec INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS paper_items (
+      paper_id TEXT NOT NULL,
+      question_id TEXT NOT NULL,
+      section TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      PRIMARY KEY (paper_id, question_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS paper_items_paper ON paper_items(paper_id, position);
+
+    CREATE TABLE IF NOT EXISTS attempts (
+      id TEXT PRIMARY KEY,
+      paper_id TEXT NOT NULL,
+      started_at INTEGER NOT NULL,
+      submitted_at INTEGER,
+      status TEXT NOT NULL,
+      duration_used_sec INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS attempts_paper ON attempts(paper_id);
+
+    CREATE TABLE IF NOT EXISTS answers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      attempt_id TEXT NOT NULL,
+      question_id TEXT NOT NULL,
+      response_json TEXT,
+      time_spent_sec INTEGER NOT NULL DEFAULT 0,
+      flagged INTEGER NOT NULL DEFAULT 0,
+      auto_score REAL,
+      status TEXT NOT NULL DEFAULT 'unanswered',
+      UNIQUE (attempt_id, question_id)
+    );
   `);
 
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
-    "3",
+    "4",
   );
 }

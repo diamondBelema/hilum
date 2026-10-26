@@ -56,3 +56,15 @@ Append-only log. Newest entry at the bottom.
 - MCP: add/list/get/update/verify questions plus transactional `import_past_paper` (forces unverified, stable ids, idempotent).
 - HTTP: `/api/questions` filters, detail, PATCH, verify; UI Exams tab has the bank and a source-beside-question verification workspace with progress and mobile source sheet.
 - Next: M4 exam engine (papers, attempts, runner, autosave, deterministic scoring, spotter).
+
+## 2026-10-26 — M4 exam engine
+
+- Status: done (`bun run verify`: typecheck, 53 tests across 8 files, smoke ui/api/mcp).
+- Schema v4 adds `papers`, `paper_items`, `attempts` and `answers`; a paper snapshots question ids so later bank edits do not rewrite an old paper.
+- `PaperService`: blueprint validation (type, count, minutes, marks, negative marks, scoring, spotter seconds), verified-only selection, deterministic duration from section minutes.
+- `ExamRunner`: start/get/save/submit/results; autosave per answer; timer derived from `started_at`; auto-submit at zero; deterministic grading for `tf_multi` (`per_statement`/`all_or_nothing`), `mcq_single` (negative marks), `spotter` (normalized answer/accepted list); theory stays `pending_grading`.
+- Builder and runner UI in the Exams tab: paper list, blueprint builder, full-screen runner (countdown, autosave indicator, flags, question grid, pace, mobile sheet, keyboard shortcuts), sectioned locks, practice-mode model answer/rubric reveal, results by section with pending theory called out.
+- Reload/crash recovery: the active attempt id lives in `eh-attempt`; the app returns to Exams and resumes the runner with saved answers and the running clock.
+- Spotter stations: image preview, one identify field, per-station countdown with auto-advance, normalized matching against `answer`/`accepted`; image paths resolve relative to the cited note (or from `courses/`), and must exist inside the vault.
+- MCP: `create_paper`, `list_papers`, `get_paper`, `get_attempt_results`; HTTP mirrors papers and attempt start/save/submit/results.
+- Next: M5 grading queue, `get_pending_grading`/`submit_grade`, detailed debrief with per-item answers and mistake taxonomy.

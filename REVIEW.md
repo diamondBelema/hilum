@@ -45,3 +45,29 @@
 - Wikilink citation validation inside `write_note` bodies is not yet enforced (question writes are).
 - Paper/attempt tables and exam-only inclusion rules are M4. `spotter` validation waits for M4.
 - Demo bank uses fabricated past-paper fixtures outside the repo.
+
+## 2026-10-26 — M4 exam engine
+
+**Verdict: pass.** `bun run verify` green (typecheck, 53 tests across 8 files, smoke ui/api/mcp).
+
+### Scope
+- M4: schema v4 papers/attempts/answers, paper builder, strict/sectioned/practice runner, autosave, auto-submit, deterministic grading, spotter stations, MCP + HTTP exam API, browser UI.
+
+### Checked against SPEC / DESIGN
+- [x] Paper builder takes a blueprint (sections, type, count, minutes, marks, topics, negative marks, scoring) and fails on a shortfall rather than drawing unverified items.
+- [x] Strict: countdown, autosave on every answer, auto-submit at zero, flag, pace, grid, submit dialog with unanswered/flagged counts, no notes.
+- [x] Sectioned: each section has its own remaining time; inputs and grid entries lock when a section's time is up; other sections stay reachable.
+- [x] Practice: soft timer, spellcheck on, model answer/explanation/rubric revealed once answered.
+- [x] Reload mid-exam restores answers and the running timer; auto-submit also fires after a reload past the deadline.
+- [x] Objective grading: TF per-statement/all-or-nothing, MCQ negative marks, spotter normalized exact/accepted answers; theory → `pending_grading`.
+- [x] Spotter stations: image, one identify field, 60–90 s-style per-station timer with auto-advance, rotating through N stations.
+- [x] Keyboard: N/→, P/←, G, L, A–E; Enter advances from a spotter answer; shortcut sheet.
+- [x] Results: score first, section rows, pending theory called out, flagged-vs-unflagged accuracy, mistake tags.
+- [x] MCP tools `create_paper`, `list_papers`, `get_paper`, `get_attempt_results`; HTTP mirrors start/save/submit/results.
+- [x] 360/1280 px and light/dark checked for builder, runner, spotter, results and resume.
+
+### Gaps (deferred)
+- Full debrief (student answer vs correct answer, explanation, citations per item; time-per-question sort) is M5.
+- Spotter 3D/annotated-pin variants are reserved; v1 uses a static image plus text identify.
+- Autosave failure uses the "Not saved … Retry" banner code path but was not exercised with the server stopped.
+- Theory rubric checklist is shown as text in practice mode, not per-heading checkboxes.
