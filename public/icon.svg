@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hilum">
+  <rect width="512" height="512" rx="112" fill="#4338A8"/>
+  <g fill="none" stroke-width="40" stroke-linecap="round">
+    <path d="M294.8 111.1 A150 150 0 0 1 400.9 294.8" stroke="#FFFFFF"/>
+    <path d="M362.1 362.1 A150 150 0 0 1 149.9 362.1" stroke="#FFFFFF"/>
+    <path d="M111.1 294.8 A150 150 0 0 1 217.2 111.1" stroke="#FFFFFF" stroke-opacity="0.35"/>
+    <path d="M256 70 L256 256" stroke="#F08CB0" stroke-width="24"/>
+  </g>
+  <circle cx="256" cy="256" r="28" fill="#F08CB0"/>
+</svg>

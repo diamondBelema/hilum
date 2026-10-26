@@ -1,52 +1,121 @@
 @import "tailwindcss";
+@import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
+@import "@fontsource-variable/atkinson-hyperlegible-mono/wght.css";
+@import "./tokens.css";
 
-@theme {
-  --color-bg: oklch(0.12 0 0);
-  --color-surface: oklch(0.17 0 0);
-  --color-surface-2: oklch(0.21 0 0);
-  --color-border: oklch(0.29 0 0);
-  --color-border-strong: oklch(0.38 0 0);
-  --color-ink: oklch(0.96 0 0);
-  --color-muted: oklch(0.73 0 0);
-  --color-faint: oklch(0.58 0 0);
-  --color-primary: oklch(0.75 0.08 230);
-  --color-primary-hover: oklch(0.81 0.08 230);
-  --color-on-primary: oklch(0.15 0.02 230);
-  --color-success: oklch(0.78 0.14 155);
-  --color-warning: oklch(0.82 0.13 85);
-  --color-danger: oklch(0.72 0.17 25);
-  --color-info: oklch(0.75 0.09 240);
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-correct: var(--correct);
+  --color-correct-soft: var(--correct-soft);
+  --color-incorrect: var(--incorrect);
+  --color-incorrect-soft: var(--incorrect-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-focus: var(--focus);
 
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+    "Atkinson Hyperlegible Next Variable", "Atkinson Hyperlegible Next", system-ui,
+    -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono:
-    ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas,
-    monospace;
+    "Atkinson Hyperlegible Mono Variable", "Atkinson Hyperlegible Mono", "JetBrains Mono",
+    ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --radius-panel: 0.5rem;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.4;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.45;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-read: 1.0625rem;
+  --text-read--line-height: 1.65;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.3;
+  --text-2xl: 1.875rem;
+  --text-2xl--line-height: 1.25;
+
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --radius-dialog: 16px;
+  --radius-chip: 999px;
+
+  --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.18);
 }
 
 @layer base {
   html {
-    color-scheme: dark;
+    font-family: var(--font-sans);
+    font-size: 100%;
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 4rem;
+    scroll-padding-bottom: 6rem;
   }
 
   body {
-    background-color: var(--color-bg);
-    color: var(--color-ink);
+    min-height: 100dvh;
+    background-color: var(--bg);
+    color: var(--text);
+    font-size: var(--text-base);
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-primary);
+    outline: 3px solid var(--focus);
     outline-offset: 2px;
   }
 
   ::selection {
-    background-color: oklch(0.75 0.08 230 / 0.3);
+    background-color: var(--primary-soft);
+    color: var(--text);
   }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+@utility tap {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+@utility reading {
+  max-width: 68ch;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -56,5 +125,6 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

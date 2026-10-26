@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 export type Config = {
@@ -21,9 +20,7 @@ function envFlag(name: string, fallback = false): boolean {
 
 export function loadConfig(overrides: Partial<Config> = {}): Config {
   const vaultPath =
-    overrides.vaultPath ??
-    process.env.HARNESS_VAULT ??
-    join(homedir(), "Documents/learn/subjects");
+    overrides.vaultPath ?? process.env.HARNESS_VAULT ?? join(ROOT, "vault");
 
   return {
     version: "0.1.0",

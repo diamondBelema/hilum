@@ -1,5 +1,5 @@
 {
-  "name": "exam-harness",
+  "name": "hilum",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,10 +13,16 @@
     "verify": "bun run typecheck && bun test && bun run smoke"
   },
   "dependencies": {
+    "@fontsource-variable/atkinson-hyperlegible-mono": "^5.3.0",
+    "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
     "@modelcontextprotocol/sdk": "^1.17.0",
     "hono": "^4.6.0",
+    "lucide-react": "^1.61.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "yaml": "^2.9.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {

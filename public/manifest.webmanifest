@@ -1,0 +1,17 @@
+{
+  "name": "Hilum",
+  "short_name": "Hilum",
+  "description": "Local-first study harness: notes, practice and timed exams.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F6F5FB",
+  "theme_color": "#4338A8",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

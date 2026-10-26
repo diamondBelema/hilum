@@ -17,6 +17,6 @@ describe("http api", () => {
     const res = await app.request("/api/meta");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { meta: { key: string; value: string }[] };
-    expect(body.meta).toEqual([{ key: "schema_version", value: "1" }]);
+    expect(body.meta).toEqual([{ key: "schema_version", value: "2" }]);
   });
 });

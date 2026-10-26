@@ -31,3 +31,20 @@ Append-only log. Newest entry at the bottom.
 - Clarified: the harness replaces ken; ken is reference only.
 - Rewrote `docs/ken-mapping.md`: SPEC wins on layout, concepts and mastery; no ken MCP proxy; no ken state access.
 - Vault now follows `courses/<code>/`; DB stays outside the vault.
+
+## 2026-10-26 — M2 vault and notes reader
+
+- Status: done (`bun run verify`: 35 tests, smoke ui/api/mcp).
+- Vault: `VaultService` + frontmatter parser + indexer with 2 s watcher; DB `meta/notes/notes_fts/idempotency`; writes confined to the vault.
+- MCP content tools: list_courses, get_index, read_note, search_notes, write_note (modes + idempotency), list_assets, update_course; every note also exposed as a `vault://<path>` resource.
+- HTTP API mirrors read/search/course endpoints; notes reader wired to it.
+- Next: M3 question bank (schema, validators, import_past_paper, verification UI).
+
+## 2026-10-26 — U0 design foundation (pulled into Lane C early)
+
+- Status: done; tagged with M2.
+- Tokens moved to `src/ui/tokens.css` with `light-dark()` + System/Light/Dark; H&E palette (primary `#4338A8`, accent `#F08CB0`), Atkinson Hyperlegible Next/Mono bundled locally.
+- Shared UI kit (Button, Chip, Banner, EmptyState, ProgressBar, Skeleton, Sheet, MasteryRing), `/_design` gallery, app shell with sidebar/rail/bottom nav.
+- Reader fixes: Aa size/leading actually apply (removed fixed `text-read`), single title, mobile toolbar, tables fit at 360 px.
+- Theme follows the OS under System; explicit Light/Dark persisted (`eh-theme`). Demo notes are fabricated fixtures outside the repo.
+- Next: keep designing against M3 verification screen once its schema freezes.
