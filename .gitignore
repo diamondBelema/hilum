@@ -1,6 +1,16 @@
+# JavaScript / Bun
+node_modules/
+dist/
+*.log
+.env
+
+# Harness runtime state (never commit the database)
+state/
+
+# Python converter (Lane A)
 .venv/
 __pycache__/
 *.pyc
-uv.lock
-state/
+
+# Converter intake scratch
 inbox/_unsorted/
