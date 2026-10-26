@@ -25,3 +25,9 @@ Append-only log. Newest entry at the bottom.
 - Wrote `docs/ken-mapping.md`: every SPEC entity marked reuse/extend/new, resolved paths, 12 conflict decisions.
 - Main findings: ken is Bayesian (not SM-2), layout must follow ken subject dirs, concepts stay in `concept_set` files, root-level dirs break ken discovery, ken stays the only writer of progress JSON.
 - Awaiting human approval at the M0.5 checkpoint.
+
+## 2026-10-26 — M0.5 revision
+
+- Clarified: the harness replaces ken; ken is reference only.
+- Rewrote `docs/ken-mapping.md`: SPEC wins on layout, concepts and mastery; no ken MCP proxy; no ken state access.
+- Vault now follows `courses/<code>/`; DB stays outside the vault.
