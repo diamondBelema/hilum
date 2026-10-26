@@ -47,10 +47,32 @@ function migrate(db: Db): void {
       result TEXT NOT NULL,
       created_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS questions (
+      id TEXT PRIMARY KEY,
+      course TEXT NOT NULL,
+      type TEXT NOT NULL,
+      question_kind TEXT,
+      topic_tags TEXT NOT NULL DEFAULT '[]',
+      concept_ids TEXT NOT NULL DEFAULT '[]',
+      difficulty TEXT,
+      marks REAL NOT NULL,
+      body_json TEXT NOT NULL,
+      cites_json TEXT NOT NULL DEFAULT '[]',
+      source_paper TEXT,
+      verified INTEGER NOT NULL DEFAULT 0,
+      unverified INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT NOT NULL DEFAULT 'agent',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS questions_course ON questions(course);
+    CREATE INDEX IF NOT EXISTS questions_verified ON questions(course, verified);
   `);
 
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
-    "2",
+    "3",
   );
 }

@@ -52,6 +52,13 @@ function realpathOrNull(path: string): string | null {
   }
 }
 
+export function slug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function courseFromPath(rel: string): string | null {
   const parts = rel.split("/");
   if (parts[0] === "courses" && parts.length > 2) return parts[1] ?? null;

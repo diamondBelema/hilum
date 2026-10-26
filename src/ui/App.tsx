@@ -13,7 +13,8 @@ import { Banner } from "./components/ui.tsx";
 import { Study } from "./screens/Study.tsx";
 import { Notes } from "./screens/Notes.tsx";
 import { Reader } from "./screens/Reader.tsx";
-import { ExamsScreen, ProgressScreen } from "./screens/Placeholders.tsx";
+import { Questions } from "./screens/Questions.tsx";
+import { ProgressScreen } from "./screens/Placeholders.tsx";
 import { Settings } from "./screens/Settings.tsx";
 import { DesignGallery } from "./screens/DesignGallery.tsx";
 
@@ -289,7 +290,7 @@ function Shell() {
             loading={loading}
           />
         ) : tab === "exams" ? (
-          <ExamsScreen />
+          <Questions courses={courses} />
         ) : (
           <ProgressScreen />
         )}

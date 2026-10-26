@@ -25,6 +25,73 @@ export type NoteDetail = {
   body: string;
 };
 
+export type QuestionType = "tf_multi" | "mcq_single" | "theory";
+
+export type QuestionBody = {
+  stem?: string;
+  statements?: { text: string; answer: boolean }[];
+  options?: Record<string, string>;
+  answer?: string;
+  explanation?: string;
+  prompt?: string;
+  model_answer?: string;
+  rubric?: string;
+};
+
+export type QuestionCite = { note: string; anchor?: string; quote?: string };
+
+export type Question = {
+  id: string;
+  course: string;
+  type: QuestionType;
+  questionKind: string | null;
+  topics: string[];
+  conceptIds: string[];
+  difficulty: string | null;
+  marks: number;
+  body: QuestionBody;
+  cites: QuestionCite[];
+  sourcePaper: string | null;
+  verified: boolean;
+  unverified: boolean;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type QuestionInput = {
+  id?: string;
+  type: QuestionType;
+  question_kind?: string;
+  topics?: string[];
+  concept_ids?: string[];
+  difficulty?: "easy" | "medium" | "hard";
+  marks: number;
+  stem?: string;
+  statements?: { text: string; answer: boolean }[];
+  options?: Record<string, string>;
+  answer?: string;
+  explanation?: string;
+  prompt?: string;
+  model_answer?: string;
+  rubric?: string;
+  cites: QuestionCite[];
+  source_paper?: string;
+};
+
+async function sendJson<T>(url: string, method: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? `Request failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
@@ -50,6 +117,25 @@ export const api = {
     getJson<NoteMeta[]>(
       `/api/search?q=${encodeURIComponent(query)}${course ? `&course=${encodeURIComponent(course)}` : ""}`,
     ),
+  questions: (params: {
+    course?: string;
+    type?: string;
+    verified?: boolean;
+    q?: string;
+  } = {}) => {
+    const search = new URLSearchParams();
+    if (params.course) search.set("course", params.course);
+    if (params.type) search.set("type", params.type);
+    if (params.verified !== undefined) search.set("verified", String(params.verified));
+    if (params.q) search.set("q", params.q);
+    const suffix = search.size > 0 ? `?${search.toString()}` : "";
+    return getJson<Question[]>(`/api/questions${suffix}`);
+  },
+  question: (id: string) => getJson<Question>(`/api/questions/${encodeURIComponent(id)}`),
+  updateQuestion: (id: string, input: QuestionInput) =>
+    sendJson<Question>(`/api/questions/${encodeURIComponent(id)}`, "PATCH", input),
+  verifyQuestion: (id: string, verified = true) =>
+    sendJson<Question>(`/api/questions/${encodeURIComponent(id)}/verify`, "POST", { verified }),
 };
 
 export function assetUrl(notePath: string, src: string): string {

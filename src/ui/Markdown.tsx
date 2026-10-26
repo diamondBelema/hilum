@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { assetUrl } from "./api.ts";
+import { slug } from "./lib/markdown.ts";
 
 type Props = {
   body: string;
@@ -19,9 +20,12 @@ const text = (node: ReactNode): string => {
 const anchorOf = (children: ReactNode): { label: ReactNode; id?: string } => {
   const flat = text(children);
   const match = /\s*\{#([\w-]+)\}\s*$/.exec(flat);
-  if (!match) return { label: children };
-  const label = flat.replace(/\s*\{#[\w-]+\}\s*$/, "").trim();
-  return { label, id: match[1] };
+  if (match) {
+    const label = flat.replace(/\s*\{#[\w-]+\}\s*$/, "").trim();
+    return { label, id: match[1] };
+  }
+  const id = slug(flat);
+  return { label: children, id: id || undefined };
 };
 
 function Heading({

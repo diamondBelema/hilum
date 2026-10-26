@@ -48,3 +48,11 @@ Append-only log. Newest entry at the bottom.
 - Reader fixes: Aa size/leading actually apply (removed fixed `text-read`), single title, mobile toolbar, tables fit at 360 px.
 - Theme follows the OS under System; explicit Light/Dark persisted (`eh-theme`). Demo notes are fabricated fixtures outside the repo.
 - Next: keep designing against M3 verification screen once its schema freezes.
+
+## 2026-10-26 — M3 question bank and verification
+
+- Status: done (`bun run verify`: 46 tests, smoke ui/api/mcp).
+- Schema v3 adds `questions`; `QuestionBank` validates type shape and citations (note, anchor, quote) before any write.
+- MCP: add/list/get/update/verify questions plus transactional `import_past_paper` (forces unverified, stable ids, idempotent).
+- HTTP: `/api/questions` filters, detail, PATCH, verify; UI Exams tab has the bank and a source-beside-question verification workspace with progress and mobile source sheet.
+- Next: M4 exam engine (papers, attempts, runner, autosave, deterministic scoring, spotter).

@@ -14,3 +14,7 @@
 - **Reader prefs:** text size/leading are inline on the article wrapper; markdown must not set its own base font-size or leading.
 - **MCP content surface:** `update_course` patches `courses/<code>/course.md` frontmatter (null clears) and is idempotent via `request_id`; notes are resources at `vault://<path>`.
 - **Demo data:** screenshots use a fabricated vault under `/tmp/opencode/demo-vault`; never present it as course material, never commit it.
+- **Questions live in SQLite.** The vault supplies notes and past papers; `questions` rows are the bank. `source_paper` and `cites` point back into the vault, so nothing is duplicated as markdown.
+- **Import never auto-verifies.** `import_past_paper` forces `verified=false, unverified=true`, derives ids from course + paper + index, and rolls back the whole batch on any citation failure.
+- **Verification is explicit.** `update_question` edits content only; only `verify_question` (or the UI action) flips `verified`/`unverified`.
+- **Citation validation:** anchors may be explicit `{#id}` or heading slugs; quotes are compared whitespace-normalized inside that section. Banked items require at least one quoted cite.

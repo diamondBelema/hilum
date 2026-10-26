@@ -25,12 +25,12 @@ afterEach(async () => {
 });
 
 async function connect() {
-  const { config, vault, indexer } = createApp({
+  const { config, vault, indexer, questions } = createApp({
     config: { vaultPath: root, dbPath: ":memory:" },
   });
   await indexer.reindexAll();
 
-  const server = createMcpServer(config, vault);
+  const server = createMcpServer(config, vault, questions);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
 
@@ -120,6 +120,92 @@ describe("mcp content tools", () => {
 
     const read = await client.readResource({ uri: note!.uri });
     expect((read.contents[0] as { text: string }).text).toContain("Filtered sodium");
+
+    await server.close();
+  });
+
+  test("exposes the question-bank tools end to end", async () => {
+    const { client, server } = await connect();
+    const names = (await client.listTools()).tools.map((tool) => tool.name);
+    for (const name of [
+      "add_questions",
+      "list_questions",
+      "get_question",
+      "update_question",
+      "verify_question",
+      "import_past_paper",
+    ]) {
+      expect(names).toContain(name);
+    }
+
+    const question = {
+      id: "ana-211-mcp-01",
+      type: "tf_multi",
+      topics: ["renal"],
+      marks: 5,
+      stem: "Concerning the tubules:",
+      statements: [
+        { text: "Sodium is reabsorbed.", answer: true },
+        { text: "No sodium moves.", answer: false },
+        { text: "The tubule is in the kidney.", answer: true },
+        { text: "The tubule is in the liver.", answer: false },
+      ],
+      cites: [
+        {
+          note: "ana-211/notes/tubules.md",
+          anchor: "tubules",
+          quote: "Filtered sodium is reabsorbed",
+        },
+      ],
+    };
+
+    const added = await client.callTool({
+      name: "add_questions",
+      arguments: { course: "ana-211", questions: [question] },
+    });
+    expect(added.isError).not.toBe(true);
+    expect(text(added)).toContain("ana-211-mcp-01");
+
+    const listed = await client.callTool({
+      name: "list_questions",
+      arguments: { course: "ana-211", verified: false },
+    });
+    expect(text(listed)).toContain("ana-211-mcp-01");
+
+    const fetched = await client.callTool({
+      name: "get_question",
+      arguments: { id: "ana-211-mcp-01" },
+    });
+    expect(text(fetched)).toContain("Concerning the tubules");
+
+    const updated = await client.callTool({
+      name: "update_question",
+      arguments: {
+        id: "ana-211-mcp-01",
+        question: { ...question, stem: "Updated tubule stem:" },
+      },
+    });
+    expect(updated.isError).not.toBe(true);
+    expect(text(updated)).toContain("Updated tubule stem");
+
+    const verified = await client.callTool({
+      name: "verify_question",
+      arguments: { id: "ana-211-mcp-01" },
+    });
+    expect(text(verified)).toContain('"verified":true');
+
+    const imported = await client.callTool({
+      name: "import_past_paper",
+      arguments: {
+        course: "ana-211",
+        source: "notes/tubules.md",
+        title: "tubules-paper",
+        questions: [{ ...question, id: undefined }],
+        request_id: "paper-mcp-1",
+      },
+    });
+    expect(imported.isError).not.toBe(true);
+    expect(text(imported)).toContain("ana-211-tubules-paper-01");
 
     await server.close();
   });
