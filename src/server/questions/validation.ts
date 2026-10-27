@@ -31,6 +31,7 @@ export const questionInputSchema = z
     prompt: z.string().min(1).optional(),
     model_answer: z.string().optional(),
     rubric: z.string().optional(),
+    answer_input: z.enum(["text", "text_and_drawing", "photo"]).optional(),
     cites: z.array(citeSchema).default([]),
     source_paper: z.string().optional(),
     verified: z.boolean().default(false),
@@ -115,7 +116,12 @@ export type QuestionBody =
       accepted?: string[];
       explanation?: string;
     }
-  | { prompt: string; model_answer?: string; rubric?: string };
+  | {
+      prompt: string;
+      model_answer?: string;
+      rubric?: string;
+      answer_input?: "text" | "text_and_drawing" | "photo";
+    };
 
 export function questionBody(input: QuestionInput): QuestionBody {
   if (input.type === "tf_multi") {
@@ -147,6 +153,7 @@ export function questionBody(input: QuestionInput): QuestionBody {
     prompt: input.prompt ?? "",
     model_answer: input.model_answer,
     rubric: input.rubric,
+    answer_input: input.answer_input ?? "text",
   };
 }
 

@@ -68,3 +68,16 @@ Append-only log. Newest entry at the bottom.
 - Spotter stations: image preview, one identify field, per-station countdown with auto-advance, normalized matching against `answer`/`accepted`; image paths resolve relative to the cited note (or from `courses/`), and must exist inside the vault.
 - MCP: `create_paper`, `list_papers`, `get_paper`, `get_attempt_results`; HTTP mirrors papers and attempt start/save/submit/results.
 - Next: M5 grading queue, `get_pending_grading`/`submit_grade`, detailed debrief with per-item answers and mistake taxonomy.
+
+## 2026-10-27 — M5 grading queue and debrief
+
+- Status: done (`bun run verify`: typecheck, 56 tests across 8 files, smoke ui/api/mcp).
+- Schema v5 adds `grades` and `evidence`. Grades store per-heading rubric scores, total, feedback, mistake tags and grader; evidence rows link each answered question to its concept ids for the mastery layer.
+- `GradingService`: pending queue across courses, single-answer prompt, strict grade validation (non-empty rubric, each award within its max, total within the question marks, taxonomy-only tags), re-grade support, SSE publish.
+- Grading UI: a new Grading tab with a live pending badge, course filter, student answer (text or photo), model answer, rubric and citations, Copy grading prompt, Show prompt, and Paste grade JSON with client-side validation before the server check.
+- SSE: `/api/events` streams hello, submitted, graded and keepalive frames; the queue, nav badge and an open debrief refresh without a manual reload.
+- Photo answers: theory questions accept `answer_input: text | text_and_drawing | photo`; uploads (JPEG/PNG/WebP, 10 MB max) are stored beside the database, served through an attempt-scoped route, and never leave the device.
+- Debrief: score on graded items, section rows, mistake groups with counts and Review these, All/Mistakes/Awaiting filters, paper/slowest ordering, per-item student answer, correct answer/model answer, explanation, rubric, grade breakdown, tags and citations.
+- Attempt history: `/api/attempts` lists recent attempts; a paper row now offers Results for the latest submitted attempt and Resume for an in-progress one, so debriefs survive leaving the screen.
+- MCP: `get_pending_grading`, `submit_grade`, `grade_theory_answer` and `exam_debrief` prompts; the shared prompt includes the full task, marks, rubric, citations and photo URL.
+- Next: M6 mastery and progression (evidence aggregation, concept graph, dashboard, weak topics, real results).

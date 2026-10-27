@@ -1,4 +1,4 @@
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 export type Config = {
   version: string;
@@ -6,6 +6,7 @@ export type Config = {
   hostname: string;
   vaultPath: string;
   dbPath: string;
+  uploadPath: string;
   lan: boolean;
   mcpToken: string | null;
 };
@@ -21,13 +22,16 @@ function envFlag(name: string, fallback = false): boolean {
 export function loadConfig(overrides: Partial<Config> = {}): Config {
   const vaultPath =
     overrides.vaultPath ?? process.env.HARNESS_VAULT ?? join(ROOT, "vault");
+  const dbPath = overrides.dbPath ?? process.env.HARNESS_DB ?? join(ROOT, "state/app.db");
 
   return {
     version: "0.1.0",
     port: overrides.port ?? Number(process.env.PORT ?? 4317),
     hostname: overrides.hostname ?? process.env.HOST ?? "127.0.0.1",
     vaultPath,
-    dbPath: overrides.dbPath ?? process.env.HARNESS_DB ?? join(ROOT, "state/app.db"),
+    dbPath,
+    uploadPath:
+      overrides.uploadPath ?? process.env.HARNESS_UPLOADS ?? join(dirname(dbPath), "uploads"),
     lan: overrides.lan ?? envFlag("HARNESS_LAN"),
     mcpToken: overrides.mcpToken ?? process.env.HARNESS_MCP_TOKEN ?? null,
   };

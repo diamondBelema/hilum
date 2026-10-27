@@ -71,3 +71,29 @@
 - Spotter 3D/annotated-pin variants are reserved; v1 uses a static image plus text identify.
 - Autosave failure uses the "Not saved … Retry" banner code path but was not exercised with the server stopped.
 - Theory rubric checklist is shown as text in practice mode, not per-heading checkboxes.
+
+## 2026-10-27 — M5 grading queue and debrief
+
+**Verdict: pass.** `bun run verify` green (typecheck, 56 tests across 8 files, smoke ui/api/mcp).
+
+### Scope
+- M5: schema v5 grades/evidence, pending queue, grade validation, SSE, copy/paste fallbacks, photo answers, full debrief, attempt history, MCP grading tools and prompts.
+
+### Checked against SPEC / DESIGN
+- [x] Theory submissions become `pending_grading`; the queue shows question, rubric, model answer, response or photo.
+- [x] `get_pending_grading` and `submit_grade` exist; `grade_theory_answer` and `exam_debrief` prompts render usable instructions.
+- [x] Grade JSON is validated on both sides: non-empty rubric rows, awarded ≤ max, total ≤ marks, taxonomy-only mistake tags.
+- [x] SSE updates the nav badge and queue immediately; an open debrief refetches after a grade for its attempt.
+- [x] Fallback "Copy grading prompt" and "Paste grade JSON" work without any agent connected.
+- [x] Photo flow: theory `answer_input=photo`, upload/replace, preview, attempt-scoped serving, pending/debrief display.
+- [x] Results: large score, section rows, grouped mistakes with counts, Review these, flagged accuracy, sortable time, per-item student/correct answers, explanation, rubric, grade breakdown and citations.
+- [x] Each final answer writes evidence tagged to the question's concept ids; re-grading is idempotent.
+- [x] Attempt history: Results/Resume from the paper list, so a debrief is reachable after leaving the screen.
+- [x] 360/1280 px and light/dark checked for grading, debrief, photo upload and the five-tab mobile nav; no horizontal scroll at 360 px.
+
+### Gaps (deferred)
+- Photo answers are shown at fit-to-width; pinch/zoom and labelled-diagram annotation are not built.
+- The photo URL in a grading prompt is localhost-scoped; a remote agent needs network access to the same host.
+- Practice-mode theory answers still enter the grading queue even though practice reveals the reference answer.
+- Attempt history is API-level only; the paper row shows the latest attempt rather than a list of all attempts.
+- Evidence is keyed by concept id; topic-level aggregation is left to M6's mastery views.

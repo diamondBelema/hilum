@@ -112,10 +112,40 @@ function migrate(db: Db): void {
       status TEXT NOT NULL DEFAULT 'unanswered',
       UNIQUE (attempt_id, question_id)
     );
+
+    CREATE TABLE IF NOT EXISTS grades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      answer_id INTEGER NOT NULL UNIQUE,
+      rubric_scores_json TEXT NOT NULL DEFAULT '[]',
+      total REAL NOT NULL,
+      feedback_md TEXT NOT NULL DEFAULT '',
+      mistake_tags TEXT NOT NULL DEFAULT '[]',
+      graded_by TEXT NOT NULL,
+      graded_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS grades_graded_at ON grades(graded_at);
+
+    CREATE TABLE IF NOT EXISTS evidence (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT,
+      activity_id TEXT,
+      answer_id INTEGER,
+      concept_id TEXT,
+      kind TEXT NOT NULL,
+      correct INTEGER,
+      confidence TEXT,
+      time_sec INTEGER NOT NULL DEFAULT 0,
+      excerpt TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS evidence_concept ON evidence(concept_id, created_at);
+    CREATE INDEX IF NOT EXISTS evidence_answer ON evidence(answer_id);
   `);
 
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
-    "4",
+    "5",
   );
 }

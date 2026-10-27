@@ -25,18 +25,18 @@ afterEach(async () => {
 });
 
 async function connect() {
-  const { config, vault, indexer, questions, papers, runner } = createApp({
+  const { config, vault, indexer, questions, papers, runner, grading } = createApp({
     config: { vaultPath: root, dbPath: ":memory:" },
   });
   await indexer.reindexAll();
 
-  const server = createMcpServer(config, vault, questions, papers, runner);
+  const server = createMcpServer(config, vault, questions, papers, runner, grading);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
 
   const client = new Client({ name: "test", version: "0" });
   await client.connect(clientTransport);
-  return { client, server, vault };
+  return { client, server, vault, runner };
 }
 
 describe("mcp content tools", () => {
@@ -128,6 +128,8 @@ describe("mcp content tools", () => {
     const { client, server } = await connect();
     const names = (await client.listTools()).tools.map((tool) => tool.name);
     for (const name of [
+      "get_pending_grading",
+      "submit_grade",
       "add_questions",
       "list_questions",
       "get_question",
@@ -226,6 +228,89 @@ describe("mcp content tools", () => {
     expect(imported.isError).not.toBe(true);
     expect(text(imported)).toContain("ana-211-tubules-paper-01");
 
+    await server.close();
+  });
+
+  test("grades theory through MCP tools and prompts", async () => {
+    const { client, server, runner } = await connect();
+    const prompts = (await client.listPrompts()).prompts.map((prompt) => prompt.name);
+    expect(prompts).toContain("grade_theory_answer");
+    expect(prompts).toContain("exam_debrief");
+
+    const question = {
+      id: "ana-211-th-mcp",
+      type: "theory",
+      question_kind: "mechanism",
+      topics: ["renal"],
+      concept_ids: ["sodium-reabsorption"],
+      marks: 10,
+      prompt: "Explain sodium reabsorption.",
+      model_answer: "Filtered sodium is reabsorbed.",
+      rubric: "Mechanism 10",
+      cites: [
+        {
+          note: "ana-211/notes/tubules.md",
+          anchor: "tubules",
+          quote: "Filtered sodium is reabsorbed",
+        },
+      ],
+    };
+    const added = await client.callTool({
+      name: "add_questions",
+      arguments: { course: "ana-211", questions: [question] },
+    });
+    expect(added.isError).not.toBe(true);
+    await client.callTool({ name: "verify_question", arguments: { id: question.id } });
+    const paper = await client.callTool({
+      name: "create_paper",
+      arguments: {
+        course: "ana-211",
+        mode: "strict",
+        blueprint: [{ section: "C", type: "theory", count: 1, minutes: 20 }],
+      },
+    });
+    const paperId = (JSON.parse(text(paper)) as { id: string }).id;
+    const session = runner.start(paperId);
+    runner.save(session.attempt.id, { questionId: question.id, response: { text: "Sodium moves." } });
+    runner.submit(session.attempt.id);
+
+    const pending = await client.callTool({
+      name: "get_pending_grading",
+      arguments: { course: "ana-211" },
+    });
+    const items = JSON.parse(text(pending)) as { answerId: number }[];
+    expect(items).toHaveLength(1);
+    const answerId = items[0]!.answerId;
+
+    const prompt = await client.getPrompt({
+      name: "grade_theory_answer",
+      arguments: { answer_id: String(answerId) },
+    });
+    expect(prompt.messages[0]?.content.type).toBe("text");
+    expect((prompt.messages[0]?.content as { text: string }).text).toContain("rubric_scores");
+
+    const graded = await client.callTool({
+      name: "submit_grade",
+      arguments: {
+        answer_id: answerId,
+        rubric_scores: [{ heading: "Mechanism", awarded: 7, max: 10 }],
+        feedback: "Name the transporter.",
+        mistake_tags: ["knowledge_gap"],
+      },
+    });
+    expect(graded.isError).not.toBe(true);
+    expect(text(graded)).toContain('"total":7');
+
+    const results = await client.callTool({
+      name: "get_attempt_results",
+      arguments: { attempt_id: session.attempt.id },
+    });
+    expect(text(results)).toContain('"status":"graded"');
+    const debrief = await client.getPrompt({
+      name: "exam_debrief",
+      arguments: { attempt_id: session.attempt.id },
+    });
+    expect((debrief.messages[0]?.content as { text: string }).text).toContain("Debrief");
     await server.close();
   });
 

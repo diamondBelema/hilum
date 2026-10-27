@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "../db.ts";
 import type { Question } from "../questions/validation.ts";
 import type { Paper, PaperService } from "./papers.ts";
+import type { EventBus } from "../events.ts";
+import type { Grade, MistakeTag, RubricScore } from "./grading.ts";
+import { replaceAnswerEvidence, responseExcerpt } from "./evidence.ts";
 
 export type AttemptRow = {
   id: string;
@@ -41,6 +44,17 @@ export type AnswerState = {
   status: string;
 };
 
+export type AttemptSummary = {
+  id: string;
+  paperId: string;
+  paperTitle: string;
+  course: string;
+  startedAt: number;
+  submittedAt: number | null;
+  status: string;
+  durationUsedSec: number | null;
+};
+
 export type AttemptSession = {
   attempt: Attempt;
   paper: Paper;
@@ -62,6 +76,11 @@ export type ResultItem = {
   correct: boolean | null;
   flagged: boolean;
   timeSpentSec: number;
+  questionKind: string | null;
+  conceptIds: string[];
+  body: Question["body"];
+  cites: Question["cites"];
+  grade: Grade | null;
 };
 
 export type SectionResult = {
@@ -86,6 +105,7 @@ export class ExamRunner {
   constructor(
     private readonly db: Db,
     private readonly papers: PaperService,
+    private readonly events?: EventBus,
   ) {}
 
   start(paperId: string): AttemptSession {
@@ -99,6 +119,36 @@ export class ExamRunner {
       )
       .run(id, paper.id, now);
     return this.session(this.attemptRow(id), paper);
+  }
+
+  attempts(course?: string): AttemptSummary[] {
+    const rows = (
+      course
+        ? this.db
+            .query(
+              `SELECT att.*, p.title AS paper_title, p.course
+               FROM attempts att JOIN papers p ON p.id = att.paper_id
+               WHERE p.course = ? ORDER BY att.started_at DESC LIMIT 20`,
+            )
+            .all(course)
+        : this.db
+            .query(
+              `SELECT att.*, p.title AS paper_title, p.course
+               FROM attempts att JOIN papers p ON p.id = att.paper_id
+               ORDER BY att.started_at DESC LIMIT 20`,
+            )
+            .all()
+    ) as (AttemptRow & { paper_title: string; course: string })[];
+    return rows.map((row) => ({
+      id: row.id,
+      paperId: row.paper_id,
+      paperTitle: row.paper_title,
+      course: row.course,
+      startedAt: row.started_at,
+      submittedAt: row.submitted_at,
+      status: row.status,
+      durationUsedSec: row.duration_used_sec,
+    }));
   }
 
   get(id: string): AttemptSession {
@@ -226,6 +276,28 @@ export class ExamRunner {
       )
       .run(now, durationUsed, attemptId);
 
+    for (const item of paper.items) {
+      const saved = this.db
+        .query("SELECT * FROM answers WHERE attempt_id = ? AND question_id = ?")
+        .get(attemptId, item.question.id) as AnswerRow | null;
+      if (!saved || saved.status !== "auto_graded") continue;
+      const response = parseResponse(saved.response_json);
+      replaceAnswerEvidence(this.db, {
+        answerId: saved.id,
+        question: item.question,
+        correct: isCorrect(item.question, response),
+        timeSec: saved.time_spent_sec,
+        excerpt: responseExcerpt(item.question, response),
+      });
+    }
+
+    this.events?.publish({
+      type: "submitted",
+      course: paper.course,
+      attemptId,
+      at: now,
+    });
+
     return this.results(attemptId);
   }
 
@@ -234,6 +306,35 @@ export class ExamRunner {
     const paper = this.papers.get(attempt.paper_id);
     const answers = new Map(
       this.answerRows(attemptId).map((answer) => [answer.question_id, answer]),
+    );
+    const grades = new Map<number, Grade>(
+      (
+        this.db
+          .query(
+            `SELECT g.* FROM grades g JOIN answers a ON a.id = g.answer_id
+             WHERE a.attempt_id = ?`,
+          )
+          .all(attemptId) as {
+          answer_id: number;
+          rubric_scores_json: string;
+          total: number;
+          feedback_md: string;
+          mistake_tags: string;
+          graded_by: string;
+          graded_at: number;
+        }[]
+      ).map((row) => [
+        row.answer_id,
+        {
+          answerId: row.answer_id,
+          rubricScores: JSON.parse(row.rubric_scores_json) as RubricScore[],
+          total: row.total,
+          feedback: row.feedback_md,
+          mistakeTags: JSON.parse(row.mistake_tags) as MistakeTag[],
+          gradedBy: row.graded_by,
+          gradedAt: row.graded_at,
+        },
+      ]),
     );
     const sections = new Map<string, SectionResult>();
     const items: ResultItem[] = [];
@@ -248,6 +349,7 @@ export class ExamRunner {
       const score = answer?.auto_score ?? null;
       const status = answer?.status ?? "unanswered";
       const correct = status === "auto_graded" ? isCorrect(question, response) : null;
+      const grade = answer ? (grades.get(answer.id) ?? null) : null;
 
       const section = sections.get(item.section) ?? {
         section: item.section,
@@ -266,6 +368,13 @@ export class ExamRunner {
           section: item.section,
           topics: question.topics,
           tags: [status === "unanswered" ? "ran_out_of_time" : "knowledge_gap"],
+        });
+      } else if (grade && grade.mistakeTags.length > 0) {
+        mistakes.push({
+          questionId: question.id,
+          section: item.section,
+          topics: question.topics,
+          tags: grade.mistakeTags,
         });
       }
       if (answer?.flagged && status === "auto_graded") {
@@ -286,6 +395,11 @@ export class ExamRunner {
         correct,
         flagged: Boolean(answer?.flagged),
         timeSpentSec: answer?.time_spent_sec ?? 0,
+        questionKind: question.questionKind,
+        conceptIds: question.conceptIds,
+        body: question.body,
+        cites: question.cites,
+        grade,
       });
     }
 

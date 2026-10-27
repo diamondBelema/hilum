@@ -717,6 +717,7 @@ function QuestionEditor({
       prompt: draft.prompt.trim(),
       model_answer: draft.modelAnswer.trim() || undefined,
       rubric: draft.rubric.trim() || undefined,
+      answer_input: draft.answerInput,
     };
   }
 
@@ -906,6 +907,23 @@ function QuestionEditor({
               inputMode="decimal"
             />
           </div>
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-semibold text-text">Answer input</span>
+            <select
+              value={draft.answerInput}
+              onChange={(event) =>
+                patchDraft({ answerInput: event.target.value as Draft["answerInput"] })
+              }
+              className={field}
+            >
+              <option value="text">Typed text</option>
+              <option value="text_and_drawing">Text and drawing (optional photo)</option>
+              <option value="photo">Photo of handwriting</option>
+            </select>
+            <p className="mt-1 text-xs text-text-muted">
+              Photo answers upload to this device; nothing leaves it.
+            </p>
+          </label>
           <TextField
             label="Model answer (optional)"
             value={draft.modelAnswer}
@@ -1119,6 +1137,7 @@ type Draft = {
   explanation: string;
   modelAnswer: string;
   rubric: string;
+  answerInput: "text" | "text_and_drawing" | "photo";
   questionKind: string;
   marks: string;
   topics: string;
@@ -1137,6 +1156,7 @@ function toDraft(question: Question): Draft {
     explanation: body.explanation ?? "",
     modelAnswer: body.model_answer ?? "",
     rubric: body.rubric ?? "",
+    answerInput: body.answer_input ?? "text",
     questionKind: question.questionKind ?? "",
     marks: String(question.marks),
     topics: question.topics.join(", "),

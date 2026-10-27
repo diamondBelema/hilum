@@ -10,13 +10,17 @@ import {
   Flag,
   LayoutGrid,
   Send,
+  Upload,
   X,
 } from "lucide-react";
 import {
   api,
+  photoName,
+  photoUrl,
   spotterImageUrl,
   type AttemptResults,
   type AttemptSession,
+  type AttemptSummary,
   type BlueprintSection,
   type Course,
   type Paper,
@@ -28,11 +32,13 @@ import { Banner, Chip, EmptyState, ProgressBar, Skeleton } from "../components/u
 import { Sheet } from "../components/Sheet.tsx";
 import { plural } from "../lib/format.ts";
 import { clearActiveAttempt, readActiveAttempt, setActiveAttempt } from "../lib/activeAttempt.ts";
+import { subscribeHarnessEvents } from "../lib/events.ts";
 
 const MODE_LABEL = { strict: "Strict", sectioned: "Sectioned", practice: "Practice" };
 
 export function Papers({ course, onBack }: { course: Course; onBack: () => void }) {
   const [papers, setPapers] = useState<Paper[] | null>(null);
+  const [attempts, setAttempts] = useState<AttemptSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"list" | "builder" | "runner" | "results">("list");
   const [session, setSession] = useState<AttemptSession | null>(null);
@@ -40,9 +46,12 @@ export function Papers({ course, onBack }: { course: Course; onBack: () => void 
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .papers(course.code)
-      .then((list) => !cancelled && setPapers(list))
+    Promise.all([api.papers(course.code), api.attempts(course.code)])
+      .then(([list, history]) => {
+        if (cancelled) return;
+        setPapers(list);
+        setAttempts(history);
+      })
       .catch((err: unknown) => !cancelled && setError(messageOf(err)));
     return () => {
       cancelled = true;
@@ -74,10 +83,31 @@ export function Papers({ course, onBack }: { course: Course; onBack: () => void 
   }, [course.code]);
 
   function reload() {
-    api
-      .papers(course.code)
-      .then(setPapers)
+    Promise.all([api.papers(course.code), api.attempts(course.code)])
+      .then(([list, history]) => {
+        setPapers(list);
+        setAttempts(history);
+      })
       .catch((err: unknown) => setError(messageOf(err)));
+  }
+
+  async function openAttempt(attempt: AttemptSummary) {
+    setError(null);
+    try {
+      if (attempt.status === "in_progress") {
+        const resumed = await api.attempt(attempt.id);
+        setActiveAttempt({ id: resumed.attempt.id, course: course.code });
+        setSession(resumed);
+        setResults(null);
+        setView("runner");
+      } else {
+        setResults(await api.results(attempt.id));
+        setSession(null);
+        setView("results");
+      }
+    } catch (err) {
+      setError(messageOf(err));
+    }
   }
 
   async function start(paper: Paper) {
@@ -111,10 +141,19 @@ export function Papers({ course, onBack }: { course: Course; onBack: () => void 
     );
   }
 
+  function refreshResults() {
+    if (!results) return;
+    api
+      .results(results.attempt.id)
+      .then(setResults)
+      .catch((err: unknown) => setError(messageOf(err)));
+  }
+
   if (view === "results" && results) {
     return (
       <Results
         results={results}
+        onRefresh={refreshResults}
         onBack={() => {
           setResults(null);
           setSession(null);
@@ -176,22 +215,36 @@ export function Papers({ course, onBack }: { course: Course; onBack: () => void 
         </div>
       ) : (
         <ul className="mt-6 divide-y divide-border-subtle border-y border-border-subtle">
-          {papers.map((paper) => (
-            <li key={paper.id} className="flex flex-wrap items-center gap-3 py-4">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{paper.title}</p>
-                <p className="mt-1 flex flex-wrap gap-1.5">
-                  <Chip>{MODE_LABEL[paper.mode]}</Chip>
-                  <Chip>{plural(paper.items.length, "question")}</Chip>
-                  <Chip>{Math.round(paper.durationSec / 60)} min</Chip>
-                </p>
-              </div>
-              <Button variant="primary" onClick={() => void start(paper)}>
-                Start
-                <ChevronRight aria-hidden="true" className="size-4" />
-              </Button>
-            </li>
-          ))}
+          {papers.map((paper) => {
+            const latest = attempts?.find((attempt) => attempt.paperId === paper.id);
+            return (
+              <li key={paper.id} className="flex flex-wrap items-center gap-3 py-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{paper.title}</p>
+                  <p className="mt-1 flex flex-wrap gap-1.5">
+                    <Chip>{MODE_LABEL[paper.mode]}</Chip>
+                    <Chip>{plural(paper.items.length, "question")}</Chip>
+                    <Chip>{Math.round(paper.durationSec / 60)} min</Chip>
+                    {latest?.status === "in_progress" && <Chip>In progress</Chip>}
+                  </p>
+                </div>
+                {latest?.status === "in_progress" && (
+                  <Button variant="secondary" onClick={() => void openAttempt(latest)}>
+                    Resume
+                  </Button>
+                )}
+                {latest?.status === "submitted" && (
+                  <Button variant="secondary" onClick={() => void openAttempt(latest)}>
+                    Results
+                  </Button>
+                )}
+                <Button variant="primary" onClick={() => void start(paper)}>
+                  Start
+                  <ChevronRight aria-hidden="true" className="size-4" />
+                </Button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -412,6 +465,7 @@ function Runner({
   const [submitOpen, setSubmitOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const submitted = useRef(false);
   const questionSince = useRef(Date.now());
   const item = paper.items[index]!;
@@ -506,6 +560,31 @@ function Runner({
     const next = { ...answers, [question.id]: response };
     setAnswers(next);
     void persist(next, flags);
+  }
+
+  async function uploadTheoryPhoto(file: File) {
+    if (sectionLocked || uploadedLocked()) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const saved = await api.uploadPhoto(
+        initial.attempt.id,
+        question.id,
+        file,
+        theoryAnswer(answers[question.id]),
+      );
+      setAnswers((current) => ({ ...current, [question.id]: saved.response }));
+      setSaveState("saved");
+    } catch (err) {
+      setSaveState("error");
+      setError(messageOf(err));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function uploadedLocked(): boolean {
+    return submitted.current;
   }
 
   function toggleFlag() {
@@ -689,33 +768,92 @@ function Runner({
                   </fieldset>
                 )}
 
-                {question.type === "theory" && (
-                  <div>
-                    <label htmlFor="theory-answer" className="sr-only">
-                      Your answer
-                    </label>
-                    <textarea
-                      id="theory-answer"
-                      rows={10}
-                      value={theoryAnswer(answers[question.id])}
-                      disabled={sectionLocked}
-                      spellCheck={paper.mode === "practice"}
-                      autoCorrect={paper.mode === "practice" ? "on" : "off"}
-                      onChange={(event) => {
-                        const next = { ...answers, [question.id]: { text: event.target.value } };
-                        setAnswers(next);
-                        setSaveState("saving");
-                        window.setTimeout(() => void persist(next, flags), 600);
-                      }}
-                      className="reading min-h-64 w-full resize-y rounded-control border border-border-strong bg-surface px-3 py-3 text-base leading-7"
-                      placeholder="Write your answer…"
-                    />
-                    <p className="mt-1 flex justify-between text-xs text-text-muted">
-                      <span>{plural(wordCount(theoryAnswer(answers[question.id])), "word")}</span>
-                      <span>{plural(question.marks, "mark")}</span>
-                    </p>
-                  </div>
-                )}
+                {question.type === "theory" && (() => {
+                  const answerInput = question.body.answer_input ?? "text";
+                  const photo = photoName(answers[question.id]);
+                  return (
+                    <div>
+                      {answerInput !== "photo" && (
+                        <>
+                          <label htmlFor="theory-answer" className="sr-only">
+                            Your answer
+                          </label>
+                          <textarea
+                            id="theory-answer"
+                            rows={10}
+                            value={theoryAnswer(answers[question.id])}
+                            disabled={sectionLocked}
+                            spellCheck={paper.mode === "practice"}
+                            autoCorrect={paper.mode === "practice" ? "on" : "off"}
+                            onChange={(event) => {
+                              const next = { ...answers, [question.id]: { text: event.target.value } };
+                              setAnswers(next);
+                              setSaveState("saving");
+                              window.setTimeout(() => void persist(next, flags), 600);
+                            }}
+                            className="reading min-h-64 w-full resize-y rounded-control border border-border-strong bg-surface px-3 py-3 text-base leading-7"
+                            placeholder="Write your answer…"
+                          />
+                          <p className="mt-1 flex justify-between text-xs text-text-muted">
+                            <span>{plural(wordCount(theoryAnswer(answers[question.id])), "word")}</span>
+                            <span>{plural(question.marks, "mark")}</span>
+                          </p>
+                        </>
+                      )}
+
+                      {answerInput !== "text" && (
+                        <div className={answerInput === "photo" ? "" : "mt-2"}>
+                          {answerInput === "photo" && !photo && (
+                            <p className="reading mb-2 text-sm text-text-muted">
+                              Write the answer on paper, photograph the whole page, then upload it here.
+                            </p>
+                          )}
+                          {photo && (
+                            <img
+                              src={photoUrl(initial.attempt.id, question.id, photo)}
+                              alt="Your handwritten answer"
+                              className="mb-2 max-h-[52dvh] w-full rounded-panel border border-border-subtle bg-surface object-contain"
+                            />
+                          )}
+                          <label
+                            className={`inline-flex min-h-11 items-center gap-2 rounded-control border border-border-strong bg-surface px-4 text-sm font-semibold ${
+                              sectionLocked
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer hover:bg-surface-2"
+                            }`}
+                          >
+                            <Upload aria-hidden="true" className="size-4" />
+                            {uploading
+                              ? "Uploading…"
+                              : photo
+                                ? "Replace photo"
+                                : answerInput === "photo"
+                                  ? "Upload photo of your answer"
+                                  : "Add a photo"}
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              capture="environment"
+                              className="sr-only"
+                              disabled={sectionLocked || uploading}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = "";
+                                if (file) void uploadTheoryPhoto(file);
+                              }}
+                            />
+                          </label>
+                          <p className="mt-1 text-xs text-text-muted">
+                            JPEG, PNG or WebP up to 10 MB. Stored on this device.
+                          </p>
+                        </div>
+                      )}
+                      {answerInput === "photo" && (
+                        <p className="mt-2 text-xs text-text-muted">{plural(question.marks, "mark")}</p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {question.type === "spotter" && (
                   <div>
@@ -1015,19 +1153,43 @@ function QuestionGrid({
 
 function Results({
   results,
+  onRefresh,
   onBack,
   onBank,
 }: {
   results: AttemptResults;
+  onRefresh: () => void;
   onBack: () => void;
   onBank: () => void;
 }) {
   const pendingMarks = results.items
     .filter((item) => item.status === "pending_grading")
     .reduce((sum, item) => sum + item.marks, 0);
-  const objectiveMax = results.score.max - pendingMarks;
-  const percent =
-    objectiveMax > 0 ? Math.round((results.score.awarded / objectiveMax) * 100) : 0;
+  const gradedMax = results.score.max - pendingMarks;
+  const percent = gradedMax > 0 ? Math.round((results.score.awarded / gradedMax) * 100) : 0;
+  const [filter, setFilter] = useState<"all" | "mistakes" | "pending">("all");
+  const [sort, setSort] = useState<"paper" | "slowest">("paper");
+  const mistakeIds = new Set(results.mistakes.map((item) => item.questionId));
+  const mistakeTags = new Map(results.mistakes.map((item) => [item.questionId, item.tags]));
+  const groups = new Map<string, number>();
+  for (const mistake of results.mistakes) {
+    for (const tag of mistake.tags) groups.set(tag, (groups.get(tag) ?? 0) + 1);
+  }
+  const visible = results.items.filter((item) => {
+    if (filter === "mistakes") return mistakeIds.has(item.questionId);
+    if (filter === "pending") return item.status === "pending_grading";
+    return true;
+  });
+  if (sort === "slowest") visible.sort((a, b) => b.timeSpentSec - a.timeSpentSec);
+
+  useEffect(
+    () =>
+      subscribeHarnessEvents((event) => {
+        if (event.type === "graded" && event.attemptId === results.attempt.id) onRefresh();
+      }),
+    [results.attempt.id, onRefresh],
+  );
+
   return (
     <div className="max-w-4xl">
       <h1 className="text-xl font-semibold tracking-tight">{results.paper.title}</h1>
@@ -1041,11 +1203,13 @@ function Results({
           <span className="text-base text-text-muted"> / {results.score.max}</span>
         </p>
         <p className="mt-1 text-sm text-text-muted">
-          {percent}% on objective items
-          {results.score.pending > 0 ? ` · ${plural(results.score.pending, "theory answer")} awaiting grading` : ""}
+          {percent}% on graded items
+          {results.score.pending > 0
+            ? ` · ${plural(results.score.pending, "theory answer")} awaiting grading (${pendingMarks} marks)`
+            : ""}
         </p>
         <div className="mt-3">
-          <ProgressBar label="Score" value={results.score.awarded} max={results.score.max} />
+          <ProgressBar label="Graded score" value={results.score.awarded} max={gradedMax} />
         </div>
       </div>
 
@@ -1079,16 +1243,32 @@ function Results({
           </p>
         </div>
         <div className="rounded-panel border border-border-subtle bg-surface p-4">
-          <h2 className="text-sm font-semibold">Mistakes</h2>
-          {results.mistakes.length === 0 ? (
-            <p className="mt-1 text-sm text-text-muted">No automatic mistakes.</p>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-sm font-semibold">Mistakes</h2>
+            {groups.size > 0 && (
+              <Button
+                variant="ghost"
+                className="min-h-9 px-2 text-xs"
+                onClick={() => {
+                  setFilter("mistakes");
+                  requestAnimationFrame(() =>
+                    document.getElementById("items-heading")?.scrollIntoView({ block: "start" }),
+                  );
+                }}
+              >
+                Review these
+              </Button>
+            )}
+          </div>
+          {groups.size === 0 ? (
+            <p className="mt-1 text-sm text-text-muted">No mistakes tagged.</p>
           ) : (
             <ul className="mt-1 flex flex-wrap gap-1.5">
-              {results.mistakes.map((mistake) => (
-                <li key={mistake.questionId}>
+              {[...groups.entries()].map(([tag, count]) => (
+                <li key={tag}>
                   <Chip>
                     <AlertTriangle aria-hidden="true" className="size-3.5 text-warning" />
-                    {mistake.tags.join(", ")}
+                    {mistakeLabel(tag)} · {count}
                   </Chip>
                 </li>
               ))}
@@ -1098,42 +1278,67 @@ function Results({
       </div>
 
       <section aria-labelledby="items-heading" className="mt-6">
-        <h2 id="items-heading" className="text-base font-semibold">Questions</h2>
-        <ul className="mt-2 divide-y divide-border-subtle border-y border-border-subtle">
-          {results.items.map((item, itemIndex) => (
-            <li key={item.questionId} className="flex items-start gap-3 py-3">
-              <span className="mt-0.5 font-mono text-xs text-text-muted">{itemIndex + 1}</span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm">
-                  {item.type === "theory"
-                    ? item.status === "pending_grading"
-                      ? "Theory answer awaiting grading"
-                      : "Theory"
-                    : item.correct
-                      ? "Correct"
-                      : item.status === "unanswered"
-                        ? "Not answered"
-                        : "Incorrect"}
-                </p>
-                <p className="mt-1 flex flex-wrap gap-1.5">
-                  <Chip>{item.section}</Chip>
-                  <Chip>{plural(item.marks, "mark")}</Chip>
-                  {item.autoScore !== null && <Chip>{item.autoScore} awarded</Chip>}
-                  {item.flagged && <Chip>Flagged</Chip>}
-                </p>
-              </div>
-              <span className="mt-0.5">
-                {item.status === "pending_grading" ? (
-                  <Clock aria-label="Pending" className="size-5 text-warning" />
-                ) : item.correct ? (
-                  <CheckCircle2 aria-label="Correct" className="size-5 text-correct" />
-                ) : (
-                  <X aria-label="Incorrect" className="size-5 text-incorrect" />
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="items-heading" className="text-base font-semibold">Debrief</h2>
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Filter questions">
+            {([
+              ["all", "All"],
+              ["mistakes", "Mistakes"],
+              ["pending", "Awaiting grading"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={filter === value}
+                onClick={() => setFilter(value)}
+                className={`min-h-9 rounded-control px-2.5 text-xs font-semibold ${
+                  filter === value
+                    ? "bg-primary-soft text-text"
+                    : "border border-border-subtle text-text-muted hover:bg-surface-2"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-text-muted">Order</span>
+          <Button
+            variant="ghost"
+            className="min-h-9 px-2 text-xs"
+            aria-pressed={sort === "paper"}
+            onClick={() => setSort("paper")}
+          >
+            Paper order
+          </Button>
+          <Button
+            variant="ghost"
+            className="min-h-9 px-2 text-xs"
+            aria-pressed={sort === "slowest"}
+            onClick={() => setSort("slowest")}
+          >
+            Slowest first
+          </Button>
+        </div>
+
+        {visible.length === 0 ? (
+          <p className="mt-3 rounded-panel border border-border-subtle bg-surface p-4 text-sm text-text-muted">
+            No questions match this view.
+          </p>
+        ) : (
+          <ul className="mt-2 divide-y divide-border-subtle border-y border-border-subtle">
+            {visible.map((item) => (
+              <DebriefItem
+                key={item.questionId}
+                item={item}
+                attemptId={results.attempt.id}
+                number={results.items.findIndex((entry) => entry.questionId === item.questionId) + 1}
+                tags={mistakeTags.get(item.questionId) ?? []}
+              />
+            ))}
+          </ul>
+        )}
       </section>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -1142,6 +1347,275 @@ function Results({
       </div>
     </div>
   );
+}
+
+function DebriefItem({
+  item,
+  attemptId,
+  number,
+  tags,
+}: {
+  item: AttemptResults["items"][number];
+  attemptId: string;
+  number: number;
+  tags: string[];
+}) {
+  const pending = item.status === "pending_grading";
+  const photo = photoName(item.response);
+  const prompt =
+    item.body.stem ||
+    item.body.prompt ||
+    (item.type === "theory" ? "Theory answer" : typeLabel(item.type));
+  const statusLabel = pending
+    ? "Awaiting grading"
+    : item.type === "theory"
+      ? "Graded theory"
+      : item.correct
+        ? "Correct"
+        : item.status === "unanswered"
+          ? "Not answered"
+          : "Incorrect";
+  return (
+    <li className="py-4">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 font-mono text-xs text-text-muted">{number}</span>
+        <div className="min-w-0 flex-1">
+          <p className="reading text-sm">{prompt}</p>
+          <p className="mt-1 flex flex-wrap gap-1.5">
+            <Chip>{item.section}</Chip>
+            <Chip>{typeLabel(item.type)}</Chip>
+            <Chip>{plural(item.marks, "mark")}</Chip>
+            {item.autoScore !== null && <Chip>{item.autoScore} awarded</Chip>}
+            {item.timeSpentSec > 0 && <Chip>{formatTime(item.timeSpentSec)}</Chip>}
+            {item.flagged && <Chip>Flagged</Chip>}
+            {tags.map((tag) => (
+              <Chip key={tag}>
+                <AlertTriangle aria-hidden="true" className="size-3.5 text-warning" />
+                {mistakeLabel(tag)}
+              </Chip>
+            ))}
+          </p>
+          <details className="group mt-2">
+            <summary className="flex min-h-9 cursor-pointer items-center gap-1.5 text-xs font-semibold text-text-muted">
+              <span className="group-open:hidden">Show answer and explanation</span>
+              <span className="hidden group-open:inline">Hide answer and explanation</span>
+            </summary>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <section aria-label="Your answer" className="rounded-control border border-border-subtle bg-surface p-3">
+                <h3 className="text-xs font-semibold text-text-muted">Your answer</h3>
+                <AnswerView item={item} attemptId={attemptId} photo={photo} />
+              </section>
+              <section aria-label="Correct answer" className="rounded-control border border-border-subtle bg-surface p-3">
+                <h3 className="text-xs font-semibold text-text-muted">
+                  {item.type === "theory" ? "Model answer" : "Correct answer"}
+                </h3>
+                <CorrectView item={item} />
+              </section>
+            </div>
+
+            {item.body.explanation && (
+              <div className="mt-3 rounded-control border border-border-subtle bg-surface p-3">
+                <h3 className="text-xs font-semibold text-text-muted">Explanation</h3>
+                <p className="reading mt-1 whitespace-pre-wrap text-sm">{item.body.explanation}</p>
+              </div>
+            )}
+
+            {item.type === "theory" && item.body.rubric && (
+              <div className="mt-3 rounded-control border border-border-subtle bg-surface p-3">
+                <h3 className="text-xs font-semibold text-text-muted">Rubric</h3>
+                <p className="reading mt-1 whitespace-pre-wrap text-sm text-text-muted">{item.body.rubric}</p>
+              </div>
+            )}
+
+            {item.grade && (
+              <div className="mt-3 rounded-control border border-border-subtle bg-surface p-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="text-xs font-semibold text-text-muted">Grade</h3>
+                  <p className="font-mono text-xs tabular-nums">
+                    {item.grade.total} / {item.marks} · {item.grade.gradedBy}
+                  </p>
+                </div>
+                <ul className="mt-2 space-y-1.5">
+                  {item.grade.rubricScores.map((score, index) => (
+                    <li key={`${score.heading}-${index}`} className="text-sm">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="font-semibold">{score.heading}</span>
+                        <span className="font-mono text-xs tabular-nums">
+                          {score.awarded} / {score.max}
+                        </span>
+                      </div>
+                      {score.comment && <p className="text-xs text-text-muted">{score.comment}</p>}
+                    </li>
+                  ))}
+                </ul>
+                {item.grade.feedback && (
+                  <p className="reading mt-2 whitespace-pre-wrap text-sm">{item.grade.feedback}</p>
+                )}
+                {item.grade.mistakeTags.length > 0 && (
+                  <ul className="mt-2 flex flex-wrap gap-1.5">
+                    {item.grade.mistakeTags.map((tag) => (
+                      <li key={tag}>
+                        <Chip>{mistakeLabel(tag)}</Chip>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {pending && (
+              <div className="mt-3">
+                <Banner tone="warning">
+                  This answer is awaiting grading. The score above excludes its marks until a grade is saved.
+                </Banner>
+              </div>
+            )}
+
+            {item.cites.length > 0 && (
+              <div className="mt-3">
+                <h3 className="text-xs font-semibold text-text-muted">Citations</h3>
+                <ul className="mt-1 flex flex-wrap gap-1.5">
+                  {item.cites.map((cite, index) => (
+                    <li key={`${cite.note}-${index}`}>
+                      <Chip>
+                        {cite.note}
+                        {cite.anchor ? `#${cite.anchor}` : ""}
+                      </Chip>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </details>
+        </div>
+        <span className="mt-0.5 flex flex-col items-end gap-1 text-right">
+          <span className="text-xs font-semibold text-text-muted">{statusLabel}</span>
+          {pending ? (
+            <Clock aria-label="Pending" className="size-5 text-warning" />
+          ) : item.type === "theory" ? (
+            <CheckCircle2 aria-label="Graded" className="size-5 text-text-muted" />
+          ) : item.correct ? (
+            <CheckCircle2 aria-label="Correct" className="size-5 text-correct" />
+          ) : (
+            <X aria-label="Incorrect" className="size-5 text-incorrect" />
+          )}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+function AnswerView({
+  item,
+  attemptId,
+  photo,
+}: {
+  item: AttemptResults["items"][number];
+  attemptId: string;
+  photo: string | null;
+}) {
+  const text = theoryAnswer(item.response);
+  return (
+    <div className="mt-1 space-y-2">
+      {photo && (
+        <img
+          src={photoUrl(attemptId, item.questionId, photo)}
+          alt="Handwritten answer"
+          loading="lazy"
+          className="max-h-96 w-full rounded-control border border-border-subtle bg-surface object-contain"
+        />
+      )}
+      {item.type === "tf_multi" ? (
+        <ol className="space-y-1 text-sm">
+          {(item.body.statements ?? []).map((statement, index) => (
+            <li key={index}>
+              <span className="text-text-muted">{index + 1}. </span>
+              {statement.text}
+              <span className="ml-2 font-semibold">
+                {tfAnswers(item.response)[index] === undefined
+                  ? "—"
+                  : tfAnswers(item.response)[index]
+                    ? "True"
+                    : "False"}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : item.type === "mcq_single" ? (
+        <McqAnswer item={item} />
+      ) : text ? (
+        <p className="reading whitespace-pre-wrap text-sm">{text}</p>
+      ) : photo ? (
+        <p className="text-sm text-text-muted">Photo answer</p>
+      ) : (
+        <p className="text-sm text-text-muted">No answer saved.</p>
+      )}
+    </div>
+  );
+}
+
+function McqAnswer({ item }: { item: AttemptResults["items"][number] }) {
+  const answer = mcqAnswer(item.response);
+  if (!answer) return <p className="mt-1 text-sm text-text-muted">No answer saved.</p>;
+  return (
+    <p className="mt-1 text-sm">
+      <span className="font-semibold">{answer}</span>
+      {item.body.options?.[answer] ? ` — ${item.body.options[answer]}` : ""}
+    </p>
+  );
+}
+
+function CorrectView({ item }: { item: AttemptResults["items"][number] }) {
+  if (item.type === "tf_multi") {
+    return (
+      <ol className="mt-1 space-y-1 text-sm">
+        {(item.body.statements ?? []).map((statement, index) => (
+          <li key={index}>
+            <span className="text-text-muted">{index + 1}. </span>
+            {statement.text}
+            <span className="ml-2 font-semibold text-correct">
+              {statement.answer ? "True" : "False"}
+            </span>
+          </li>
+        ))}
+      </ol>
+    );
+  }
+  if (item.type === "mcq_single") {
+    const answer = item.body.answer ?? "";
+    return (
+      <p className="mt-1 text-sm">
+        <span className="font-semibold text-correct">{answer}</span>
+        {item.body.options?.[answer] ? ` — ${item.body.options[answer]}` : ""}
+      </p>
+    );
+  }
+  if (item.type === "spotter") {
+    return (
+      <p className="mt-1 text-sm">
+        <span className="font-semibold text-correct">{item.body.answer ?? "No answer"}</span>
+        {item.body.accepted && item.body.accepted.length > 0
+          ? ` · also accepted: ${item.body.accepted.join(", ")}`
+          : ""}
+      </p>
+    );
+  }
+  return (
+    <p className="reading mt-1 whitespace-pre-wrap text-sm">
+      {item.body.model_answer || "No model answer supplied."}
+    </p>
+  );
+}
+
+function mistakeLabel(tag: string): string {
+  const labels: Record<string, string> = {
+    knowledge_gap: "Knowledge gap",
+    misread_question: "Misread question",
+    wrong_structure: "Wrong structure",
+    ran_out_of_time: "Ran out of time",
+    careless: "Careless",
+  };
+  return labels[tag] ?? tag;
 }
 
 function typeLabel(type: QuestionType): string {

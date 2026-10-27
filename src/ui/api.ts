@@ -39,6 +39,7 @@ export type QuestionBody = {
   prompt?: string;
   model_answer?: string;
   rubric?: string;
+  answer_input?: "text" | "text_and_drawing" | "photo";
 };
 
 export type QuestionCite = { note: string; anchor?: string; quote?: string };
@@ -85,6 +86,17 @@ export type Paper = {
   items: { question: Question; section: string; position: number }[];
 };
 
+export type AttemptSummary = {
+  id: string;
+  paperId: string;
+  paperTitle: string;
+  course: string;
+  startedAt: number;
+  submittedAt: number | null;
+  status: string;
+  durationUsedSec: number | null;
+};
+
 export type AttemptSession = {
   attempt: {
     id: string;
@@ -107,6 +119,30 @@ export type AttemptSession = {
   expired: boolean;
 };
 
+export type RubricScore = {
+  heading: string;
+  awarded: number;
+  max: number;
+  comment?: string;
+};
+
+export type MistakeTag =
+  | "knowledge_gap"
+  | "misread_question"
+  | "wrong_structure"
+  | "ran_out_of_time"
+  | "careless";
+
+export type Grade = {
+  answerId: number;
+  rubricScores: RubricScore[];
+  total: number;
+  feedback: string;
+  mistakeTags: MistakeTag[];
+  gradedBy: string;
+  gradedAt: number;
+};
+
 export type ResultItem = {
   questionId: string;
   section: string;
@@ -120,6 +156,32 @@ export type ResultItem = {
   correct: boolean | null;
   flagged: boolean;
   timeSpentSec: number;
+  questionKind: string | null;
+  conceptIds: string[];
+  body: QuestionBody;
+  cites: QuestionCite[];
+  grade: Grade | null;
+};
+
+export type PendingGradingItem = {
+  answerId: number;
+  attemptId: string;
+  paperId: string;
+  paperTitle: string;
+  course: string;
+  questionId: string;
+  section: string;
+  type: QuestionType;
+  questionKind: string | null;
+  marks: number;
+  topics: string[];
+  conceptIds: string[];
+  body: QuestionBody;
+  cites: QuestionCite[];
+  response: unknown;
+  timeSpentSec: number;
+  flagged: boolean;
+  submittedAt: number;
 };
 
 export type AttemptResults = {
@@ -152,6 +214,7 @@ export type QuestionInput = {
   prompt?: string;
   model_answer?: string;
   rubric?: string;
+  answer_input?: "text" | "text_and_drawing" | "photo";
   cites: QuestionCite[];
   source_paper?: string;
 };
@@ -222,6 +285,10 @@ export const api = {
     blueprint: BlueprintSection[];
     mode: "strict" | "sectioned" | "practice";
   }) => sendJson<Paper>("/api/papers", "POST", input),
+  attempts: (course?: string) =>
+    getJson<AttemptSummary[]>(
+      `/api/attempts${course ? `?course=${encodeURIComponent(course)}` : ""}`,
+    ),
   startAttempt: (paperId: string) =>
     sendJson<AttemptSession>("/api/attempts", "POST", { paper_id: paperId }),
   attempt: (id: string) => getJson<AttemptSession>(`/api/attempts/${encodeURIComponent(id)}`),
@@ -238,6 +305,32 @@ export const api = {
     sendJson<AttemptResults>(`/api/attempts/${encodeURIComponent(attemptId)}/submit`, "POST", { auto }),
   results: (attemptId: string) =>
     getJson<AttemptResults>(`/api/attempts/${encodeURIComponent(attemptId)}/results`),
+  uploadPhoto: async (attemptId: string, questionId: string, file: File, text?: string) => {
+    const form = new FormData();
+    form.set("question_id", questionId);
+    form.set("file", file);
+    if (text) form.set("text", text);
+    const res = await fetch(`/api/attempts/${encodeURIComponent(attemptId)}/photo`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(payload.error ?? `Upload failed: ${res.status}`);
+    }
+    return res.json() as Promise<AttemptSession["answers"][number]>;
+  },
+  pendingGrading: (course?: string) =>
+    getJson<PendingGradingItem[]>(
+      `/api/grading${course ? `?course=${encodeURIComponent(course)}` : ""}`,
+    ),
+  gradingPrompt: (answerId: number) =>
+    getJson<{ prompt: string }>(`/api/grading/${answerId}/prompt`),
+  gradeAnswer: (answerId: number, input: {
+    rubric_scores: RubricScore[];
+    feedback: string;
+    mistake_tags: MistakeTag[];
+  }) => sendJson<Grade>(`/api/answers/${answerId}/grade`, "POST", { ...input, answer_id: answerId }),
 };
 
 export function assetUrl(notePath: string, src: string): string {
@@ -256,4 +349,14 @@ export function spotterImageUrl(question: Question): string {
   if (/^(https?:|data:|\/)/.test(src)) return src;
   if (src.startsWith("courses/")) return `/api/asset?path=${encodeURIComponent(src)}`;
   return assetUrl(question.cites[0]?.note ?? `courses/${question.course}/course.md`, src);
+}
+
+export function photoName(response: unknown): string | null {
+  if (!response || typeof response !== "object") return null;
+  const value = (response as { photo?: unknown }).photo;
+  return typeof value === "string" ? value : null;
+}
+
+export function photoUrl(attemptId: string, questionId: string, name: string): string {
+  return `/api/attempts/${encodeURIComponent(attemptId)}/photo/${encodeURIComponent(questionId)}?file=${encodeURIComponent(name)}`;
 }

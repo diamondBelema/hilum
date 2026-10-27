@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ClipboardCheck,
+  ClipboardList,
   Home,
   NotebookText,
   Settings2,
@@ -17,13 +18,16 @@ import { Questions } from "./screens/Questions.tsx";
 import { ProgressScreen } from "./screens/Placeholders.tsx";
 import { Settings } from "./screens/Settings.tsx";
 import { DesignGallery } from "./screens/DesignGallery.tsx";
+import { Grading } from "./screens/Grading.tsx";
 import { readActiveAttempt } from "./lib/activeAttempt.ts";
+import { subscribeHarnessEvents } from "./lib/events.ts";
 
-type Tab = "study" | "exams" | "notes" | "progress";
+type Tab = "study" | "exams" | "grading" | "notes" | "progress";
 
 const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "study", label: "Study", icon: Home },
   { id: "exams", label: "Exams", icon: ClipboardCheck },
+  { id: "grading", label: "Grading", icon: ClipboardList },
   { id: "notes", label: "Notes", icon: NotebookText },
   { id: "progress", label: "Progress", icon: TrendingUp },
 ];
@@ -44,6 +48,25 @@ function Shell() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
+  const [pendingGrading, setPendingGrading] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => {
+      api
+        .pendingGrading()
+        .then((items) => !cancelled && setPendingGrading(items.length))
+        .catch(() => {});
+    };
+    refresh();
+    const unsubscribe = subscribeHarnessEvents((event) => {
+      if (event.type === "graded" || event.type === "submitted") refresh();
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     api
@@ -186,7 +209,13 @@ function Shell() {
         </div>
         <nav aria-label="Main" className="px-2">
           {NAV.map((item) => (
-            <NavButton key={item.id} item={item} active={tab === item.id} onClick={() => selectTab(item.id)} />
+            <NavButton
+              key={item.id}
+              item={item}
+              active={tab === item.id}
+              badge={item.id === "grading" ? pendingGrading : 0}
+              onClick={() => selectTab(item.id)}
+            />
           ))}
         </nav>
         {tab === "notes" && course && courses.length > 0 && (
@@ -239,11 +268,16 @@ function Shell() {
               aria-label={item.label}
               aria-current={tab === item.id ? "page" : undefined}
               onClick={() => selectTab(item.id)}
-              className={`flex size-12 items-center justify-center rounded-control ${
+              className={`relative flex size-12 items-center justify-center rounded-control ${
                 tab === item.id ? "bg-primary-soft text-text" : "text-text-muted hover:bg-surface-2"
               }`}
             >
               <Icon aria-hidden="true" className="size-5" />
+              {item.id === "grading" && pendingGrading > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-bg">
+                  {pendingGrading}
+                </span>
+              )}
             </button>
           );
         })}
@@ -294,6 +328,8 @@ function Shell() {
           />
         ) : tab === "exams" ? (
           <Questions courses={courses} />
+        ) : tab === "grading" ? (
+          <Grading courses={courses} onOpenExams={() => selectTab("exams")} />
         ) : (
           <ProgressScreen />
         )}
@@ -303,7 +339,7 @@ function Shell() {
         aria-label="Main"
         className="fixed inset-x-0 bottom-0 z-20 border-t border-border-subtle bg-surface pb-[env(safe-area-inset-bottom)] sm:hidden"
       >
-        <ul className="grid grid-cols-4">
+        <ul className="grid grid-cols-5">
           {NAV.map((item) => {
             const Icon = item.icon;
             return (
@@ -312,12 +348,17 @@ function Shell() {
                   type="button"
                   onClick={() => selectTab(item.id)}
                   aria-current={tab === item.id ? "page" : undefined}
-                  className={`flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-xs ${
+                  className={`relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-xs ${
                     tab === item.id ? "text-primary" : "text-text-muted"
                   }`}
                 >
                   <Icon aria-hidden="true" className="size-5" />
                   {item.label}
+                  {item.id === "grading" && pendingGrading > 0 && (
+                    <span className="absolute top-1 right-1/4 flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-bg">
+                      {pendingGrading}
+                    </span>
+                  )}
                 </button>
               </li>
             );
@@ -333,10 +374,12 @@ function Shell() {
 function NavButton({
   item,
   active,
+  badge = 0,
   onClick,
 }: {
   item: { label: string; icon: LucideIcon };
   active: boolean;
+  badge?: number;
   onClick: () => void;
 }) {
   const Icon = item.icon;
@@ -345,12 +388,18 @@ function NavButton({
       type="button"
       onClick={onClick}
       aria-current={active ? "page" : undefined}
+      aria-label={badge > 0 ? `${item.label}, ${badge} waiting` : item.label}
       className={`flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-sm ${
         active ? "bg-primary-soft font-semibold text-text" : "text-text-muted hover:bg-surface-2 hover:text-text"
       }`}
     >
       <Icon aria-hidden="true" className="size-5" />
       {item.label}
+      {badge > 0 && (
+        <span className="ml-auto rounded-chip bg-accent px-2 py-0.5 text-[11px] font-semibold text-bg">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
