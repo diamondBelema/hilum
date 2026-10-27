@@ -25,18 +25,19 @@ afterEach(async () => {
 });
 
 async function connect() {
-  const { config, vault, indexer, questions, papers, runner, grading } = createApp({
+  const app = createApp({
     config: { vaultPath: root, dbPath: ":memory:" },
   });
+  const { config, vault, indexer, questions, papers, runner, grading, sessions } = app;
   await indexer.reindexAll();
 
-  const server = createMcpServer(config, vault, questions, papers, runner, grading);
+  const server = createMcpServer(config, vault, questions, papers, runner, grading, sessions);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
 
   const client = new Client({ name: "test", version: "0" });
   await client.connect(clientTransport);
-  return { client, server, vault, runner };
+  return { client, server, vault, runner, sessions };
 }
 
 describe("mcp content tools", () => {
@@ -311,6 +312,109 @@ describe("mcp content tools", () => {
       arguments: { attempt_id: session.attempt.id },
     });
     expect((debrief.messages[0]?.content as { text: string }).text).toContain("Debrief");
+    await server.close();
+  });
+
+  test("runs a live session through MCP tools", async () => {
+    const { client, server, sessions } = await connect();
+    const prompts = (await client.listPrompts()).prompts.map((prompt) => prompt.name);
+    expect(prompts).toContain("run_session");
+    const tools = (await client.listTools()).tools.map((tool) => tool.name);
+    for (const name of [
+      "session_start",
+      "get_session",
+      "push_activity",
+      "await_response",
+      "record_evidence",
+      "get_agent_requests",
+      "bank_activity",
+      "session_end",
+    ]) {
+      expect(tools).toContain(name);
+    }
+
+    const started = await client.callTool({ name: "session_start", arguments: { course: "ana-211" } });
+    const session = JSON.parse(text(started)) as { session: { id: string } };
+    const sessionId = session.session.id;
+
+    const invalid = await client.callTool({
+      name: "push_activity",
+      arguments: {
+        session_id: sessionId,
+        spec: {
+          cites: [{ note: "ana-211/notes/tubules.md", anchor: "tubules", quote: "Filtered sodium" }],
+          components: [{ type: "not_a_component" }],
+        },
+      },
+    });
+    expect(invalid.isError).toBe(true);
+    expect(text(invalid)).toContain("Available types");
+    expect(text(invalid)).toContain("mcq_single");
+
+    const pushed = await client.callTool({
+      name: "push_activity",
+      arguments: {
+        session_id: sessionId,
+        spec: {
+          title: "Tubules probe",
+          cites: [
+            {
+              note: "ana-211/notes/tubules.md",
+              anchor: "tubules",
+              quote: "Filtered sodium is reabsorbed",
+            },
+          ],
+          concept_ids: ["sodium-reabsorption"],
+          components: [
+            {
+              type: "mcq_single",
+              stem: "What happens to filtered sodium?",
+              options: ["It is secreted", "It is reabsorbed"],
+              answer: 1,
+              concept_ids: ["sodium-reabsorption"],
+            },
+            { type: "confidence_rating" },
+          ],
+        },
+      },
+    });
+    expect(pushed.isError).not.toBe(true);
+    const activity = JSON.parse(text(pushed)) as { id: string };
+
+    const answered = sessions.respond(sessionId, activity.id, {
+      components: [1, "likely"],
+      confidence: "likely",
+    }, 12);
+    expect(answered.status).toBe("answered");
+
+    const awaited = await client.callTool({
+      name: "await_response",
+      arguments: { session_id: sessionId, timeout_seconds: 1 },
+    });
+    expect(text(awaited)).toContain('"status":"answered"');
+    expect(text(awaited)).toContain("sodium-reabsorption");
+
+    const request = sessions.request(sessionId, "Explain the transporter");
+    expect(request.status).toBe("open");
+    const requests = await client.callTool({
+      name: "get_agent_requests",
+      arguments: { session_id: sessionId },
+    });
+    expect(text(requests)).toContain("Explain the transporter");
+
+    const banked = await client.callTool({
+      name: "bank_activity",
+      arguments: { activity_id: activity.id, tags: ["renal"] },
+    });
+    expect(banked.isError).not.toBe(true);
+    expect(text(banked)).toContain("courses/ana-211/activities/");
+
+    const ended = await client.callTool({
+      name: "session_end",
+      arguments: { session_id: sessionId, summary: "Sodium is reabsorbed." },
+    });
+    expect(ended.isError).not.toBe(true);
+    expect(text(ended)).toContain("courses/ana-211/sessions/");
     await server.close();
   });
 

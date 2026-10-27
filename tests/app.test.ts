@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApp } from "../src/server/app.ts";
@@ -20,7 +20,7 @@ describe("http api", () => {
     const res = await app.request("/api/meta");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { meta: { key: string; value: string }[] };
-    expect(body.meta).toEqual([{ key: "schema_version", value: "5" }]);
+    expect(body.meta).toEqual([{ key: "schema_version", value: "6" }]);
   });
 
   test("serves questions, updates content and verifies", async () => {
@@ -164,6 +164,85 @@ describe("grading and photo api", () => {
     const first = await reader.read();
     expect(new TextDecoder().decode(first.value)).toContain('"type":"hello"');
     await reader.cancel();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("creates, answers, banks and ends a live session over HTTP", async () => {
+    const root = await mkdtemp(join(tmpdir(), "harness-live-api-"));
+    await mkdir(join(root, "courses/ana-211/notes"), { recursive: true });
+    await writeFile(
+      join(root, "courses/ana-211/notes/thorax.md"),
+      "## Diaphragm {#diaphragm}\n\nThe diaphragm is the primary muscle of inspiration.\n",
+      "utf8",
+    );
+    const { app, sessions } = createApp({ config: { dbPath: ":memory:", vaultPath: root } });
+
+    const created = await app.request("/api/sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ course: "ana-211", goal: "review" }),
+    });
+    expect(created.status).toBe(201);
+    const session = (await created.json()) as { id: string; agentConnected: boolean };
+    expect(session.agentConnected).toBe(false);
+
+    const activity = await sessions.pushActivity(session.id, {
+      title: "Diaphragm probe",
+      cites: [
+        {
+          note: "ana-211/notes/thorax.md",
+          anchor: "diaphragm",
+          quote: "The diaphragm is the primary muscle of inspiration",
+        },
+      ],
+      concept_ids: ["diaphragm"],
+      components: [
+        {
+          type: "mcq_single",
+          stem: "Primary muscle of inspiration?",
+          options: ["Diaphragm", "Rectus abdominis"],
+          answer: 0,
+          concept_ids: ["diaphragm"],
+        },
+      ],
+    });
+
+    const answered = await app.request(`/api/sessions/${session.id}/activities/${activity.id}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ response: { components: [0] }, time_sec: 7 }),
+    });
+    expect(answered.status).toBe(200);
+    expect(((await answered.json()) as { status: string }).status).toBe("answered");
+
+    const request = await app.request(`/api/sessions/${session.id}/requests`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "Explain this" }),
+    });
+    expect(request.status).toBe(201);
+
+    const banked = await app.request(`/api/activities/${activity.id}/bank`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tags: ["thorax"] }),
+    });
+    expect(banked.status).toBe(201);
+    const bankPath = ((await banked.json()) as { path: string }).path;
+    expect(await readFile(join(root, bankPath), "utf8")).toContain("Diaphragm probe");
+
+    const ended = await app.request(`/api/sessions/${session.id}/end`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ summary: "Diaphragm first." }),
+    });
+    expect(ended.status).toBe(200);
+    const endedSession = (await ended.json()) as { endedAt: number | null; notePath: string | null };
+    expect(endedSession.endedAt).toBeNumber();
+    expect(await readFile(join(root, endedSession.notePath ?? ""), "utf8")).toContain("Diaphragm first.");
+
+    const active = await app.request("/api/sessions/active");
+    expect(await active.json()).toBeNull();
     await rm(root, { recursive: true, force: true });
   });
 });

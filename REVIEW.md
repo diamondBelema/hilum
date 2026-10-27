@@ -97,3 +97,29 @@
 - Practice-mode theory answers still enter the grading queue even though practice reveals the reference answer.
 - Attempt history is API-level only; the paper row shows the latest attempt rather than a list of all attempts.
 - Evidence is keyed by concept id; topic-level aggregation is left to M6's mastery views.
+
+## 2026-10-27 — M5b live sessions and ActivitySpec renderer
+
+**Verdict: pass.** `bun run verify` green (typecheck, 65 tests across 9 files, smoke ui/api/mcp).
+
+### Scope
+- M5b: schema v6 sessions/activities/agent_requests, SessionService, the 11 starred ActivitySpec components, live link/SSE, agent requests, render errors, banking, session notes, AGENTS.md, MCP session tools and `run_session`, Live UI.
+
+### Checked against SPEC / DESIGN
+- [x] `session_start` returns a session plus mastery/due/frontier placeholders; `get_session`, `push_activity`, `await_response`, `record_evidence`, `get_agent_requests`, `bank_activity`, `session_end` all exist.
+- [x] ActivitySpec is validated against a fixed catalog; unknown types are rejected with the available list; every activity carries valid cites.
+- [x] All starred components render: flashcard, cloze, mcq_single, tf_multi, theory, worked_example_stepper, predict_reveal, compare_table, mermaid_diagram, confidence_rating, think_aloud. Component renderer tests use server-side React rendering, so each catalog entry is exercised.
+- [x] Mermaid renders locally with strict security, follows light/dark, and a parse failure is reported back to the agent and shown as the friendly fallback.
+- [x] Status strip: connected, preparing with elapsed seconds, not connected; after 20 s it adds "Still working…" and the two escape buttons. Student actions cannot fake presence.
+- [x] Confidence and think-aloud appear only when the spec asks for them; answers write evidence per concept.
+- [x] Ask-the-agent sheet has Explain this / Quiz me / I am confused / Go slower, a custom request, and a visible queue.
+- [x] A student can Keep this; the activity lands in `courses/<course>/activities/` with cites and spec. End session writes a session note with summary and activity log.
+- [x] AGENTS.md and MCP server instructions describe the same loop; `run_session` prompt is available.
+- [x] 390/1440 px and light/dark checked; six-tab mobile nav fits at 360 px without clipping; diagram, stepper, compare table, confidence and think-aloud all usable.
+
+### Gaps (deferred)
+- Mastery, due items and frontier are empty until M6; `find_concepts`/`get_next_concepts` do not exist yet.
+- Banked activities are stored and cited but cannot yet be replayed, scheduled or included in papers.
+- The browser flow was exercised with seeded session data; the MCP loop is covered in memory, not against a real external teaching agent.
+- Session history is API-level; the Live screen does not list old sessions.
+- Only one active session per course is surfaced; overlapping sessions in other courses are not managed in the UI.

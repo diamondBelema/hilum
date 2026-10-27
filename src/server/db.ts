@@ -142,10 +142,60 @@ function migrate(db: Db): void {
 
     CREATE INDEX IF NOT EXISTS evidence_concept ON evidence(concept_id, created_at);
     CREATE INDEX IF NOT EXISTS evidence_answer ON evidence(answer_id);
+    CREATE INDEX IF NOT EXISTS evidence_session ON evidence(session_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      course TEXT NOT NULL,
+      goal TEXT NOT NULL DEFAULT 'learn',
+      started_at INTEGER NOT NULL,
+      ended_at INTEGER,
+      summary TEXT NOT NULL DEFAULT '',
+      note_path TEXT,
+      agent_seen_at INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS sessions_course ON sessions(course, started_at);
+
+    CREATE TABLE IF NOT EXISTS activities (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      course TEXT NOT NULL,
+      spec_json TEXT NOT NULL,
+      cites_json TEXT NOT NULL DEFAULT '[]',
+      concept_ids TEXT NOT NULL DEFAULT '[]',
+      response_json TEXT,
+      render_error TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      banked INTEGER NOT NULL DEFAULT 0,
+      banked_path TEXT,
+      response_seen INTEGER NOT NULL DEFAULT 0,
+      render_seen INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      answered_at INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS activities_session ON activities(session_id, created_at);
+    CREATE INDEX IF NOT EXISTS activities_pending ON activities(session_id, status);
+
+    CREATE TABLE IF NOT EXISTS agent_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS agent_requests_session ON agent_requests(session_id, status);
   `);
+
+  const activityColumns = db.query("PRAGMA table_info(activities)").all() as { name: string }[];
+  if (!activityColumns.some((column) => column.name === "render_seen")) {
+    db.exec("ALTER TABLE activities ADD COLUMN render_seen INTEGER NOT NULL DEFAULT 0");
+  }
 
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
-    "5",
+    "6",
   );
 }

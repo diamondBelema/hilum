@@ -1,7 +1,9 @@
 export type HarnessEvent =
   | { type: "hello"; at: number }
   | { type: "submitted"; course: string; attemptId: string; at: number }
-  | { type: "graded"; course: string; attemptId: string; answerId: number; at: number };
+  | { type: "graded"; course: string; attemptId: string; answerId: number; at: number }
+  | { type: "activity"; course: string; sessionId: string; activityId: string; state: string; at: number }
+  | { type: "session"; course: string; sessionId: string; state: string; at: number };
 
 const listeners = new Set<(event: HarnessEvent) => void>();
 let source: EventSource | null = null;

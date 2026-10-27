@@ -81,3 +81,16 @@ Append-only log. Newest entry at the bottom.
 - Attempt history: `/api/attempts` lists recent attempts; a paper row now offers Results for the latest submitted attempt and Resume for an in-progress one, so debriefs survive leaving the screen.
 - MCP: `get_pending_grading`, `submit_grade`, `grade_theory_answer` and `exam_debrief` prompts; the shared prompt includes the full task, marks, rubric, citations and photo URL.
 - Next: M6 mastery and progression (evidence aggregation, concept graph, dashboard, weak topics, real results).
+
+## 2026-10-27 — M5b live sessions and ActivitySpec renderer
+
+- Status: done (`bun run verify`: typecheck, 65 tests across 9 files, smoke ui/api/mcp).
+- Schema v6 adds `sessions`, `activities` and `agent_requests`; evidence now carries the session/activity link and is indexed by session. Existing v6 demo rows get the new `render_seen` column on open.
+- `ActivitySpec` is one strict catalog with 11 shipped components: flashcard, cloze, mcq_single, tf_multi, theory, worked_example_stepper, predict_reveal, compare_table, mermaid_diagram, confidence_rating and think_aloud. Unknown types return the full available list; citations (note, anchor, verbatim quote) are validated before any activity is stored.
+- `SessionService`: start/resume per course, push, answer with server-side answer validation, evidence per concept, agent requests, render errors, a 25 s long-poll for the agent, banking, and end-of-session notes under `courses/<code>/sessions/`.
+- MCP: `session_start`, `get_session`, `push_activity`, `await_response`, `record_evidence`, `get_agent_requests`, `bank_activity`, `session_end`, plus a `run_session` prompt. Agent presence is driven only by session tool calls, never by the browser reading a session.
+- Live UI: a new Live tab with the three-state status strip (connected / preparing with elapsed seconds / not connected), the 20 s "still working" message with Read the note and Practice saved questions, the ActivitySpec renderer, Ask-the-agent sheet and quick requests, Keep this, and End session with a vault note.
+- Mermaid renders lazily in the browser with strict security, follows the light/dark theme, and reports parse failures back through `render_error`; the student sees "This activity could not be displayed. The agent has been told."
+- Banked activities are written to `courses/<code>/activities/<slug>-<id>.md` with frontmatter cites and the JSON spec; the student can keep one from the live session and the agent can bank through MCP.
+- AGENTS.md and the MCP server instructions now carry the full teacher protocol. Mobile nav grew to six tabs without clipping at 360 px.
+- Next: M6 concepts, mastery, decay, frontier, due queue and the real dashboard (session_start will start returning those snapshots).

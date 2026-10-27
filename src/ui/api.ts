@@ -241,6 +241,110 @@ async function getJson<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export type ActivityType =
+  | "flashcard"
+  | "cloze"
+  | "mcq_single"
+  | "tf_multi"
+  | "theory"
+  | "worked_example_stepper"
+  | "predict_reveal"
+  | "compare_table"
+  | "mermaid_diagram"
+  | "confidence_rating"
+  | "think_aloud";
+
+export type ActivityComponent = {
+  type: ActivityType;
+  concept_ids?: string[];
+  front?: string;
+  back?: string;
+  text?: string;
+  explanation?: string;
+  stem?: string;
+  options?: string[];
+  answer?: number;
+  statements?: { text: string; answer: boolean; explanation?: string }[];
+  scoring?: "per_statement" | "all_or_nothing";
+  prompt?: string;
+  marks?: number;
+  model_answer?: string;
+  rubric?: { point: string; marks: number }[];
+  title?: string;
+  steps?: { title: string; body: string }[];
+  reveal?: string;
+  hint?: string;
+  caption?: string;
+  columns?: string[];
+  rows?: string[][];
+  code?: string;
+  min_words?: number;
+};
+
+export type ActivityCite = { note: string; anchor?: string; quote?: string };
+
+export type ActivitySpec = {
+  title?: string;
+  instructions?: string;
+  goal?: string;
+  cites: ActivityCite[];
+  concept_ids: string[];
+  components: ActivityComponent[];
+};
+
+export type Confidence = "guessing" | "likely" | "sure";
+
+export type ActivityResponse = {
+  components: unknown[];
+  confidence?: Confidence;
+  think_aloud?: string;
+};
+
+export type SessionActivity = {
+  id: string;
+  sessionId: string;
+  course: string;
+  title: string;
+  spec: ActivitySpec;
+  cites: ActivityCite[];
+  status: string;
+  response: ActivityResponse | null;
+  renderError: string | null;
+  banked: boolean;
+  bankedPath: string | null;
+  createdAt: number;
+  answeredAt: number | null;
+};
+
+export type AgentRequest = { id: number; text: string; status: string; createdAt: number };
+
+export type SessionDetail = {
+  id: string;
+  course: string;
+  goal: string;
+  startedAt: number;
+  endedAt: number | null;
+  summary: string;
+  notePath: string | null;
+  agentSeenAt: number | null;
+  agentConnected: boolean;
+  agentPreparing: boolean;
+  activity: SessionActivity | null;
+  activities: SessionActivity[];
+  requests: AgentRequest[];
+  evidenceCount: number;
+};
+
+export type SessionSummary = {
+  id: string;
+  course: string;
+  goal: string;
+  startedAt: number;
+  endedAt: number | null;
+  summary: string;
+  notePath: string | null;
+};
+
 export type Health = {
   status: string;
   version: string;
@@ -331,6 +435,39 @@ export const api = {
     feedback: string;
     mistake_tags: MistakeTag[];
   }) => sendJson<Grade>(`/api/answers/${answerId}/grade`, "POST", { ...input, answer_id: answerId }),
+  activeSession: (course?: string) =>
+    getJson<SessionDetail | null>(
+      `/api/sessions/active${course ? `?course=${encodeURIComponent(course)}` : ""}`,
+    ),
+  session: (id: string) => getJson<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}`),
+  startSession: (course: string, goal = "learn") =>
+    sendJson<SessionDetail>("/api/sessions", "POST", { course, goal }),
+  endSession: (id: string, summary: string) =>
+    sendJson<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}/end`, "POST", { summary }),
+  respondActivity: (id: string, activityId: string, response: ActivityResponse, timeSec: number) =>
+    sendJson<SessionActivity>(
+      `/api/sessions/${encodeURIComponent(id)}/activities/${encodeURIComponent(activityId)}/respond`,
+      "POST",
+      { response, time_sec: timeSec },
+    ),
+  renderError: (id: string, activityId: string, message: string) =>
+    sendJson<{ ok: boolean }>(
+      `/api/sessions/${encodeURIComponent(id)}/activities/${encodeURIComponent(activityId)}/render-error`,
+      "POST",
+      { message },
+    ),
+  askAgent: (id: string, text: string) =>
+    sendJson<AgentRequest>(`/api/sessions/${encodeURIComponent(id)}/requests`, "POST", { text }),
+  bankActivity: (activityId: string, tags: string[] = []) =>
+    sendJson<{ path: string; id: string }>(
+      `/api/activities/${encodeURIComponent(activityId)}/bank`,
+      "POST",
+      { tags },
+    ),
+  sessionHistory: (course?: string) =>
+    getJson<SessionSummary[]>(
+      `/api/sessions/history${course ? `?course=${encodeURIComponent(course)}` : ""}`,
+    ),
 };
 
 export function assetUrl(notePath: string, src: string): string {

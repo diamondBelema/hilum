@@ -8,6 +8,7 @@ import { CitationError } from "./questions/citations.ts";
 import { ExamError, ExamRunner } from "./exams/attempts.ts";
 import { PaperError, PaperService } from "./exams/papers.ts";
 import { GradingError, GradingService } from "./exams/grading.ts";
+import { SessionError, SessionService } from "./sessions/service.ts";
 import { EventBus } from "./events.ts";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
@@ -35,6 +36,7 @@ export function createApp(deps: AppDeps = {}) {
     events,
     `http://${config.hostname}:${config.port}`,
   );
+  const sessions = new SessionService(db, vault, events);
   const app = new Hono();
 
   app.onError((err, c) => {
@@ -43,7 +45,8 @@ export function createApp(deps: AppDeps = {}) {
       err instanceof QuestionError ||
       err instanceof PaperError ||
       err instanceof ExamError ||
-      err instanceof GradingError
+      err instanceof GradingError ||
+      err instanceof SessionError
     ) {
       return c.json({ error: err.message }, 400);
     }
@@ -268,6 +271,50 @@ export function createApp(deps: AppDeps = {}) {
     });
   });
 
+  app.get("/api/sessions/active", (c) => c.json(sessions.active(c.req.query("course"))));
+
+  app.get("/api/sessions/history", (c) => c.json(sessions.history(c.req.query("course"))));
+
+  app.post("/api/sessions", async (c) => {
+    const body = await c.req.json<{ course?: string; goal?: string }>();
+    return c.json(await sessions.start(String(body.course ?? ""), body.goal, "app"), 201);
+  });
+
+  app.get("/api/sessions/:id", (c) => c.json(sessions.detail(c.req.param("id"))));
+
+  app.post("/api/activities/:id/bank", async (c) => {
+    const body = await c.req.json<{ tags?: string[] }>().catch(() => ({ tags: [] }));
+    return c.json(await sessions.bankActivity(c.req.param("id"), body.tags ?? []), 201);
+  });
+
+  app.post("/api/sessions/:id/end", async (c) => {
+    const body = await c.req.json<{ summary?: string }>().catch(() => ({ summary: "" }));
+    return c.json(await sessions.end(c.req.param("id"), body.summary ?? ""));
+  });
+
+  app.post("/api/sessions/:id/requests", async (c) => {
+    const body = await c.req.json<{ text?: string }>();
+    return c.json(sessions.request(c.req.param("id"), String(body.text ?? "")), 201);
+  });
+
+  app.post("/api/sessions/:id/activities/:activityId/respond", async (c) => {
+    const body = await c.req.json<{ response?: unknown; time_sec?: number }>();
+    return c.json(
+      sessions.respond(
+        c.req.param("id"),
+        c.req.param("activityId"),
+        body.response,
+        Number(body.time_sec ?? 0),
+      ),
+    );
+  });
+
+  app.post("/api/sessions/:id/activities/:activityId/render-error", async (c) => {
+    const body = await c.req.json<{ message?: string }>();
+    sessions.renderError(c.req.param("id"), c.req.param("activityId"), String(body.message ?? ""));
+    return c.json({ ok: true });
+  });
+
   app.get("/api/events", (c) => {
     const encoder = new TextEncoder();
     let unsubscribe = () => {};
@@ -314,14 +361,16 @@ export function createApp(deps: AppDeps = {}) {
     });
   });
 
-  app.all("/mcp", (c) => handleMcpRequest(c.req.raw, config, vault, questions, papers, runner, grading));
+  app.all("/mcp", (c) =>
+    handleMcpRequest(c.req.raw, config, vault, questions, papers, runner, grading, sessions),
+  );
 
   app.get("/_design", async (c) => c.html(await Bun.file(paths.uiIndex).text()));
 
   app.use("/*", serveStatic({ root: paths.uiDist }));
   app.get("*", serveStatic({ path: paths.uiIndex }));
 
-  return { app, config, db, vault, indexer, questions, papers, runner, grading };
+  return { app, config, db, vault, indexer, questions, papers, runner, grading, sessions };
 }
 
 function zodMessage(err: ZodError): string {

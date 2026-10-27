@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Home,
   NotebookText,
+  Radio,
   Settings2,
   TrendingUp,
   type LucideIcon,
@@ -19,13 +20,15 @@ import { ProgressScreen } from "./screens/Placeholders.tsx";
 import { Settings } from "./screens/Settings.tsx";
 import { DesignGallery } from "./screens/DesignGallery.tsx";
 import { Grading } from "./screens/Grading.tsx";
+import { Live } from "./screens/Live.tsx";
 import { readActiveAttempt } from "./lib/activeAttempt.ts";
 import { subscribeHarnessEvents } from "./lib/events.ts";
 
-type Tab = "study" | "exams" | "grading" | "notes" | "progress";
+type Tab = "study" | "live" | "exams" | "grading" | "notes" | "progress";
 
 const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "study", label: "Study", icon: Home },
+  { id: "live", label: "Live", icon: Radio },
   { id: "exams", label: "Exams", icon: ClipboardCheck },
   { id: "grading", label: "Grading", icon: ClipboardList },
   { id: "notes", label: "Notes", icon: NotebookText },
@@ -326,6 +329,12 @@ function Shell() {
             onOpenNote={(path) => void openNote(path)}
             loading={loading}
           />
+        ) : tab === "live" ? (
+          <Live
+            courses={courses}
+            onOpenNote={(path, anchor) => void openNote(path, anchor)}
+            onOpenExams={() => selectTab("exams")}
+          />
         ) : tab === "exams" ? (
           <Questions courses={courses} />
         ) : tab === "grading" ? (
@@ -339,7 +348,7 @@ function Shell() {
         aria-label="Main"
         className="fixed inset-x-0 bottom-0 z-20 border-t border-border-subtle bg-surface pb-[env(safe-area-inset-bottom)] sm:hidden"
       >
-        <ul className="grid grid-cols-5">
+        <ul className="grid grid-cols-6">
           {NAV.map((item) => {
             const Icon = item.icon;
             return (
@@ -348,7 +357,7 @@ function Shell() {
                   type="button"
                   onClick={() => selectTab(item.id)}
                   aria-current={tab === item.id ? "page" : undefined}
-                  className={`relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-xs ${
+                  className={`relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] ${
                     tab === item.id ? "text-primary" : "text-text-muted"
                   }`}
                 >
