@@ -220,15 +220,15 @@ function Shell() {
         Skip to content
       </a>
 
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar)] flex-col border-r border-border-subtle bg-surface lg:flex">
-        <div className="flex items-center gap-3 px-5 py-5">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar)] flex-col bg-surface lg:flex border-r border-border-subtle">
+        <div className="flex items-center gap-3 px-5 py-6">
           <img src="/icon.svg" alt="" aria-hidden="true" className="size-9 rounded-[10px]" />
           <div>
             <p className="text-base font-semibold tracking-tight">Hilum</p>
             <p className="mt-0.5 text-xs text-text-muted">Local study</p>
           </div>
         </div>
-        <nav aria-label="Main" className="px-2">
+        <nav aria-label="Main" className="px-2 pt-3">
           {NAV.map((item) => (
             <NavButton
               key={item.id}
@@ -429,7 +429,7 @@ function NavButton({
       aria-current={active ? "page" : undefined}
       aria-label={badge > 0 ? `${item.label}, ${badge} waiting` : item.label}
       className={`flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-sm ${
-        active ? "bg-primary-soft font-semibold text-text" : "text-text-muted hover:bg-surface-2 hover:text-text"
+        active ? "bg-surface-2 font-semibold text-primary" : "text-text-muted hover:bg-surface-2 hover:text-text"
       }`}
     >
       <Icon aria-hidden="true" className="size-5" />

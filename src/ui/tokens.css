@@ -1,29 +1,29 @@
 /*
- * Design tokens from DESIGN.md section 3.
- * Colors use light-dark() so one definition serves both themes; the
- * color-scheme property below selects the active side.
+ * Design tokens from DESIGN.md sections 3, 3.1 and 3.1b.
+ * Light theme (DESIGN 3.1) and Black theme (DESIGN 3.1b, default dark) via light-dark().
+ * The color-scheme property selects the active side; [data-theme] overrides the system.
  */
 :root {
   color-scheme: light;
 
-  --bg: light-dark(#f6f5fb, #12111c);
-  --surface: light-dark(#ffffff, #1b1a2a);
-  --surface-2: light-dark(#eeedf6, #25243a);
-  --border-subtle: light-dark(#e2e0ee, #2f2e47);
-  --border-strong: light-dark(#8a88a6, #6f6d91);
-  --text: light-dark(#1b1b2e, #ecebf5);
-  --text-muted: light-dark(#4f4e6b, #b4b2cb);
+  --bg: light-dark(#f6f5fb, #0a0a0c);
+  --surface: light-dark(#ffffff, #121215);
+  --surface-2: light-dark(#eeedf6, #1a1a1f);
+  --border-subtle: light-dark(#e2e0ee, #25252b);
+  --border-strong: light-dark(#8a88a6, #6a6a78);
+  --text: light-dark(#1b1b2e, #ededf0);
+  --text-muted: light-dark(#4f4e6b, #a3a3b0);
   --primary: light-dark(#4338a8, #a9a3ff);
-  --on-primary: light-dark(#ffffff, #12111c);
-  --primary-soft: light-dark(#e6e3fa, #2b2860);
+  --on-primary: light-dark(#ffffff, #0a0a0c);
+  --primary-soft: light-dark(#e6e3fa, #1f1d45);
   --accent: light-dark(#b3345f, #f08cb0);
-  --accent-soft: light-dark(#fbe4ec, #3a1f2d);
+  --accent-soft: light-dark(#fbe4ec, #2e1a24);
   --correct: light-dark(#17703f, #6fd59a);
-  --correct-soft: light-dark(#e3f4ea, #17301f);
+  --correct-soft: light-dark(#e3f4ea, #11261a);
   --incorrect: light-dark(#b3261e, #ff8a80);
-  --incorrect-soft: light-dark(#fbe6e4, #3a1a18);
+  --incorrect-soft: light-dark(#fbe6e4, #301614);
   --warning: light-dark(#8a5100, #f2b544);
-  --warning-soft: light-dark(#fff0d6, #36290b);
+  --warning-soft: light-dark(#fff0d6, #2b2209);
   --focus: light-dark(#4338a8, #a9a3ff);
 
   --text-xs: 0.8125rem;

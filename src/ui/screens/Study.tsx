@@ -1,6 +1,17 @@
-import { useEffect, useState } from "react";
-import { BookOpen, CalendarClock, GraduationCap, Play, RefreshCw } from "lucide-react";
-import { api, type Course, type Dashboard } from "../api.ts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  BookOpen,
+  CalendarClock,
+  ClipboardList,
+  GraduationCap,
+  Play,
+  RefreshCw,
+  Sparkles,
+  Timer,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
+import { api, type Course, type Dashboard, type SessionDetail, type SessionSummary } from "../api.ts";
 import { plural } from "../lib/format.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
 import { Button } from "../components/Button.tsx";
@@ -21,14 +32,29 @@ export function Study({
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeSession, setActiveSession] = useState<SessionDetail | null>(null);
+  const [composerText, setComposerText] = useState("");
+  const [composerMode, setComposerMode] = useState<"teach" | "practice">("teach");
+  const [queuing, setQueuing] = useState(false);
+  const [queued, setQueued] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [sessionSearch, setSessionSearch] = useState("");
+  const [sessionsLoading, setSessionsLoading] = useState(false);
 
   function load() {
     setLoading(true);
-    api
-      .dashboard()
-      .then(setDashboard)
+    setSessionsLoading(true);
+    Promise.all([api.dashboard(), api.sessionHistory()])
+      .then(([dashboard, sessions]) => {
+        setDashboard(dashboard);
+        setSessions(sessions);
+      })
       .catch((err: unknown) => setError(messageOf(err)))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setSessionsLoading(false);
+      });
   }
 
   useEffect(() => {
@@ -38,6 +64,11 @@ export function Study({
       .then((value) => !cancelled && setDashboard(value))
       .catch((err: unknown) => !cancelled && setError(messageOf(err)))
       .finally(() => !cancelled && setLoading(false));
+    api
+      .sessionHistory()
+      .then((sessions) => !cancelled && setSessions(sessions))
+      .catch(() => !cancelled && setSessions([]))
+      .finally(() => !cancelled && setSessionsLoading(false));
     const unsubscribe = subscribeHarnessEvents((event) => {
       if (event.type === "activity" || event.type === "session" || event.type === "graded") load();
     });
@@ -45,13 +76,61 @@ export function Study({
       cancelled = true;
       unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .activeSession()
+      .then((session) => !cancelled && setActiveSession(session))
+      .catch(() => !cancelled && setActiveSession(null));
+    const timer = setInterval(() => {
+      api.activeSession().then((session) => !cancelled && setActiveSession(session)).catch(() => {});
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, []);
 
   const noteCount = courses.reduce((sum, course) => sum + course.notes, 0);
   const hasTopics = Boolean(dashboard && dashboard.counts.total > 0);
   const due = dashboard?.due ?? [];
   const next = dashboard?.next ?? [];
+  const connected = Boolean(activeSession?.agentConnected);
+  const preparing = Boolean(connected && activeSession?.agentPreparing);
+
+  async function queueRequest() {
+    const text = composerText.trim();
+    if (!text) return;
+    setQueued(false);
+    setError(null);
+    setQueuing(true);
+    try {
+      let session = activeSession;
+      if (!session) {
+        const course = courses.find((item) => item.notes > 0 || item.concepts > 0) ?? courses[0];
+        if (!course) {
+          setError("Add a course first, then ask something to learn.");
+          return;
+        }
+        session = await api.startSession(course.code, "learn");
+        setActiveSession(session);
+      }
+      await api.askAgent(session.id, text);
+      setComposerText("");
+      setQueued(true);
+      setNotice("Request queued. The agent will pick it up on its next check.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setQueuing(false);
+    }
+  }
+
+  function messageOf(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
+  }
 
   return (
     <div className="max-w-3xl">
@@ -65,6 +144,88 @@ export function Study({
           <Banner tone="error">{error}</Banner>
         </div>
       )}
+
+      {notice && (
+        <div className="mt-4">
+          <Banner tone="success" role="status">
+            {notice}
+          </Banner>
+        </div>
+      )}
+
+      {/* Composer: "What do you want to learn?" */}
+      <section className="mt-7 rounded-panel border border-border bg-surface p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-mono tracking-wider uppercase text-text-muted">Composer</p>
+            <label className="block text-sm font-semibold">What do you want to learn?</label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <input
+                type="text"
+                value={composerText}
+                onChange={(event) => setComposerText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void queueRequest();
+                  }
+                }}
+                className="reading min-h-11 flex-1 rounded-control border border-border-strong bg-bg px-3 text-sm focus:border-primary focus:outline-none"
+                placeholder="For example: explain the proximal convoluted tubule"
+              />
+              <div className="flex items-center gap-1 border border-border-strong rounded-control bg-surface">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={composerMode === "teach"}
+                  onClick={() => setComposerMode("teach")}
+                  className={`px-3 py-2 text-sm font-medium rounded-l-control ${
+                    composerMode === "teach"
+                      ? "bg-primary-soft text-primary"
+                      : "text-text-muted hover:bg-surface-2"
+                  }`}
+                >
+                  Teach
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={composerMode === "practice"}
+                  onClick={() => setComposerMode("practice")}
+                  className={`px-3 py-2 text-sm font-medium rounded-r-control ${
+                    composerMode === "practice"
+                      ? "bg-primary-soft text-primary"
+                      : "text-text-muted hover:bg-surface-2"
+                  }`}
+                >
+                  Practice
+                </button>
+              </div>
+              <Button
+                variant="primary"
+                onClick={() => void queueRequest()}
+                loading={queuing}
+                disabled={!composerText.trim()}
+              >
+                {queued ? <span>Queued</span> : <span>Ask</span>}
+              </Button>
+            </div>
+            {composerMode === "practice" && (
+              <p className="mt-2 text-xs text-text-muted">
+                Practice opens banked questions for your topics.
+              </p>
+            )}
+            {!connected && (
+              <p className="mt-2 text-xs text-text-muted">
+                No agent is connected right now.{" "}
+                <span className="font-medium">Practice</span> still works; teach requests wait until an agent
+                connects over MCP.
+              </p>
+            )}
+          </div>
+          <AgentStatus connected={connected} preparing={preparing} session={activeSession} />
+        </div>
+      </section>
 
       {loading && !dashboard ? (
         <div className="mt-6 space-y-4">
@@ -260,12 +421,146 @@ export function Study({
               </ul>
             )}
           </section>
+
+          <section aria-labelledby="sessions-heading" className="mt-8">
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <div>
+                <h2 id="sessions-heading" className="text-base font-semibold">
+                  Sessions
+                </h2>
+                <p className="mt-0.5 text-xs text-text-muted">
+                  Recent teaching sessions. Open one in Live to continue.
+                </p>
+              </div>
+              <label className="min-w-56 flex-1">
+                <span className="sr-only">Search sessions</span>
+                <input
+                  type="search"
+                  value={sessionSearch}
+                  onChange={(event) => setSessionSearch(event.target.value)}
+                  className="min-h-11 w-full rounded-control border border-border-strong bg-bg px-3 text-sm focus:border-primary focus:outline-none"
+                  placeholder="Search sessions…"
+                />
+              </label>
+            </div>
+            {sessionsLoading && sessions.length === 0 ? (
+              <div className="mt-2 space-y-1">
+                <Skeleton lines={1} />
+                <Skeleton lines={1} />
+              </div>
+            ) : sessions.length === 0 ? (
+              <p className="mt-2 text-sm text-text-muted">
+                No sessions yet. Start one from Live or queue a teach request above.
+              </p>
+            ) : (
+              <ul className="mt-2 divide-y divide-border-subtle border-y border-border-subtle">
+                {sessions
+                  .filter(
+                    (session) =>
+                      !sessionSearch ||
+                      session.course.toLowerCase().includes(sessionSearch.toLowerCase()) ||
+                      session.goal.toLowerCase().includes(sessionSearch.toLowerCase()),
+                  )
+                  .map((session) => (
+                    <li key={session.id} className="py-3 flex items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline gap-2">
+                          <p className="text-sm font-semibold text-text truncate">
+                            {session.course} · {session.goal}
+                          </p>
+                          <span className="font-mono text-xs text-text-muted">
+                            {relativeTime(session.startedAt)}
+                          </span>
+                        </div>
+                        {session.summary && (
+                          <p className="mt-0.5 text-xs text-text-muted truncate max-w-[42ch]">
+                            {session.summary}
+                          </p>
+                        )}
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-text-muted">
+                          {session.endedAt ? (
+                            <span>· ended</span>
+                          ) : (
+                            <span className="text-warning">· active</span>
+                          )}
+                          {session.notePath && (
+                            <span>· note saved</span>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </section>
         </>
       )}
     </div>
   );
 }
 
-function messageOf(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+function relativeTime(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} d ago`;
+}
+
+function AgentStatus({
+  connected,
+  preparing,
+  session,
+}: {
+  connected: boolean;
+  preparing: boolean;
+  session: SessionDetail | null;
+}) {
+  const label = !connected
+    ? "Agent not connected"
+    : preparing
+      ? "Agent is preparing"
+      : "Agent connected";
+  const detail = !connected
+    ? "Teach requests queue until an agent connects."
+    : preparing
+      ? "Choosing the next activity for you."
+      : "Ask something to learn, or practise below.";
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-control border px-3 py-2 text-xs ${
+        !connected
+          ? "border-border-subtle bg-surface-2 text-text-muted"
+          : preparing
+            ? "border-warning/40 bg-warning-soft text-text"
+            : "border-correct/30 bg-correct-soft text-text"
+      }`}
+      role="status"
+      aria-live="polite"
+    >
+      {connected ? (
+        preparing ? (
+          <Timer aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
+        ) : (
+          <Wifi aria-hidden="true" className="size-3.5 shrink-0 text-correct" />
+        )
+      ) : (
+        <WifiOff aria-hidden="true" className="size-3.5 shrink-0 text-text-muted" />
+      )}
+      <p className="font-medium text-text">{label}</p>
+      <p className="text-xs">{detail}</p>
+      {session && (
+        <button
+          type="button"
+          onClick={() => {}}
+          className="ml-auto flex min-h-9 items-center gap-1 rounded-control border border-transparent bg-transparent px-2 text-xs hover:bg-surface-2 hover:text-primary transition-colors"
+        >
+          <Sparkles aria-hidden="true" className="size-3.5" /> Live
+        </button>
+      )}
+    </div>
+  );
 }

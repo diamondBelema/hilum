@@ -263,6 +263,10 @@
   max-width: 68ch;
 }
 
+@utility sectionLabel {
+  @apply font-mono text-xs tracking-wider uppercase text-muted;
+}
+
 .mermaid-svg {
   max-width: 100%;
   padding: 0.5rem;
