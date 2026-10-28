@@ -163,6 +163,15 @@ Append-only log. Newest entry at the bottom.
 - Interactions: tap to recenter, wheel zoom, drag pan, reset view; spinners only while loading, never over a rendered graph.
 - Tagged `n1-pass`.
 
+## 2026-10-28 — N2 black theme and calmer chrome
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok; contrast tokens pass 4.5:1/3:1 in both themes; reviewer pass `bun run check:ui` ok at 360px).
+- `tokens.css`: Black theme (DESIGN 3.1b) is now the default dark theme — neutral near-black `#0a0a0c` bg, `#121215` surface, `#ededf0` text, `--text-muted` `#a3a3b0`, primary `#a9a3ff`, focus `#a9a3ff`. Expressed via `light-dark()` so the automated contrast test parses both themes; `[data-theme="dark"]`/`[data-theme="light"]` override the system. Contrast pairs verified: text 4.5:1, UI boundaries 3:1 in both themes.
+- `styles.css`: added `sectionLabel` utility (mono, uppercase, 13px, letter-spacing 0.06em, `--text-muted`) per DESIGN 3.2.
+- Sidebar: calmer — icon + sentence-case label, selected state is one surface step (`bg-surface-2`) plus primary text, generous padding, kept subtle border.
+- Study screen: kept ranked "Next up" list; added centered-width composer "What do you want to learn?" with Teach/Practice toggle. Teach queues an agent request via `api.askAgent` (creates/uses an active session, reaches `get_agent_requests`). Practice offers banked practice. With no agent connected, the composer says so and practice still works. Agent status strip (connected/preparing/not connected) shown beside composer; 20s "still working" behaviour preserved from Live.
+- Sessions list with relative times and a search box; update/"Request queued" toast. Tagged `n2-pass`.
+
 ## 2026-10-28 — N0 housekeeping
 
 - Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok).
