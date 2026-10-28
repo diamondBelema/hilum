@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 
-const base = process.env.HILUM_URL ?? "http://127.0.0.1:4317";
+const base = process.env.HILUM_URL ?? "http://127.0.0.1:4747";
 const tabs = ["Study", "Live", "Exams", "Grading", "Notes", "Progress", "Graph"] as const;
 
 type Failure = string;

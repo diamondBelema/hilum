@@ -26,7 +26,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
 
   return {
     version: "0.1.0",
-    port: overrides.port ?? Number(process.env.PORT ?? 4317),
+    port: overrides.port ?? Number(process.env.PORT ?? 4747),
     hostname: overrides.hostname ?? process.env.HOST ?? "127.0.0.1",
     vaultPath,
     dbPath,

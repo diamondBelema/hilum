@@ -24,12 +24,12 @@ bun run start
 ```
 
 Builds the UI on first run, then serves the app and the MCP endpoint on
-`http://127.0.0.1:4317`. Use the `./start` wrapper to launch from any directory.
+`http://127.0.0.1:4747`. Use the `./start` wrapper to launch from any directory.
 
 | Script | What it does |
 | --- | --- |
-| `bun run start` | Build UI + serve app and MCP on port 4317 |
-| `bun run dev` | Server on 4317 + Vite dev server on 5173 |
+| `bun run start` | Build UI + serve app and MCP on port 4747 |
+| `bun run dev` | Server on 4747 + Vite dev server on 5173 |
 | `bun run verify` | Typecheck + tests + smoke (UI, API, MCP) |
 | `bun run test` | Unit tests |
 | `bun run smoke` | Health, UI shell, MCP initialize |
@@ -42,7 +42,7 @@ All optional; defaults are fine for local use.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `4317` | HTTP port |
+| `PORT` | `4747` | HTTP port |
 | `HOST` | `127.0.0.1` | Bind address; use `0.0.0.0` for LAN access |
 | `HARNESS_VAULT` | `./vault` | Vault directory |
 | `HARNESS_DB` | `./state/app.db` | SQLite database |
@@ -74,7 +74,7 @@ The database (`state/app.db`) holds attempts, grades, evidence and mastery. It i
 
 There is no built-in account system; the app trusts whoever can reach it.
 
-- **Same Wi-Fi:** `HOST=0.0.0.0 bun run start`, then open `http://<your-lan-ip>:4317`.
+- **Same Wi-Fi:** `HOST=0.0.0.0 bun run start`, then open `http://<your-lan-ip>:4747`.
   Anyone on that network gets read/write access to the vault and database, so only do
   this on a trusted network.
 - **Another machine:** copy the repo plus your vault and `state/app.db`, then run with
@@ -85,14 +85,14 @@ There is no built-in account system; the app trusts whoever can reach it.
 
 ## MCP (opencode or any MCP client)
 
-One endpoint: `http://127.0.0.1:4317/mcp` (streamable HTTP). Example global config:
+One endpoint: `http://127.0.0.1:4747/mcp` (streamable HTTP). Example global config:
 
 ```json
 {
   "mcp": {
     "hilum": {
       "type": "remote",
-      "url": "http://127.0.0.1:4317/mcp",
+      "url": "http://127.0.0.1:4747/mcp",
       "enabled": true
     }
   }
@@ -111,7 +111,7 @@ Prompts: `run_session(course)`, `grade_theory_answer(answer_id)`, `exam_debrief(
 
 ## Start a teaching session
 
-1. `bun run start` and open `http://127.0.0.1:4317`.
+1. `bun run start` and open `http://127.0.0.1:4747`.
 2. Add cited concepts (MCP `add_concept` or the Progress screen).
 3. Study tab → the frontier shows what to study next and what is due for review.
 4. Click **Study this** to open a live session; the agent drives activities via MCP

@@ -95,7 +95,7 @@ export class GradingService {
     private readonly db: Db,
     private readonly papers: PaperService,
     private readonly events?: EventBus,
-    private readonly baseUrl = "http://127.0.0.1:4317",
+    private readonly baseUrl = "http://127.0.0.1:4747",
   ) {}
 
   pending(options: { course?: string; limit?: number } = {}): PendingItem[] {
