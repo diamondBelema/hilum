@@ -1,0 +1,674 @@
+[
+  {
+    "screen": "study",
+    "width": 1280,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "live",
+    "width": 1280,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 5,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part3.md#s19",
+        "w": 203,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part3.md#s19",
+        "w": 203,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part4.md#s36",
+        "w": 206,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "End session",
+        "w": 68,
+        "h": 18
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "exams",
+    "width": 1280,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "grading",
+    "width": 1280,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "notes",
+    "width": 1280,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "progress",
+    "width": 1280,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "graph",
+    "width": 1280,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "reader",
+    "width": 1280,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "study",
+    "width": 1280,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "live",
+    "width": 1280,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 5,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part3.md#s19",
+        "w": 203,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part3.md#s19",
+        "w": 203,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part4.md#s36",
+        "w": 206,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "End session",
+        "w": 68,
+        "h": 18
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "exams",
+    "width": 1280,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "grading",
+    "width": 1280,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "notes",
+    "width": 1280,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "progress",
+    "width": 1280,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "graph",
+    "width": 1280,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "reader",
+    "width": 1280,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "study",
+    "width": 360,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "live",
+    "width": 360,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 5,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part3.md#s19",
+        "w": 203,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part3.md#s19",
+        "w": 203,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part4.md#s36",
+        "w": 206,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "End session",
+        "w": 60,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "exams",
+    "width": 360,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "grading",
+    "width": 360,
+    "theme": "light",
+    "overflow": 107,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "notes",
+    "width": 360,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "progress",
+    "width": 360,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "graph",
+    "width": 360,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "reader",
+    "width": 360,
+    "theme": "light",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "study",
+    "width": 360,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "live",
+    "width": 360,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 5,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part3.md#s19",
+        "w": 203,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part3.md#s19",
+        "w": 203,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "BCH 203-CARBS-part4.md#s36",
+        "w": 206,
+        "h": 28
+      },
+      {
+        "tag": "BUTTON",
+        "text": "End session",
+        "w": 60,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "exams",
+    "width": 360,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "grading",
+    "width": 360,
+    "theme": "dark",
+    "overflow": 107,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "notes",
+    "width": 360,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "progress",
+    "width": 360,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "graph",
+    "width": 360,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  },
+  {
+    "screen": "reader",
+    "width": 360,
+    "theme": "dark",
+    "overflow": 0,
+    "smallCount": 1,
+    "small": [
+      {
+        "tag": "A",
+        "text": "Skip to content",
+        "w": 129,
+        "h": 36
+      }
+    ],
+    "tinyCount": 0,
+    "tiny": [],
+    "errs": []
+  }
+]
