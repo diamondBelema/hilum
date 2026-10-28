@@ -186,3 +186,19 @@ Append-only log. Newest entry at the bottom.
 - Port: single default 4747 everywhere (`src/server/config.ts`, `scripts/dev.ts`, `vite.config.ts`, `scripts/check-ui.ts`, `src/server/exams/grading.ts` fallback, README, DECISIONS.md, tests/config.test.ts). 4317 is avoided (OpenTelemetry collector default). `bun run start` serves on `127.0.0.1:4747`; health and MCP initialize respond.
 - Brand: added `BRAND.md` documenting port 4747, the Hilum name, H&E palette, local fonts and the icon rules.
 - Icon: confirmed `public/icon.svg` as the final color icon; rendered `public/icon-mono.svg` plus PNGs at 16/32/180/192/512 and maskable PNGs at 192/512 (`public/icon-maskable.svg`). `manifest.webmanifest` lists any + maskable icons; `index.html` favicon uses `/favicon-32x32.png` with SVG fallback. Tagged `n0-pass`.
+
+## 2026-10-28 — N3 in-app note editor
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok; reviewer pass `bun run check:ui` ok at 360px).
+- Spike decision recorded in `DECISIONS.md`: CodeMirror 6 source editor with side-by-side react-markdown live preview (desktop), chosen over Milkdown/TipTap for round-trip fidelity (frontmatter untouched, `{#anchors}`, wikilinks, tables, mermaid fences, images preserved), lazy load only on the editor screen, offline with zero network requests, reliable mobile typing.
+- `Editor.tsx`: source/preview toggle, toolbar (image), "Saved / Not saved" states with debounced autosave (1.5s) through `api.writeNote` → VaultService `writeNote` (mode replace), frontmatter held in a Details panel (title, course, topics, source type) never shown as YAML; student notes default `source_type: student_notes, trust: medium`; manual Save button; external-change banner skeleton (Reload/Keep mine/See changes) wired but no live watcher yet; keyboard-operable; works at 360px.
+- Server: added `POST /api/note` (writeNote replace) and `POST /api/asset` (writeAsset into `<course>/assets/`); `api.writeNote`/`api.writeAsset` client helpers.
+- Tagged `n3-pass`.
+
+## 2026-10-28 — N4 config editors in the app
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok; reviewer pass `bun run check:ui` ok at 360px).
+- Server: added `PATCH /api/course/:code` (course settings: title, department, exam_date, exam_blueprint), `PATCH /api/course/:code/answer-style`, `PATCH /api/rubrics/:name`, `PATCH /api/course/:code/mastery`, plus `GET /api/course/:code/history` and `POST /api/course/:code/restore`. All write through VaultService with request-id idempotency, keep the last 20 versions in `.history/`, and support restore. `updateCourse` also records history.
+- UI: `Config.tsx` sheet (opened from Settings via a course picker) with four tabs — Course settings (title, department, exam date, exam blueprint table of type/count/minutes/marks each, default exam mode), Answer style, Rubric, Mastery thresholds. Inline validation errors, "Saved / Not saved" states, history restore, "Edit raw" escape hatch via the textareas. Config writes the real files (`course.md`, `answer-style.md`, `rubrics/<name>.md`, `mastery.md`) so the exam builder and grader pick up new values; grades keep a snapshot of the rubric used so past grades are unchanged after a rubric edit.
+- Also fixed: note now stays open when switching tabs (was cleared on every tab switch).
+- Tagged `n4-pass`.
