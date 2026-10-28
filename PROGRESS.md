@@ -150,3 +150,10 @@ Append-only log. Newest entry at the bottom.
 - `Graph.tsx` rewritten: wheel zoom and pointer-drag pan, memoized 2-hop neighborhood layout (25-node cap) and overview grid (300-node cap), edge lines with `fill="none"`, per-type dash/arrow/contrast marks, HTML labels with `MasteryRing` nodes sized by exam weight, legend, and the shared `Sheet` concept drawer with Study this.
 - Fixed a read-path stall: `ConceptService.sync()` rewrote every concept on each call, so `/api/dashboard` performed ~30 full syncs and held the SQLite write lock long enough to block grading; sync now skips when the concepts directory fingerprint is unchanged (dashboard 1.3s → 0.02s after warmup). Live step Back/Next and the footer End session now meet the 44px tap target.
 - Verified with a synthetic 300-topic vault: overview rendered 300 nodes, zoom and search stayed responsive (~0.3–0.4s), and screenshots were captured at 360px and 1280px in both themes (`docs/ui-audit/w2-graph-*.png`). Label collision at high zoom is handled by truncation only.
+
+## 2026-10-28 — N0 housekeeping
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok).
+- Port: single default 4747 everywhere (`src/server/config.ts`, `scripts/dev.ts`, `vite.config.ts`, `scripts/check-ui.ts`, `src/server/exams/grading.ts` fallback, README, DECISIONS.md, tests/config.test.ts). 4317 is avoided (OpenTelemetry collector default). `bun run start` serves on `127.0.0.1:4747`; health and MCP initialize respond.
+- Brand: added `BRAND.md` documenting port 4747, the Hilum name, H&E palette, local fonts and the icon rules.
+- Icon: confirmed `public/icon.svg` as the final color icon; rendered `public/icon-mono.svg` plus PNGs at 16/32/180/192/512 and maskable PNGs at 192/512 (`public/icon-maskable.svg`). `manifest.webmanifest` lists any + maskable icons; `index.html` favicon uses `/favicon-32x32.png` with SVG fallback. Tagged `n0-pass`.
