@@ -192,6 +192,13 @@ export function createApp(deps: AppDeps = {}) {
     return c.json(vault.readNote(path));
   });
 
+  app.post("/api/note", async (c) => {
+    const input = await c.req.json<{ path: string; content: string; requestId?: string }>();
+    if (!input.path || !input.content) return c.json({ error: "path and content are required" }, 400);
+    const result = await vault.writeNote({ path: input.path, content: input.content, mode: "replace", requestId: input.requestId });
+    return c.json(result);
+  });
+
   app.get("/api/search", (c) => {
     const query = c.req.query("q") ?? "";
     const limit = Number(c.req.query("limit") ?? 20);
@@ -211,6 +218,13 @@ export function createApp(deps: AppDeps = {}) {
     const file = Bun.file(abs);
     if (!(await file.exists())) return c.json({ error: "not found" }, 404);
     return new Response(file, { headers: { "content-type": file.type } });
+  });
+
+  app.post("/api/asset", async (c) => {
+    const input = await c.req.json<{ course: string; fileName: string; base64: string; contentType: string }>();
+    if (!input.course || !input.fileName || !input.base64) return c.json({ error: "course, fileName and base64 are required" }, 400);
+    const result = await vault.writeAsset(input.course, input.fileName, input.base64, input.contentType);
+    return c.json(result);
   });
 
   app.get("/api/questions", async (c) => {

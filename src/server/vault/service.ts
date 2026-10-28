@@ -227,6 +227,20 @@ export class VaultService {
     return assets.sort((a, b) => a.path.localeCompare(b.path));
   }
 
+  async writeAsset(course: string, fileName: string, base64: string, contentType: string): Promise<{ path: string; bytes: number }> {
+    const safe = normalizeRel(fileName);
+    if (!safe.toLowerCase().endsWith(".png") && !safe.toLowerCase().endsWith(".jpg") && !safe.toLowerCase().endsWith(".jpeg") && !safe.toLowerCase().endsWith(".gif") && !safe.toLowerCase().endsWith(".webp")) {
+      throw new VaultPathError("only image assets are supported");
+    }
+    const dir = join(this.root, "courses", course, "assets");
+    await mkdir(dir, { recursive: true });
+    const abs = join(dir, safe);
+    const bytes = Buffer.from(base64, "base64");
+    await writeFile(abs, bytes);
+    await this.indexer?.indexFile(abs);
+    return { path: relative(this.root, abs).split("\\").join("/"), bytes: bytes.byteLength };
+  }
+
   notesForCourse(course: string): NoteSearchHit[] {
     const rows = this.db
       .query(

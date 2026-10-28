@@ -23,6 +23,7 @@ import { Settings } from "./screens/Settings.tsx";
 import { DesignGallery } from "./screens/DesignGallery.tsx";
 import { Grading } from "./screens/Grading.tsx";
 import { Live } from "./screens/Live.tsx";
+import { Editor } from "./screens/Editor.tsx";
 import { readActiveAttempt } from "./lib/activeAttempt.ts";
 import { subscribeHarnessEvents } from "./lib/events.ts";
 
@@ -49,6 +50,7 @@ function Shell() {
   const [course, setCourse] = useState<Course | null>(null);
   const [notes, setNotes] = useState<NoteMeta[]>([]);
   const [note, setNote] = useState<NoteDetail | null>(null);
+  const [editingNote, setEditingNote] = useState<{ path: string; course: Course | null } | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<NoteMeta[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -211,6 +213,10 @@ function Shell() {
     window.scrollTo({ top: 0 });
   }
 
+  function closeEditor() {
+    setEditingNote(null);
+  }
+
   return (
     <div className="min-h-dvh">
       <a
@@ -330,7 +336,9 @@ function Shell() {
           </div>
         )}
 
-        {note ? (
+        {editingNote ? (
+          <Editor course={editingNote.course} onBack={closeEditor} notePath={editingNote.path} />
+        ) : note ? (
           <Reader note={note} course={course} onBack={closeNote} onOpenNote={(path, anchor) => void openNote(path, anchor)} />
         ) : tab === "study" ? (
           <Study

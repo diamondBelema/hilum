@@ -471,6 +471,15 @@ export const api = {
   courses: () => getJson<Course[]>("/api/courses"),
   notes: (course: string) => getJson<NoteMeta[]>(`/api/courses/${encodeURIComponent(course)}/notes`),
   note: (path: string) => getJson<NoteDetail>(`/api/note?path=${encodeURIComponent(path)}`),
+  writeNote: (input: { path: string; content: string; requestId?: string }) =>
+    sendJson<{ path: string; bytes: number; mode: string }>("/api/note", "POST", input),
+  writeAsset: (input: {
+    course: string;
+    fileName: string;
+    base64: string;
+    contentType: string;
+  }) =>
+    sendJson<{ path: string; bytes: number }>("/api/asset", "POST", input),
   search: (query: string, course?: string) =>
     getJson<NoteMeta[]>(
       `/api/search?q=${encodeURIComponent(query)}${course ? `&course=${encodeURIComponent(course)}` : ""}`,
