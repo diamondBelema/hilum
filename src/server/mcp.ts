@@ -326,11 +326,11 @@ export function createMcpServer(
     "verify_question",
     {
       description: "Mark a question verified or unverified after checking it against its source.",
-      inputSchema: { id: z.string(), verified: z.boolean().default(true) },
+      inputSchema: { id: z.string(), verified: z.boolean().default(true), by: z.string().default("agent") },
     },
-    async ({ id, verified }) => {
+    async ({ id, verified, by }) => {
       try {
-        return json(questions.verify(id, verified));
+        return json(questions.verify(id, verified, by));
       } catch (err) {
         return fail(err);
       }

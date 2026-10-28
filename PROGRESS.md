@@ -124,3 +124,14 @@ Append-only log. Newest entry at the bottom.
 - Root cause: embedded images in converted notes are written as `![alt](../assets/file.jpeg) <!-- needs-description -->`. The trailing HTML comment broke ReactMarkdown's image/link parsing, causing images to render as raw text instead of `` elements.
 - Fix: added `stripHtmlComments()` to `src/ui/Markdown.tsx` which strips `<!-- ... -->` from the markdown body before passing it to ReactMarkdown. Comments are not rendered anyway, so this is safe.
 - Also confirmed `react-markdown` v10 correctly parses images with special characters (spaces, apostrophes, parentheses) in URLs and alt text when served fresh.
+
+## 2026-10-28 — W0 data-safety baseline
+
+- Status: done (`bun run verify`: typecheck clean, 76 tests across 11 files, smoke ui/api/mcp ok).
+- Backups: `scripts/copy-db.ts` now uses `VACUUM INTO` for a consistent snapshot (including WAL), runs `PRAGMA integrity_check`, reopens the copy to count rows, and prunes to 14 copies. A systemd user timer (`hilum-backup.timer`, daily) writes to `/home/flatplanet/hilum-backups`; first two backups restored cleanly (733 notes, 44 questions, 69 evidence, 2 sessions).
+- Vault history: `~/Documents/hilum-vault` is now a local git repo (`main`, initial snapshot committed) with temporary files ignored.
+- Repo hygiene: `answer_style` work, audit/task docs and copy-db changes committed on `master`; Lane A tools and progress committed on `lane-a-converter`, with the external `vault` symlink ignored.
+- Schema v8: questions gain `verified_by`/`verified_at`; `verify_question` and the HTTP route record who verified. The 44 existing verified questions are marked `bulk-sql-2026-10-28`; 10 were spot-checked in the Exams UI (all showed Verified).
+- Real results: `record_real_result` now writes to a new `real_results` table (concept, course, kind, correct, confidence, excerpt) and no longer creates evidence or changes mastery; a regression test locks that in.
+- Maintenance: `bun run maintain` checkpoints the WAL, vacuums and prints database, vault and free-space figures. `/api/health` reports disk space; Settings warns when free space is under 10% (currently 5.8%).
+- Next: W1 quick UI fixes, then W2 graph rework.

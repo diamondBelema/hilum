@@ -146,11 +146,20 @@ export class QuestionBank {
     return this.get(id);
   }
 
-  verify(id: string, verified = true): Question {
+  verify(id: string, verified = true, by = "agent"): Question {
     this.get(id);
     this.db
-      .query("UPDATE questions SET verified = ?, unverified = ?, updated_at = ? WHERE id = ?")
-      .run(verified ? 1 : 0, verified ? 0 : 1, Date.now(), id);
+      .query(
+        "UPDATE questions SET verified = ?, unverified = ?, verified_by = ?, verified_at = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(
+        verified ? 1 : 0,
+        verified ? 0 : 1,
+        verified ? by : null,
+        verified ? Date.now() : null,
+        Date.now(),
+        id,
+      );
     return this.get(id);
   }
 
@@ -239,6 +248,8 @@ export class QuestionBank {
       sourcePaper: parsed.source_paper ? this.resolveSource(course, parsed.source_paper) : null,
       verified,
       unverified: verified ? false : (parsed.unverified ?? true),
+      verifiedBy: verified ? options.createdBy : null,
+      verifiedAt: verified ? now : null,
       createdBy: options.createdBy,
       createdAt: now,
       updatedAt: now,
@@ -250,8 +261,8 @@ export class QuestionBank {
       .query(
         `INSERT INTO questions (id, course, type, question_kind, topic_tags, concept_ids,
            difficulty, marks, body_json, cites_json, source_paper, verified, unverified,
-           created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           verified_by, verified_at, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         question.id,
@@ -267,6 +278,8 @@ export class QuestionBank {
         question.sourcePaper,
         question.verified ? 1 : 0,
         question.unverified ? 1 : 0,
+        question.verifiedBy,
+        question.verifiedAt,
         question.createdBy,
         question.createdAt,
         question.updatedAt,

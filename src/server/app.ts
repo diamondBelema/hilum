@@ -11,8 +11,8 @@ import { GradingError, GradingService } from "./exams/grading.ts";
 import { SessionError, SessionService } from "./sessions/service.ts";
 import { ConceptError, ConceptService } from "./concepts/service.ts";
 import { EventBus } from "./events.ts";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { mkdir, readFile, statfs, unlink, writeFile } from "node:fs/promises";
+import { dirname, extname, join } from "node:path";
 import { NoteIndexer } from "./vault/indexer.ts";
 import { VaultService } from "./vault/service.ts";
 import { resolveInside, VaultPathError } from "./vault/paths.ts";
@@ -61,16 +61,30 @@ export function createApp(deps: AppDeps = {}) {
     return c.json({ error: "internal server error" }, 500);
   });
 
-  app.get("/api/health", (c) =>
-    c.json({
+  app.get("/api/health", async (c) => {
+    let disk: { freeBytes: number; totalBytes: number; freePercent: number } | null = null;
+    try {
+      const stats = await statfs(dirname(config.dbPath));
+      const totalBytes = stats.blocks * stats.bsize;
+      const freeBytes = stats.bavail * stats.bsize;
+      disk = {
+        freeBytes,
+        totalBytes,
+        freePercent: totalBytes > 0 ? Math.round((freeBytes / totalBytes) * 1000) / 10 : 0,
+      };
+    } catch {
+      disk = null;
+    }
+    return c.json({
       status: "ok",
       version: config.version,
       mcp: "/mcp",
       vault: config.vaultPath,
       db: config.dbPath,
+      disk,
       stats: vault.stats(),
-    }),
-  );
+    });
+  });
 
   app.get("/api/meta", (c) => {
     const rows = db.query("SELECT key, value FROM meta ORDER BY key").all();
@@ -135,7 +149,8 @@ export function createApp(deps: AppDeps = {}) {
 
   app.post("/api/questions/:id/verify", async (c) => {
     const body = await c.req.json().catch(() => ({}));
-    return c.json(questions.verify(c.req.param("id"), body.verified !== false));
+    const by = typeof body.by === "string" && body.by.trim() ? body.by.trim() : "ui";
+    return c.json(questions.verify(c.req.param("id"), body.verified !== false, by));
   });
 
   app.post("/api/papers", async (c) => {

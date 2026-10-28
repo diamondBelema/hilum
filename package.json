@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "smoke": "bun run scripts/smoke.ts",
+    "maintain": "bun run scripts/maintain-db.ts",
     "verify": "bun run typecheck && bun test && bun run smoke"
   },
   "dependencies": {

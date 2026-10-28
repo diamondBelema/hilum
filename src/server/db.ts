@@ -62,6 +62,8 @@ function migrate(db: Db): void {
       source_paper TEXT,
       verified INTEGER NOT NULL DEFAULT 0,
       unverified INTEGER NOT NULL DEFAULT 0,
+      verified_by TEXT,
+      verified_at INTEGER,
       created_by TEXT NOT NULL DEFAULT 'agent',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -143,6 +145,19 @@ function migrate(db: Db): void {
     CREATE INDEX IF NOT EXISTS evidence_concept ON evidence(concept_id, created_at);
     CREATE INDEX IF NOT EXISTS evidence_answer ON evidence(answer_id);
     CREATE INDEX IF NOT EXISTS evidence_session ON evidence(session_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS real_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      concept_id TEXT NOT NULL,
+      course TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      correct INTEGER,
+      confidence TEXT,
+      excerpt TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS real_results_concept ON real_results(concept_id, created_at);
 
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
@@ -229,8 +244,16 @@ function migrate(db: Db): void {
     db.exec("ALTER TABLE activities ADD COLUMN render_seen INTEGER NOT NULL DEFAULT 0");
   }
 
+  const questionColumns = db.query("PRAGMA table_info(questions)").all() as { name: string }[];
+  if (!questionColumns.some((column) => column.name === "verified_by")) {
+    db.exec("ALTER TABLE questions ADD COLUMN verified_by TEXT");
+  }
+  if (!questionColumns.some((column) => column.name === "verified_at")) {
+    db.exec("ALTER TABLE questions ADD COLUMN verified_at INTEGER");
+  }
+
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
-    "7",
+    "8",
   );
 }

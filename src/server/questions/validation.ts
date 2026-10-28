@@ -171,6 +171,8 @@ export type Question = {
   sourcePaper: string | null;
   verified: boolean;
   unverified: boolean;
+  verifiedBy: string | null;
+  verifiedAt: number | null;
   createdBy: string;
   createdAt: number;
   updatedAt: number;
@@ -190,6 +192,8 @@ export type QuestionRow = {
   source_paper: string | null;
   verified: number;
   unverified: number;
+  verified_by: string | null;
+  verified_at: number | null;
   created_by: string;
   created_at: number;
   updated_at: number;
@@ -210,6 +214,8 @@ export function rowToQuestion(row: QuestionRow): Question {
     sourcePaper: row.source_paper,
     verified: row.verified === 1,
     unverified: row.unverified === 1,
+    verifiedBy: row.verified_by,
+    verifiedAt: row.verified_at,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

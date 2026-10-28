@@ -47,9 +47,24 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
                 <dt className="text-text">Version</dt>
                 <dd>{health.version}</dd>
               </div>
+              {health.disk && (
+                <div>
+                  <dt className="text-text">Free space</dt>
+                  <dd>
+                    {formatBytes(health.disk.freeBytes)} of {formatBytes(health.disk.totalBytes)} (
+                    {health.disk.freePercent}%)
+                  </dd>
+                </div>
+              )}
             </dl>
           ) : (
             !error && <p className="mt-1 text-sm text-text-muted">Reading server info…</p>
+          )}
+          {health?.disk && health.disk.freePercent < 10 && (
+            <p className="mt-3 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning">
+              Only {formatBytes(health.disk.freeBytes)} free ({health.disk.freePercent}%). Delete old
+              backups or free space before recording exams.
+            </p>
           )}
           <p className="mt-3 text-xs text-text-muted">
             The vault path, LAN access and MCP token come from the server environment. This build does not
@@ -59,4 +74,9 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
       </div>
     </Sheet>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 ** 3) return `${Math.round(bytes / 1024 ** 2)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }

@@ -450,6 +450,7 @@ export type Health = {
   version: string;
   vault: string;
   db: string;
+  disk: { freeBytes: number; totalBytes: number; freePercent: number } | null;
 };
 
 export const api = {

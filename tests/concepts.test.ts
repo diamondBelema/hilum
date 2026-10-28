@@ -65,6 +65,18 @@ async function addBase() {
   return { thorax, wall };
 }
 
+function addEvidence(
+  conceptId: string,
+  kind: string,
+  correct: boolean,
+  answerId: number | null,
+  at = Date.now(),
+) {
+  db.query(
+    "INSERT INTO evidence (answer_id, concept_id, kind, correct, time_sec, created_at) VALUES (?, ?, ?, ?, 20, ?)",
+  ).run(answerId, conceptId, kind, correct ? 1 : 0, at);
+}
+
 describe("concept graph", () => {
   test("writes cited concept files and finds aliases", async () => {
     const { wall } = await addBase();
@@ -123,8 +135,8 @@ describe("mastery", () => {
     const { wall } = await addBase();
     expect(concepts.get(wall.id).mastery.state).toBe("unseen");
 
-    concepts.recordRealResult({ conceptId: wall.id, correct: true, kind: "mcq_single" });
-    concepts.recordRealResult({ conceptId: wall.id, correct: true, kind: "theory" });
+    addEvidence(wall.id, "exam:mcq_single", true, null);
+    addEvidence(wall.id, "exam:theory", true, null);
     expect(concepts.get(wall.id).mastery.state).toBe("understood");
 
     db.query(
@@ -140,12 +152,24 @@ describe("mastery", () => {
     expect(concepts.due("ana-211").map((concept) => concept.id)).toContain(wall.id);
   });
 
+  test("keeps real exam results out of mastery evidence", async () => {
+    const { wall } = await addBase();
+    concepts.recordRealResult({ conceptId: wall.id, correct: true, kind: "final" });
+
+    expect(concepts.get(wall.id).mastery.state).toBe("unseen");
+    expect(concepts.get(wall.id).mastery.evidenceCount).toBe(0);
+    expect(db.query("SELECT COUNT(*) AS n FROM evidence").get()).toEqual({ n: 0 });
+    expect(
+      db.query("SELECT concept_id, course, kind, correct FROM real_results").all(),
+    ).toEqual([{ concept_id: wall.id, course: "ana-211", kind: "final", correct: 1 }]);
+  });
+
   test("frontier honours prerequisites and ranks lecturer flags", async () => {
     const { thorax, wall } = await addBase();
     const next = concepts.next("ana-211", 5, "2026-12-01");
     expect(next.map((item) => item.concept.id)).toEqual([thorax.id]);
-    concepts.recordRealResult({ conceptId: thorax.id, correct: true, kind: "mcq_single" });
-    concepts.recordRealResult({ conceptId: thorax.id, correct: true, kind: "theory" });
+    addEvidence(thorax.id, "exam:mcq_single", true, null);
+    addEvidence(thorax.id, "exam:theory", true, null);
     const opened = concepts.next("ana-211", 5, "2026-12-01");
     expect(opened[0]?.concept.id).toBe(wall.id);
     expect(opened.map((item) => item.concept.id)).toContain(thorax.id);

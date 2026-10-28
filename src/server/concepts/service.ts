@@ -711,20 +711,21 @@ export class ConceptService {
     excerpt?: string;
   }): { id: number; conceptId: string } {
     this.sync();
-    this.row(input.conceptId);
+    const concept = this.row(input.conceptId);
     const result = this.db
       .query(
-        "INSERT INTO evidence (concept_id, kind, correct, confidence, time_sec, excerpt, created_at) VALUES (?, ?, ?, ?, 0, ?, ?)",
+        `INSERT INTO real_results (concept_id, course, kind, correct, confidence, excerpt, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.conceptId,
+        concept.course,
         input.kind?.trim() || "real_result",
         input.correct === undefined || input.correct === null ? null : input.correct ? 1 : 0,
         input.confidence ?? null,
         input.excerpt ?? null,
         Date.now(),
       );
-    this.refreshMastery(input.conceptId);
     return { id: Number(result.lastInsertRowid), conceptId: input.conceptId };
   }
 
@@ -767,10 +768,6 @@ export class ConceptService {
         view.evidenceCount,
       );
     return view;
-  }
-
-  private refreshMastery(conceptId: string): void {
-    this.masteryFor(conceptId);
   }
 
   private row(id: string): ConceptRow {

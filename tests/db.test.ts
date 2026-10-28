@@ -7,7 +7,7 @@ describe("db", () => {
     const row = db.query("SELECT value FROM meta WHERE key = ?").get("schema_version") as {
       value: string;
     };
-    expect(row.value).toBe("7");
+    expect(row.value).toBe("8");
     const tables = db
       .query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all() as { name: string }[];
