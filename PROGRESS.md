@@ -151,6 +151,18 @@ Append-only log. Newest entry at the bottom.
 - Fixed a read-path stall: `ConceptService.sync()` rewrote every concept on each call, so `/api/dashboard` performed ~30 full syncs and held the SQLite write lock long enough to block grading; sync now skips when the concepts directory fingerprint is unchanged (dashboard 1.3s → 0.02s after warmup). Live step Back/Next and the footer End session now meet the 44px tap target.
 - Verified with a synthetic 300-topic vault: overview rendered 300 nodes, zoom and search stayed responsive (~0.3–0.4s), and screenshots were captured at 360px and 1280px in both themes (`docs/ui-audit/w2-graph-*.png`). Label collision at high zoom is handled by truncation only.
 
+## 2026-10-28 — N1 graph rework
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok; reviewer pass `bun run check:ui` ok at 360px).
+- Force-directed layout with `d3-force` (`d3-force@3.0.0` added) replaces the fixed radial layout so cross-links between subtrees show in neighborhood mode; tree layout stays in Tree view.
+- Edges are 1.5px lines in `--border-strong`, real `stroke-dasharray` per type, `fill="none"`: parent solid, prerequisite dashed + arrowhead, related dotted, contrasts-with solid + crossbar. Selected edges highlight in `--primary`.
+- Node labels use `--text` with a 2px `--bg` halo, wrapped to two lines at ~18 characters, collision-avoided and clamped inside the canvas.
+- MasteryRing drawn on every node (shape-coded states, decay dashed outline), sized by exam weight in three steps (28/36/44px diameter).
+- Neighborhood (2-hop, 25-node cap, "+N more"), Overview (300-node cap, labels hidden until zoom, search focuses a node), Tree (indented, expand/collapse, subtree rollup) and Frontier (ranked "Study this") views; legend always visible.
+- Concept drawer via shared `Sheet`: clickable, Escape closes, focus trap, no `backdrop-filter`; "Study this" navigates.
+- Interactions: tap to recenter, wheel zoom, drag pan, reset view; spinners only while loading, never over a rendered graph.
+- Tagged `n1-pass`.
+
 ## 2026-10-28 — N0 housekeeping
 
 - Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok).
