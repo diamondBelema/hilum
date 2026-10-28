@@ -25,14 +25,28 @@ const COMPONENTS = {
   flashcard: { type: "flashcard", front: "Where is sodium reabsorbed?", back: "Proximal tubule" },
   cloze: { type: "cloze", text: "Filtered {{sodium}} is reabsorbed." },
   mcq_single: { type: "mcq_single", stem: "What happens to sodium?", options: ["Secreted", "Reabsorbed"], answer: 1 },
+  mcq_multi: { type: "mcq_multi", stem: "Select all ions.", options: ["Sodium", "Potassium", "Calcium"], answer: [0, 1] },
   tf_multi: { type: "tf_multi", stem: "Mark each statement.", statements: [{ text: "Sodium is reabsorbed.", answer: true }, { text: "Sodium is secreted.", answer: false }] },
+  short_answer: { type: "short_answer", stem: "Where is sodium reabsorbed?" },
+  matching: { type: "matching", pairs: [{ left: "Sodium", right: "Na+" }, { left: "Potassium", right: "K+" }] },
+  ordering: { type: "ordering", items: [{ id: "a", text: "First" }, { id: "b", text: "Second" }] },
   theory: { type: "theory", prompt: "Explain sodium handling.", marks: 5 },
+  calculation: { type: "calculation", stem: "Calculate the dose.", answer: 5, tolerance: 0.5 },
   worked_example_stepper: { type: "worked_example_stepper", title: "Follow the sodium", steps: [{ title: "Filter", body: "Sodium enters the filtrate." }] },
   predict_reveal: { type: "predict_reveal", prompt: "Predict the effect.", reveal: "More sodium is lost." },
   compare_table: { type: "compare_table", columns: ["Segment", "Action"], rows: [["Proximal", "Reabsorb"]] },
   mermaid_diagram: { type: "mermaid_diagram", code: "flowchart LR\nA-->B" },
+  concept_map: { type: "concept_map", nodes: [{ id: "a", label: "Sodium" }], edges: [{ from: "a", to: "b" }] },
+  label_diagram: { type: "label_diagram", labels: ["A", "B"] },
+  timeline: { type: "timeline", events: ["Step 1", "Step 2"] },
+  annotated_image: { type: "annotated_image" },
+  spotter_station: { type: "spotter_station", question: "Identify the structure." },
   confidence_rating: { type: "confidence_rating" },
   think_aloud: { type: "think_aloud", prompt: "Walk me through it.", min_words: 1 },
+  muddy_point: { type: "muddy_point", prompt: "What is confusing?" },
+  spot_the_error: { type: "spot_the_error", text: "Line one.\nLine two has an error." },
+  teach_back: { type: "teach_back", prompt: "Teach it back." },
+  case_vignette: { type: "case_vignette", stem: "A patient presents...", questions: ["What is the diagnosis?", "What is the treatment?"] },
 } as const;
 
 let root: string;
@@ -60,7 +74,7 @@ afterEach(async () => {
 
 describe("ActivitySpec", () => {
   test("accepts every shipped component type", () => {
-    expect(ACTIVITY_TYPES).toHaveLength(11);
+    expect(ACTIVITY_TYPES).toHaveLength(25);
     for (const type of ACTIVITY_TYPES) {
       const spec = parseActivitySpec({ cites: [CITE], components: [COMPONENTS[type]] });
       expect(spec.components[0]?.type).toBe(type);

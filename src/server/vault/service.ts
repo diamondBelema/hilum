@@ -457,6 +457,19 @@ export class VaultService {
     return { path: safe, bytes: Buffer.byteLength(content) };
   }
 
+  async deleteNote(rel: string): Promise<{ path: string }> {
+    const safe = normalizeRel(rel);
+    const abs = resolveInside(this.root, safe);
+    if (!existsSync(abs)) throw new VaultPathError(`note does not exist: ${safe}`);
+    await rm(abs);
+    try {
+      this.db.prepare("DELETE FROM notes_fts WHERE path = ?").run(safe);
+    } catch {
+      /* best effort */
+    }
+    return { path: safe };
+  }
+
   async writeAnswerStyle(code: string, content: string, requestId?: string): Promise<{ path: string; bytes: number }> {
     if (!/^[A-Za-z0-9._-]+$/.test(code)) throw new VaultPathError(`invalid course code: ${code}`);
     return this.writeTextFile(`courses/${code}/answer-style.md`, content, requestId);

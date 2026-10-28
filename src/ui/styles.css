@@ -264,7 +264,12 @@
 }
 
 @utility sectionLabel {
-  @apply font-mono text-xs tracking-wider uppercase text-muted;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .mermaid-svg {

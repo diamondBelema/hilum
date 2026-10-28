@@ -183,6 +183,141 @@ function ComponentView({
           disabled={disabled}
         />
       );
+    case "short_answer":
+      return (
+        <ShortAnswer
+          stem={component.stem ?? ""}
+          answer={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          disabled={disabled}
+          modelAnswer={component.model_answer}
+        />
+      );
+    case "matching":
+      return (
+        <Matching
+          pairs={component.pairs ?? []}
+          value={typeof value === "object" && value !== null ? (value as Record<string, string>) : {}}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
+    case "ordering":
+      return (
+        <Ordering
+          items={component.items ?? []}
+          value={Array.isArray(value) ? value : []}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
+    case "mcq_multi":
+      return (
+        <McqMulti
+          stem={component.stem ?? ""}
+          options={component.options ?? []}
+          value={Array.isArray(value) ? value : []}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
+    case "calculation":
+      return (
+        <Calculation
+          stem={component.stem ?? ""}
+          value={typeof value === "number" ? value : null}
+          onChange={onChange}
+          disabled={disabled}
+          tolerance={component.tolerance}
+          answer={typeof component.answer === "number" || typeof component.answer === "string" ? component.answer : undefined}
+        />
+      );
+    case "spot_the_error":
+      return (
+        <SpotTheError
+          text={component.text ?? ""}
+          value={Array.isArray(value) ? value : []}
+          onChange={onChange}
+          disabled={disabled}
+          errors={component.errors}
+        />
+      );
+    case "teach_back":
+      return (
+        <TeachBack
+          prompt={component.prompt ?? "Explain this in your own words."}
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          disabled={disabled}
+          minWords={component.min_words}
+        />
+      );
+    case "case_vignette":
+      return (
+        <CaseVignette
+          stem={component.stem ?? ""}
+          questions={component.questions ?? []}
+          value={typeof value === "object" && value !== null ? (value as Record<string, string>) : {}}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
+    case "concept_map":
+      return (
+        <ConceptMap
+          nodes={component.nodes ?? []}
+          edges={component.edges ?? []}
+          caption={component.caption}
+        />
+      );
+    case "label_diagram":
+      return (
+        <LabelDiagram
+          image={component.image}
+          labels={component.labels ?? []}
+          value={Array.isArray(value) ? value : []}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
+    case "timeline":
+      return (
+        <Timeline
+          events={component.events ?? []}
+          value={Array.isArray(value) ? value : []}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
+    case "annotated_image":
+      return (
+        <AnnotatedImage
+          image={component.image}
+          annotations={component.annotations ?? []}
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
+    case "spotter_station":
+      return (
+        <SpotterStation
+          image={component.image}
+          question={component.question ?? "Identify the highlighted structure."}
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
+    case "muddy_point":
+      return (
+        <MuddyPoint
+          prompt={component.prompt ?? "What is still confusing?"}
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
     default:
       return null;
   }
@@ -465,6 +600,592 @@ function Predict({
           <Eye aria-hidden="true" className="size-4" /> Reveal
         </button>
       )}
+    </div>
+  );
+}
+
+function ShortAnswer({
+  stem,
+  answer,
+  onChange,
+  disabled,
+  modelAnswer,
+}: {
+  stem: string;
+  answer: string;
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+  modelAnswer?: string;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <div>
+      <p className="reading text-base font-medium">{stem}</p>
+      <textarea
+        value={answer}
+        disabled={disabled || revealed}
+        onChange={(event) => onChange(event.target.value)}
+        rows={3}
+        placeholder="Type your answer…"
+        className="reading mt-3 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+      />
+      {revealed && modelAnswer && (
+        <div className="mt-3 rounded-control border border-correct/30 bg-correct-soft p-3 text-sm text-text">
+          <p className="text-xs font-semibold text-correct mb-1">Model answer</p>
+          <p>{modelAnswer}</p>
+        </div>
+      )}
+      {!revealed && !disabled && (
+        <button
+          type="button"
+          onClick={() => setRevealed(true)}
+          className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-control border border-border-subtle px-3 text-sm font-medium hover:bg-surface-2"
+        >
+          <Eye aria-hidden="true" className="size-4" /> Show answer
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Matching({
+  pairs,
+  value,
+  onChange,
+  disabled,
+}: {
+  pairs: { left: string; right: string }[];
+  value: Record<string, string>;
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+}) {
+  const rightIds = pairs.map((p) => p.right);
+  const setMatch = (leftId: string, rightId: string) => {
+    const next = { ...value };
+    if (rightId === "") delete next[leftId];
+    else next[leftId] = rightId;
+    onChange(next);
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold tracking-wide text-text-muted uppercase">Match each item</p>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <p className="text-xs text-text-muted mb-2">Left</p>
+          {pairs.map((pair) => (
+            <div key={pair.left} className="flex items-center gap-2 rounded-control border border-border-subtle bg-surface p-2 text-sm">
+              <span>{pair.left}</span>
+              <select
+                value={value[pair.left] ?? ""}
+                onChange={(event) => setMatch(pair.left, event.target.value)}
+                disabled={disabled}
+                className="min-h-10 flex-1 rounded-control border border-border-strong bg-surface px-2 text-sm focus:border-primary focus:outline-none"
+              >
+                <option value="">—</option>
+                {rightIds.map((rightId) => (
+                  <option key={rightId} value={rightId}>
+                    {pairs.find((p) => p.right === rightId)?.right}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+        <div>
+          <p className="text-xs text-text-muted mb-2">Right</p>
+          {pairs.map((pair) => (
+            <div key={pair.right} className="flex items-center gap-2 rounded-control border border-border-subtle bg-surface p-2 text-sm">
+              <span>{pair.right}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Ordering({
+  items,
+  value,
+  onChange,
+  disabled,
+}: {
+  items: { id: string; text: string }[];
+  value: string[];
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+}) {
+  const ordered = value.length > 0 ? value : items.map((item) => item.id);
+  const move = (id: string, delta: number) => {
+    const index = ordered.indexOf(id);
+    if (index === -1) return;
+    const next = [...ordered];
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return;
+    next.splice(index, 1);
+    next.splice(target, 0, id);
+    onChange(next);
+  };
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold tracking-wide text-text-muted uppercase">Put in order</p>
+      {ordered.map((id, index) => {
+        const item = items.find((i) => i.id === id);
+        if (!item) return null;
+        return (
+          <div
+            key={id}
+            className="flex items-center gap-2 rounded-control border border-border-subtle bg-surface p-2 text-sm"
+          >
+            <span className="min-w-4 text-center font-mono text-text-muted">{index + 1}</span>
+            <span className="flex-1">{item.text}</span>
+            {!disabled && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => move(id, -1)}
+                  disabled={index === 0}
+                  className="p-1 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
+                  aria-label="Move up"
+                >
+                  <ArrowLeft className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => move(id, 1)}
+                  disabled={index === ordered.length - 1}
+                  className="p-1 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
+                  aria-label="Move down"
+                >
+                  <ArrowRight className="size-3" />
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function McqMulti({
+  stem,
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  stem: string;
+  options: string[];
+  value: number[];
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+}) {
+  const group = useId();
+  return (
+    <fieldset disabled={disabled}>
+      <legend className="reading text-base font-medium">{stem}</legend>
+      <p className="mt-1 text-xs text-text-muted">Select all that apply.</p>
+      <div className="mt-3 space-y-2">
+        {options.map((option, index) => {
+          const selected = value.includes(index);
+          return (
+            <label
+              key={index}
+              className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-control border px-3 py-2 text-sm ${
+                selected ? "border-primary bg-primary-soft" : "border-border-subtle hover:bg-surface-2"
+              }`}
+            >
+              <input
+                type="checkbox"
+                name={group}
+                checked={selected}
+                onChange={() => {
+                  const next = selected ? value.filter((i) => i !== index) : [...value, index];
+                  onChange(next);
+                }}
+                className="mt-1 accent-[var(--color-primary)]"
+              />
+              <span>
+                <span className="mr-2 font-mono text-xs text-text-muted">{String.fromCharCode(65 + index)}</span>
+                {option}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+function Calculation({
+  stem,
+  value,
+  onChange,
+  disabled,
+  tolerance,
+  answer,
+}: {
+  stem: string;
+  value: number | null;
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+  tolerance?: number;
+  answer?: number | string;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  const numeric = typeof answer === "number" ? answer : answer ? Number(answer) : null;
+  return (
+    <div>
+      <p className="reading text-base font-medium">{stem}</p>
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          type="number"
+          step="any"
+          value={value ?? ""}
+          onChange={(event) => onChange(event.target.value === "" ? null : Number(event.target.value))}
+          disabled={disabled || revealed}
+          placeholder="0"
+          className="min-h-10 w-48 rounded-control border border-border bg-bg px-2 text-sm focus:border-primary focus:outline-none"
+        />
+        {tolerance !== undefined && numeric !== null && (
+          <span className="text-xs text-text-muted">± {tolerance}</span>
+        )}
+      </div>
+      {revealed && numeric !== null && (
+        <div className="mt-3 rounded-control border border-correct/30 bg-correct-soft p-3 text-sm text-text">
+          <p className="text-xs font-semibold text-correct mb-1">Answer</p>
+          <p>{numeric.toString()}</p>
+        </div>
+      )}
+      {!revealed && !disabled && (
+        <button
+          type="button"
+          onClick={() => setRevealed(true)}
+          className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-control border border-border-subtle px-3 text-sm font-medium hover:bg-surface-2"
+        >
+          <Eye aria-hidden="true" className="size-4" /> Show answer
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SpotTheError({
+  text,
+  value,
+  onChange,
+  disabled,
+  errors,
+}: {
+  text: string;
+  value: unknown[];
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+  errors?: number[];
+}) {
+  const lines = text.split("\n");
+  const selected = new Set(value as number[]);
+  return (
+    <div className="space-y-2">
+      <p className="reading text-base font-medium">Find the error(s)</p>
+      {lines.map((line, index) => (
+        <button
+          key={index}
+          type="button"
+          onClick={() => {
+            const next = new Set(selected);
+            if (next.has(index)) next.delete(index);
+            else next.add(index);
+            onChange([...next]);
+          }}
+          disabled={disabled}
+          aria-pressed={selected.has(index)}
+          className={`flex items-center gap-2 rounded-control border px-3 py-2 text-sm ${
+            selected.has(index)
+              ? "border-correct bg-correct-soft text-correct"
+              : "border-border-subtle hover:bg-surface-2"
+          }`}
+        >
+          <span className="text-xs font-mono text-text-muted">{index + 1}</span>
+          <span className="flex-1 whitespace-pre-wrap">{line}</span>
+        </button>
+      ))}
+      {disabled && errors && errors.length > 0 && (
+        <p className="mt-2 text-xs text-text-muted">
+          Marked lines: {errors.map((e) => e + 1).join(", ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TeachBack({
+  prompt,
+  value,
+  onChange,
+  disabled,
+  minWords,
+}: {
+  prompt: string;
+  value: string;
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+  minWords?: number;
+}) {
+  const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+  const target = minWords ?? 20;
+  return (
+    <div>
+      <p className="reading text-base font-medium">{prompt}</p>
+      <textarea
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        rows={5}
+        placeholder="Explain as if teaching a peer…"
+        className="reading mt-3 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+      />
+      <p className={`mt-1 text-xs ${words < target ? "text-text-muted" : "text-correct"}`}>
+        {words} / {target} words
+      </p>
+    </div>
+  );
+}
+
+function CaseVignette({
+  stem,
+  questions,
+  value,
+  onChange,
+  disabled,
+}: {
+  stem: string;
+  questions: string[];
+  value: Record<string, string>;
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="reading text-base font-medium">{stem}</p>
+      </div>
+      {questions.map((question, index) => (
+        <div key={index} className="rounded-control border border-border-subtle bg-surface p-3">
+          <p className="text-sm font-medium mb-2">{question}</p>
+          <textarea
+            value={value[index] ?? ""}
+            disabled={disabled}
+            onChange={(event) => {
+              const next = { ...value };
+              next[index] = event.target.value;
+              onChange(next);
+            }}
+            rows={3}
+            placeholder="Your answer…"
+            className="w-full rounded-control border border-border bg-bg p-2 text-sm focus:border-primary focus:outline-none"
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ConceptMap({ nodes, edges, caption }: { nodes: unknown[]; edges: unknown[]; caption?: string }) {
+  return (
+    <div className="rounded-control border border-border-subtle bg-surface p-4 min-h-[300px] flex items-center justify-center">
+      <p className="text-sm text-text-muted">
+        {nodes.length === 0 ? "No concept map data." : `${nodes.length} nodes, ${edges.length} connections`}
+      </p>
+      {caption && <p className="mt-2 text-center text-xs text-text-muted">{caption}</p>}
+    </div>
+  );
+}
+
+function LabelDiagram({
+  image,
+  labels,
+  value,
+  onChange,
+  disabled,
+}: {
+  image?: string;
+  labels: string[];
+  value: unknown[];
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      {image && (
+        <div className="relative rounded-control border border-border-subtle overflow-hidden">
+          <img src={`/api/asset?path=${encodeURIComponent(image)}`} alt="Diagram" className="block max-w-full h-auto" />
+        </div>
+      )}
+      {labels.map((label, index) => (
+        <div key={index} className="flex items-center gap-2">
+          <span className="min-w-[3rem] text-xs font-mono text-text-muted">Label {index + 1}</span>
+          <input
+            value={typeof value[index] === "string" ? value[index] : ""}
+            onChange={(event) => {
+              const next = [...value];
+              next[index] = event.target.value;
+              onChange(next);
+            }}
+            disabled={disabled}
+            placeholder={label}
+            className="flex-1 min-h-10 rounded-control border border-border bg-bg px-2 text-sm focus:border-primary focus:outline-none"
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Timeline({
+  events,
+  value,
+  onChange,
+  disabled,
+}: {
+  events: unknown[];
+  value: unknown[];
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold tracking-wide text-text-muted uppercase">Order the events</p>
+      {events.map((event, index) => (
+        <div key={index} className="flex items-center gap-2 rounded-control border border-border-subtle bg-surface p-2 text-sm">
+          <span className="min-w-4 text-center font-mono text-text-muted">{index + 1}</span>
+          <span className="flex-1 whitespace-pre-wrap">
+            {typeof event === "string" ? event : String(event)}
+          </span>
+          {!disabled && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = [...value];
+                  if (index > 0) [next[index], next[index - 1]] = [next[index - 1], next[index]];
+                  onChange(next);
+                }}
+                disabled={index === 0}
+                className="p-1 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
+                aria-label="Move up"
+              >
+                <ArrowLeft className="size-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = [...value];
+                  if (index < value.length - 1) [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                  onChange(next);
+                }}
+                disabled={index === value.length - 1}
+                className="p-1 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
+                aria-label="Move down"
+              >
+                <ArrowRight className="size-3" />
+              </button>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AnnotatedImage({
+  image,
+  annotations,
+  value,
+  onChange,
+  disabled,
+}: {
+  image?: string;
+  annotations: unknown[];
+  value: string;
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      {image && (
+        <div className="relative rounded-control border border-border-subtle overflow-hidden">
+          <img src={`/api/asset?path=${encodeURIComponent(image)}`} alt="Image" className="block max-w-full h-auto" />
+        </div>
+      )}
+      <p className="reading text-base font-medium">Your annotation</p>
+      <textarea
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        rows={4}
+        placeholder="Describe what you see…"
+        className="reading w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+      />
+    </div>
+  );
+}
+
+function SpotterStation({
+  image,
+  question,
+  value,
+  onChange,
+  disabled,
+}: {
+  image?: string;
+  question: string;
+  value: string;
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      {image && (
+        <div className="relative rounded-control border border-border-subtle overflow-hidden aspect-video">
+          <img src={`/api/asset?path=${encodeURIComponent(image)}`} alt="Specimen" className="block w-full h-full object-cover" />
+        </div>
+      )}
+      <p className="reading text-base font-medium">{question}</p>
+      <input
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Name the structure…"
+        className="min-h-10 w-full rounded-control border border-border bg-surface px-3 text-sm focus:border-primary focus:outline-none"
+      />
+    </div>
+  );
+}
+
+function MuddyPoint({
+  prompt,
+  value,
+  onChange,
+  disabled,
+}: {
+  prompt: string;
+  value: string;
+  onChange: (value: unknown) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <p className="reading text-base font-medium">{prompt}</p>
+      <textarea
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        rows={4}
+        placeholder="What don't you understand yet?…"
+        className="reading w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ArrowLeft, BookOpen, Search } from "lucide-react";
+import { ArrowLeft, BookOpen, Plus, Search, Trash2 } from "lucide-react";
 import type { Course, NoteMeta } from "../api.ts";
 import { plural } from "../lib/format.ts";
 import { Button } from "../components/Button.tsx";
@@ -15,6 +15,8 @@ export function Notes({
   onSelectCourse,
   onClearCourse,
   onOpenNote,
+  onNewNote,
+  onDeleteNote,
   loading,
 }: {
   courses: Course[];
@@ -26,6 +28,8 @@ export function Notes({
   onSelectCourse: (course: Course) => void;
   onClearCourse: () => void;
   onOpenNote: (path: string) => void;
+  onNewNote: (course: Course | null) => void;
+  onDeleteNote: (path: string) => void;
   loading: boolean;
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
@@ -57,6 +61,12 @@ export function Notes({
             {course ? course.title : "Notes"}
           </h1>
         </div>
+        {course && (
+          <Button variant="secondary" onClick={() => onNewNote(course)}>
+            <Plus aria-hidden="true" className="size-4" />
+            New note
+          </Button>
+        )}
         <label className="relative w-full sm:w-64">
           <span className="sr-only">Search notes</span>
           <Search
@@ -88,7 +98,7 @@ export function Notes({
           <h2 className="text-xs font-semibold text-text-muted">
             {plural(results.length, "result")} for “{query.trim()}”
           </h2>
-          <NoteList notes={results} onOpenNote={onOpenNote} showCourse />
+          <NoteList notes={results} onOpenNote={onOpenNote} onDeleteNote={onDeleteNote} showCourse />
         </section>
       )}
 
@@ -138,7 +148,7 @@ export function Notes({
               </EmptyState>
             </div>
           ) : (
-            <NoteList notes={list} onOpenNote={onOpenNote} />
+            <NoteList notes={list} onOpenNote={onOpenNote} onDeleteNote={onDeleteNote} />
           )}
         </section>
       )}
@@ -149,32 +159,47 @@ export function Notes({
 function NoteList({
   notes,
   onOpenNote,
+  onDeleteNote,
   showCourse = false,
 }: {
   notes: NoteMeta[];
   onOpenNote: (path: string) => void;
+  onDeleteNote: (path: string) => void;
   showCourse?: boolean;
 }) {
   return (
     <ul className="mt-2 divide-y divide-border-subtle border-y border-border-subtle">
       {notes.map((note) => (
         <li key={note.path}>
-          <button
-            type="button"
-            onClick={() => onOpenNote(note.path)}
-            className="flex min-h-11 w-full items-start gap-3 py-3 text-left hover:bg-surface-2"
-          >
-            <BookOpen aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-text-muted" />
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold">{note.title}</span>
-              <span className="mt-0.5 block truncate text-sm text-text-muted">
-                {note.summary || note.path}
+          <div className="flex min-h-11 w-full items-start gap-3 py-3 text-left hover:bg-surface-2">
+            <button
+              type="button"
+              onClick={() => onOpenNote(note.path)}
+              className="flex min-w-0 items-start gap-3 py-3 text-left hover:bg-surface-2"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <BookOpen aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-text-muted" />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold">{note.title}</span>
+                <span className="mt-0.5 block truncate text-sm text-text-muted">
+                  {note.summary || note.path}
+                </span>
+                {showCourse && note.course && (
+                  <span className="mt-0.5 block font-mono text-xs text-text-muted">{note.course}</span>
+                )}
               </span>
-              {showCourse && note.course && (
-                <span className="mt-0.5 block font-mono text-xs text-text-muted">{note.course}</span>
-              )}
-            </span>
-          </button>
+            </button>
+            <Button
+              variant="destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Delete “${note.title}”?`)) onDeleteNote(note.path);
+              }}
+              aria-label={`Delete ${note.title}`}
+            >
+              <Trash2 aria-hidden="true" className="size-4" />
+            </Button>
+          </div>
         </li>
       ))}
     </ul>

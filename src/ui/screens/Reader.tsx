@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Edit,
   Keyboard,
   ListTree,
   Minus,
   Plus,
+  Trash2,
   X,
   ZoomIn,
 } from "lucide-react";
@@ -21,11 +23,15 @@ export function Reader({
   course,
   onBack,
   onOpenNote,
+  onEditNote,
+  onDeleteNote,
 }: {
   note: NoteDetail;
   course: Course | null;
   onBack: () => void;
   onOpenNote: (path: string, anchor?: string) => void;
+  onEditNote?: (path: string) => void;
+  onDeleteNote?: (path: string) => void;
 }) {
   const { prefs, setPrefs, size, lineHeight } = useReaderPrefs();
   const { theme, setTheme } = useTheme();
@@ -68,6 +74,18 @@ export function Reader({
             </span>
             <span className="sr-only">Reading settings</span>
           </Button>
+          {onEditNote && (
+            <Button variant="ghost" className="px-2" onClick={() => onEditNote(note.path)}>
+              <Edit aria-hidden="true" className="size-4" />
+              <span className="sr-only">Edit note</span>
+            </Button>
+          )}
+          {onDeleteNote && (
+            <Button variant="destructive" className="px-2" onClick={() => onDeleteNote(note.path)}>
+              <Trash2 aria-hidden="true" className="size-4" />
+              <span className="sr-only">Delete note</span>
+            </Button>
+          )}
         </div>
 
         <div style={{ fontSize: size, lineHeight }} className="mt-3">

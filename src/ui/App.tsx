@@ -50,7 +50,7 @@ function Shell() {
   const [course, setCourse] = useState<Course | null>(null);
   const [notes, setNotes] = useState<NoteMeta[]>([]);
   const [note, setNote] = useState<NoteDetail | null>(null);
-  const [editingNote, setEditingNote] = useState<{ path: string; course: Course | null } | null>(null);
+  const [editingNote, setEditingNote] = useState<{ path: string | null; course: Course | null } | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<NoteMeta[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -219,6 +219,31 @@ function Shell() {
     setEditingNote(null);
   }
 
+  function createNextNote(course: Course | null) {
+    if (!course) {
+      selectTab("notes");
+      return;
+    }
+    setEditingNote({ path: null, course });
+    setTab("notes");
+  }
+
+  async function deleteNote(path: string) {
+    if (!window.confirm("Delete this note?")) return;
+    try {
+      await api.deleteNote(path);
+      setNote(null);
+      setEditingNote(null);
+      // Refresh notes list for the current course
+      if (course) {
+        const updated = await api.notes(course.code);
+        setNotes(updated);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return (
     <div className="min-h-dvh">
       <a
@@ -339,9 +364,16 @@ function Shell() {
         )}
 
         {editingNote ? (
-          <Editor course={editingNote.course} onBack={closeEditor} notePath={editingNote.path} />
+          <Editor course={editingNote.course} onBack={closeEditor} notePath={editingNote.path ?? undefined} />
         ) : note ? (
-          <Reader note={note} course={course} onBack={closeNote} onOpenNote={(path, anchor) => void openNote(path, anchor)} />
+          <Reader
+            note={note}
+            course={course}
+            onBack={closeNote}
+            onOpenNote={(path, anchor) => void openNote(path, anchor)}
+            onEditNote={(path) => { setEditingNote({ path, course }); setTab("notes"); }}
+            onDeleteNote={(path) => void deleteNote(path)}
+          />
         ) : tab === "study" ? (
           <Study
             courses={courses}
@@ -360,6 +392,8 @@ function Shell() {
             onSelectCourse={openCourse}
             onClearCourse={clearCourse}
             onOpenNote={(path) => void openNote(path)}
+            onNewNote={createNextNote}
+            onDeleteNote={(path) => void deleteNote(path)}
             loading={loading}
           />
         ) : tab === "live" ? (

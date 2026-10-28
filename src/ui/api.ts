@@ -247,14 +247,28 @@ export type ActivityType =
   | "flashcard"
   | "cloze"
   | "mcq_single"
+  | "mcq_multi"
   | "tf_multi"
+  | "short_answer"
+  | "matching"
+  | "ordering"
   | "theory"
+  | "calculation"
   | "worked_example_stepper"
   | "predict_reveal"
   | "compare_table"
   | "mermaid_diagram"
+  | "concept_map"
+  | "label_diagram"
+  | "timeline"
+  | "annotated_image"
+  | "spotter_station"
   | "confidence_rating"
-  | "think_aloud";
+  | "think_aloud"
+  | "muddy_point"
+  | "spot_the_error"
+  | "teach_back"
+  | "case_vignette";
 
 export type ActivityComponent = {
   type: ActivityType;
@@ -265,7 +279,7 @@ export type ActivityComponent = {
   explanation?: string;
   stem?: string;
   options?: string[];
-  answer?: number;
+  answer?: number | number[] | string;
   statements?: { text: string; answer: boolean; explanation?: string }[];
   scoring?: "per_statement" | "all_or_nothing";
   prompt?: string;
@@ -281,6 +295,18 @@ export type ActivityComponent = {
   rows?: string[][];
   code?: string;
   min_words?: number;
+  pairs?: { left: string; right: string }[];
+  items?: { id: string; text: string }[];
+  tolerance?: number;
+  errors?: number[];
+  questions?: string[];
+  nodes?: unknown[];
+  edges?: unknown[];
+  events?: unknown[];
+  annotations?: unknown[];
+  image?: string;
+  labels?: string[];
+  question?: string;
 };
 
 export type ActivityCite = { note: string; anchor?: string; quote?: string };
@@ -471,8 +497,10 @@ export const api = {
   courses: () => getJson<Course[]>("/api/courses"),
   notes: (course: string) => getJson<NoteMeta[]>(`/api/courses/${encodeURIComponent(course)}/notes`),
   note: (path: string) => getJson<NoteDetail>(`/api/note?path=${encodeURIComponent(path)}`),
-  writeNote: (input: { path: string; content: string; requestId?: string }) =>
+  writeNote: (input: { path: string; content: string; mode?: "create" | "replace"; requestId?: string }) =>
     sendJson<{ path: string; bytes: number; mode: string }>("/api/note", "POST", input),
+  deleteNote: (path: string) =>
+    sendJson<{ path: string }>(`/api/note?path=${encodeURIComponent(path)}`, "DELETE", undefined),
   writeAsset: (input: {
     course: string;
     fileName: string;

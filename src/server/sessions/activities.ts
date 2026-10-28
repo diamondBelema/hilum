@@ -4,14 +4,28 @@ export const ACTIVITY_TYPES = [
   "flashcard",
   "cloze",
   "mcq_single",
+  "mcq_multi",
   "tf_multi",
+  "short_answer",
+  "matching",
+  "ordering",
   "theory",
+  "calculation",
   "worked_example_stepper",
   "predict_reveal",
   "compare_table",
   "mermaid_diagram",
+  "concept_map",
+  "label_diagram",
+  "timeline",
+  "annotated_image",
+  "spotter_station",
   "confidence_rating",
   "think_aloud",
+  "muddy_point",
+  "spot_the_error",
+  "teach_back",
+  "case_vignette",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -117,7 +131,155 @@ const thinkAloud = z
   .object({ type: z.literal("think_aloud"), prompt: z.string().min(1), min_words: z.number().int().min(0).max(200).default(10), concept_ids: conceptIds })
   .strict();
 
-const componentSchema = z.discriminatedUnion("type", [flashcard, cloze, mcq, tf, theory, stepper, predict, table, mermaid, confidence, thinkAloud]);
+const mcqMulti = z
+  .object({
+    type: z.literal("mcq_multi"),
+    stem: z.string().min(1),
+    options: z.array(z.string().min(1)).min(2).max(8),
+    answer: z.array(z.number().int().nonnegative()).optional(),
+    explanation: z.string().optional(),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const shortAnswer = z
+  .object({
+    type: z.literal("short_answer"),
+    stem: z.string().min(1),
+    model_answer: z.string().optional(),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const matching = z
+  .object({
+    type: z.literal("matching"),
+    pairs: z.array(z.object({ left: z.string().min(1), right: z.string().min(1) }).strict()).min(1).max(12),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const ordering = z
+  .object({
+    type: z.literal("ordering"),
+    items: z.array(z.object({ id: z.string().min(1), text: z.string().min(1) }).strict()).min(2).max(12),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const calculation = z
+  .object({
+    type: z.literal("calculation"),
+    stem: z.string().min(1),
+    answer: z.number().optional(),
+    tolerance: z.number().nonnegative().optional(),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const spotTheError = z
+  .object({
+    type: z.literal("spot_the_error"),
+    text: z.string().min(1),
+    errors: z.array(z.number().int().nonnegative()).optional(),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const teachBack = z
+  .object({
+    type: z.literal("teach_back"),
+    prompt: z.string().min(1),
+    min_words: z.number().int().min(0).max(300).default(20),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const caseVignette = z
+  .object({
+    type: z.literal("case_vignette"),
+    stem: z.string().min(1),
+    questions: z.array(z.string().min(1)).min(1).max(6),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const conceptMap = z
+  .object({
+    type: z.literal("concept_map"),
+    nodes: z.array(z.any()).optional(),
+    edges: z.array(z.any()).optional(),
+    caption: z.string().optional(),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const labelDiagram = z
+  .object({
+    type: z.literal("label_diagram"),
+    image: z.string().optional(),
+    labels: z.array(z.string().min(1)).min(1).max(12),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const timeline = z
+  .object({
+    type: z.literal("timeline"),
+    events: z.array(z.any()).optional(),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const annotatedImage = z
+  .object({
+    type: z.literal("annotated_image"),
+    image: z.string().optional(),
+    annotations: z.array(z.any()).optional(),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const spotterStation = z
+  .object({
+    type: z.literal("spotter_station"),
+    image: z.string().optional(),
+    question: z.string().min(1),
+    concept_ids: conceptIds,
+  })
+  .strict();
+
+const muddyPoint = z
+  .object({ type: z.literal("muddy_point"), prompt: z.string().min(1), concept_ids: conceptIds })
+  .strict();
+
+const componentSchema = z.discriminatedUnion("type", [
+  flashcard,
+  cloze,
+  mcq,
+  mcqMulti,
+  tf,
+  shortAnswer,
+  matching,
+  ordering,
+  theory,
+  calculation,
+  stepper,
+  predict,
+  table,
+  mermaid,
+  conceptMap,
+  labelDiagram,
+  timeline,
+  annotatedImage,
+  spotterStation,
+  confidence,
+  thinkAloud,
+  muddyPoint,
+  spotTheError,
+  teachBack,
+  caseVignette,
+]);
 
 export const activitySpecSchema = z
   .object({
@@ -248,6 +410,68 @@ export function validateActivityResponse(spec: ActivitySpec, input: unknown): Ac
         if (value !== "guessing" && value !== "likely" && value !== "sure") {
           throw new ActivitySpecError(`component ${index + 1}: choose a confidence rating`);
         }
+        components.push(value);
+        break;
+      case "mcq_multi": {
+        if (!Array.isArray(value) || value.some((item) => typeof item !== "number")) {
+          throw new ActivitySpecError(`component ${index + 1}: select options`);
+        }
+        components.push(value);
+        break;
+      }
+      case "short_answer": {
+        const answer = String(value ?? "").trim();
+        if (!answer) throw new ActivitySpecError(`component ${index + 1}: write an answer`);
+        components.push(answer);
+        break;
+      }
+      case "matching": {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          throw new ActivitySpecError(`component ${index + 1}: make every match`);
+        }
+        components.push(value);
+        break;
+      }
+      case "ordering": {
+        if (!Array.isArray(value)) throw new ActivitySpecError(`component ${index + 1}: order the items`);
+        components.push(value);
+        break;
+      }
+      case "calculation": {
+        if (value === null || value === undefined || String(value).trim() === "") {
+          throw new ActivitySpecError(`component ${index + 1}: enter a number`);
+        }
+        components.push(Number(value));
+        break;
+      }
+      case "spot_the_error": {
+        if (!Array.isArray(value)) throw new ActivitySpecError(`component ${index + 1}: mark the error lines`);
+        components.push(value);
+        break;
+      }
+      case "teach_back": {
+        const text = String(value ?? "").trim();
+        const minWords = component.min_words ?? 20;
+        const words = text ? text.split(/\s+/).length : 0;
+        if (words < minWords) {
+          throw new ActivitySpecError(`component ${index + 1}: write at least ${minWords} words`);
+        }
+        components.push(text);
+        break;
+      }
+      case "case_vignette": {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          throw new ActivitySpecError(`component ${index + 1}: answer every question`);
+        }
+        components.push(value);
+        break;
+      }
+      case "concept_map":
+      case "label_diagram":
+      case "timeline":
+      case "annotated_image":
+      case "spotter_station":
+      case "muddy_point":
         components.push(value);
         break;
       default:

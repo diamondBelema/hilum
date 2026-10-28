@@ -199,6 +199,13 @@ export function createApp(deps: AppDeps = {}) {
     return c.json(result);
   });
 
+  app.delete("/api/note", async (c) => {
+    const path = c.req.query("path");
+    if (!path) return c.json({ error: "path is required" }, 400);
+    const result = await vault.deleteNote(path);
+    return c.json(result);
+  });
+
   app.patch("/api/course/:code", async (c) => {
     const code = c.req.param("code");
     const patch = await c.req.json<{ title?: string | null; department?: string | null; answerStyle?: string | null; examDate?: string | null; examBlueprint?: Record<string, unknown>[] | null }>();

@@ -8,12 +8,21 @@ import {
   ArrowLeft,
   ImageIcon,
   Save,
+  Trash2,
   Zap,
 } from "lucide-react";
 import { api } from "../api.ts";
 import { type Course } from "../api.ts";
 import { parseNote } from "../lib/frontmatter.ts";
 import { Button } from "../components/Button.tsx";
+
+function slug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
 
 function debounce(fn: () => void, ms: number) {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -39,6 +48,7 @@ export function Editor({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailPath, setDetailPath] = useState(notePath ?? "");
+  const [deleting, setDeleting] = useState(false);
   const [frontmatter, setFrontmatter] = useState<{
     title: string;
     course: string;
@@ -101,13 +111,22 @@ export function Editor({
   }, [notePath]);
 
   const save = useCallback(async () => {
-    if (!detailPath) return;
     setSaving(true);
     setError(null);
     try {
       const front = parseFrontmatter();
       const content = `---\n${front}\n---\n${source}`;
-      const result = await api.writeNote({ path: detailPath, content, requestId: `editor-${Date.now()}` });
+      let target = detailPath;
+      let mode: "create" | "replace" = "replace";
+      if (!target) {
+        const course = frontmatter.course.trim();
+        const title = frontmatter.title.trim();
+        if (!course || !title) throw new Error("Course and title are required");
+        target = `courses/${course}/notes/${slug(title)}.md`;
+        mode = "create";
+      }
+      const result = await api.writeNote({ path: target, content, mode, requestId: `editor-${Date.now()}` });
+      if (!detailPath) setDetailPath(target);
       lastWrittenRef.current = content;
       setUnsaved(false);
       setSaved(true);
@@ -118,7 +137,22 @@ export function Editor({
     } finally {
       setSaving(false);
     }
-  }, [detailPath, source]);
+  }, [detailPath, source, frontmatter]);
+
+  const deleteNote = useCallback(async () => {
+    if (!detailPath) return;
+    if (!window.confirm("Delete this note?")) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.deleteNote(detailPath);
+      onBack();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleting(false);
+    }
+  }, [detailPath, onBack]);
 
   const autosave = debounce(() => {
     if (unsaved && detailPath) void save();
@@ -150,7 +184,18 @@ export function Editor({
           <ArrowLeft aria-hidden="true" className="size-4" />
           Back
         </Button>
-        <h1 className="text-xl font-semibold tracking-tight">Editor</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{!detailPath ? "New note" : "Editor"}</h1>
+        {detailPath && (
+          <Button
+            variant="destructive"
+            onClick={() => void deleteNote()}
+            loading={deleting}
+            aria-label="Delete note"
+          >
+            <Trash2 aria-hidden="true" className="size-4" />
+            Delete
+          </Button>
+        )}
       </div>
 
       {error && <div className="mb-3">{error}</div>}
