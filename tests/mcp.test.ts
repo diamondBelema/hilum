@@ -515,6 +515,31 @@ describe("mcp content tools", () => {
     await server.close();
   });
 
+  test("returns the course answer style when a session starts", async () => {
+    await writeFile(
+      join(root, "courses/ana-211/answer-style.md"),
+      "---\ncourse: ana-211\nstatus: draft\nkinds:\n  - {kind: mechanism, typical_marks: 10}\n---\n\n# Answer style\n\nUse a numbered mechanism and name the nephron segment.\n",
+      "utf8",
+    );
+    await writeFile(
+      join(root, "courses/ana-211/course.md"),
+      "---\ncode: ana-211\ntitle: Anatomy 211\nanswer_style: courses/ana-211/answer-style.md\n---\n\n# Anatomy 211\n",
+      "utf8",
+    );
+    const { client, server } = await connect();
+
+    const started = await client.callTool({
+      name: "session_start",
+      arguments: { course: "ana-211" },
+    });
+    expect(started.isError).not.toBe(true);
+    expect(text(started)).toContain("numbered mechanism");
+    expect(text(started)).toContain('"status":"draft"');
+    expect(text(started)).toContain('"kind":"mechanism"');
+
+    await server.close();
+  });
+
   test("rejects traversal through MCP without writing", async () => {
     const { client, server } = await connect();
     const result = await client.callTool({

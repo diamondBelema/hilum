@@ -16,8 +16,41 @@ import {
   submitGradeSchema,
 } from "./exams/grading.ts";
 
+async function readCourseAnswerStyle(
+  vault: VaultService,
+  course: string,
+): Promise<{
+  path: string;
+  status: string | null;
+  kinds: unknown[] | null;
+  content: string;
+} | null> {
+  const info = (await vault.listCourses()).find((item) => item.code === course);
+  const configured = info?.answerStyle?.trim();
+  if (!configured) return null;
+
+  const candidates = configured.startsWith("courses/")
+    ? [configured]
+    : [configured, `courses/${configured}`, `courses/${course}/${configured}`];
+  for (const path of candidates) {
+    try {
+      const note = vault.readNote(path);
+      return {
+        path: note.path,
+        status: typeof note.frontmatter.status === "string" ? note.frontmatter.status : null,
+        kinds: Array.isArray(note.frontmatter.kinds) ? note.frontmatter.kinds : null,
+        content: note.body,
+      };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 const INSTRUCTIONS = `This server is the Exam Harness for a medical student.
 The markdown vault is the source of truth; read INDEX.md before notes.
+Each course may set answer_style in course.md. session_start returns that file: follow its command-word and answer-structure rules when probing, teaching or drafting model answers.
 Teaching protocol: session_start, read the index, probe with activities, diagnose, teach, record evidence, session_end.
 Never invent content without citations; unverified content must be marked unverified.
 Exam simulations are deterministic and run without an agent.
@@ -522,19 +555,23 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
     "session_start",
     {
       description:
-        "Start or resume a live teaching session for a course. Returns the session, mastery snapshot, due items, frontier and the last session summary.",
+        "Start or resume a live teaching session for a course. Returns the session, the course answer style, mastery snapshot, due items, frontier and the last session summary.",
       inputSchema: { course: z.string().min(1), goal: z.string().optional() },
     },
     async ({ course, goal }) => {
       try {
         const session = await sessions.start(course, goal);
+        const answerStyle = await readCourseAnswerStyle(vault, course);
         return json({
           session,
+          answer_style: answerStyle,
           mastery_snapshot: concepts.snapshot(course),
           due_items: concepts.due(course, 8),
           frontier: concepts.next(course, 5),
           last_session: sessions.history(course)[0] ?? null,
-          note: "Start with the decay review queue, then the frontier. Read the cited notes before probing, and record evidence for every taught concept.",
+          note: answerStyle
+            ? "Start with the decay review queue, then the frontier. Follow answer_style for command words, structure and marking expectations. Read the cited notes before probing, and record evidence for every taught concept."
+            : "Start with the decay review queue, then the frontier. Read the cited notes before probing, and record evidence for every taught concept.",
         });
       } catch (err) {
         return fail(err);
