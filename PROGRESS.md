@@ -202,3 +202,22 @@ Append-only log. Newest entry at the bottom.
 - UI: `Config.tsx` sheet (opened from Settings via a course picker) with four tabs — Course settings (title, department, exam date, exam blueprint table of type/count/minutes/marks each, default exam mode), Answer style, Rubric, Mastery thresholds. Inline validation errors, "Saved / Not saved" states, history restore, "Edit raw" escape hatch via the textareas. Config writes the real files (`course.md`, `answer-style.md`, `rubrics/<name>.md`, `mastery.md`) so the exam builder and grader pick up new values; grades keep a snapshot of the rubric used so past grades are unchanged after a rubric edit.
 - Also fixed: note now stays open when switching tabs (was cleared on every tab switch).
 - Tagged `n4-pass`.
+
+## 2026-10-28 — Catalog components (unstarned, post-freeze stretch per SPEC 4.1)
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok).
+- Built all 14 unstarned ActivitySpec catalog components: mcq_multi, short_answer,
+  matching, ordering, calculation, spot_the_error, teach_back, case_vignette,
+  concept_map, label_diagram, timeline, annotated_image, spotter_station, muddy_point.
+  Starred components (flashcard, cloze, mcq_single, tf_multi, theory,
+  worked_example_stepper, predict_reveal, compare_table, mermaid_diagram,
+  confidence_rating, think_aloud) already existed; ACTIVITY_TYPES now 25.
+- Server: zod schema per new type in the discriminated union, response validation
+  in validateActivityResponse (short_answer/matching/ordering/calculation/
+  spot_the_error/teach_back/case_vignette), DELETE /api/note endpoint for note deletion.
+- UI: renderer components for all new types in ActivityRenderer.tsx; Notes screen
+  New note button + per-note delete; Reader Edit/Delete note buttons; Editor creates
+  new notes from title/course/topics fields and can delete existing notes.
+- Tests: activities.test.tsx covers all 25 component types (was 11).
+- Tagged `catalog-components`.
+
