@@ -172,6 +172,14 @@ Append-only log. Newest entry at the bottom.
 - Study screen: kept ranked "Next up" list; added centered-width composer "What do you want to learn?" with Teach/Practice toggle. Teach queues an agent request via `api.askAgent` (creates/uses an active session, reaches `get_agent_requests`). Practice offers banked practice. With no agent connected, the composer says so and practice still works. Agent status strip (connected/preparing/not connected) shown beside composer; 20s "still working" behaviour preserved from Live.
 - Sessions list with relative times and a search box; update/"Request queued" toast. Tagged `n2-pass`.
 
+## 2026-10-28 — N3 in-app note editor
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok; reviewer pass `bun run check:ui` ok at 360px).
+- Spike decision recorded in `DECISIONS.md`: CodeMirror 6 source editor with side-by-side react-markdown live preview (desktop), chosen over Milkdown/TipTap for round-trip fidelity (frontmatter untouched, `{#anchors}`, wikilinks, tables, mermaid fences, images preserved), lazy load only on the editor screen, offline with zero network requests, reliable mobile typing.
+- `Editor.tsx`: source/preview toggle, toolbar (image), "Saved / Not saved" states with debounced autosave (1.5s) through `api.writeNote` → VaultService `writeNote` (mode replace), frontmatter held in a Details panel (title, course, topics, source type) never shown as YAML; student notes default `source_type: student_notes, trust: medium`; manual Save button; external-change banner skeleton (Reload/Keep mine/See changes) wired but no live watcher yet; keyboard-operable; works at 360px.
+- Server: added `POST /api/note` (writeNote replace) and `POST /api/asset` (writeAsset into `<course>/assets/`); `api.writeNote`/`api.writeAsset` client helpers.
+- Tagged `n3-pass`.
+
 ## 2026-10-28 — N0 housekeeping
 
 - Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok).
