@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { Buffer } from "node:buffer";
+import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { stringify as stringifyYaml } from "yaml";
 import type { Db } from "../db.ts";
@@ -202,6 +203,11 @@ export class VaultService {
     }
 
     const content = `---\n${stringifyYaml(frontmatter, { lineWidth: 0 })}---\n${body.replace(/^\n/, "")}`;
+    const previous = existsSync(abs) ? readFileSync(abs, "utf8") : "";
+    const histDir = this.historyDir(rel);
+    await mkdir(histDir, { recursive: true });
+    await writeFile(join(histDir, `${Date.now()}.md`), previous);
+    await this.pruneHistory(rel);
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, content, "utf8");
     await this.indexer?.indexFile(abs);
@@ -358,6 +364,112 @@ export class VaultService {
     this.db
       .query("INSERT OR REPLACE INTO idempotency (key, result, created_at) VALUES (?, ?, ?)")
       .run(`write_note:${requestId}`, JSON.stringify(result), Date.now());
+  }
+
+  private historyDir(rel: string): string {
+    return join(this.root, ".history", rel.replaceAll("/", "__"));
+  }
+
+  private async pruneHistory(rel: string): Promise<void> {
+    const dir = this.historyDir(rel);
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    const files: { name: string; mtime: number }[] = [];
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const full = join(dir, entry.name);
+      let info;
+      try {
+        info = await stat(full);
+      } catch {
+        continue;
+      }
+      files.push({ name: entry.name, mtime: info.mtimeMs });
+    }
+    files.sort((a, b) => b.mtime - a.mtime);
+    for (const file of files.slice(20)) {
+      try {
+        await rm(join(dir, file.name));
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+
+  async writeTextFile(rel: string, content: string, requestId?: string): Promise<{ path: string; bytes: number }> {
+    const safe = normalizeRel(rel);
+    const abs = resolveInside(this.root, safe);
+    await mkdir(dirname(abs), { recursive: true });
+
+    const histDir = this.historyDir(safe);
+    await mkdir(histDir, { recursive: true });
+    const stamp = Date.now().toString();
+    await writeFile(join(histDir, `${stamp}.md`), content);
+    await this.pruneHistory(safe);
+
+    await writeFile(abs, content);
+    await this.indexer?.indexFile(abs);
+    return { path: safe, bytes: Buffer.byteLength(content) };
+  }
+
+  async readTextFile(rel: string): Promise<string> {
+    const safe = normalizeRel(rel);
+    const abs = resolveInside(this.root, safe);
+    return readFileSync(abs, "utf8");
+  }
+
+  async listHistory(rel: string): Promise<{ stamp: string }[]> {
+    const safe = normalizeRel(rel);
+    const dir = this.historyDir(safe);
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const stamps: { name: string; mtime: number }[] = [];
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      const full = join(dir, entry.name);
+      let info;
+      try {
+        info = await stat(full);
+      } catch {
+        continue;
+      }
+      stamps.push({ name: entry.name.replace(/\.md$/, ""), mtime: info.mtimeMs });
+    }
+    stamps.sort((a, b) => b.mtime - a.mtime);
+    return stamps.map((item) => ({ stamp: item.name }));
+  }
+
+  async restoreVersion(rel: string, stamp: string): Promise<{ path: string; bytes: number }> {
+    const safe = normalizeRel(rel);
+    const dir = this.historyDir(safe);
+    const abs = resolveInside(this.root, safe);
+    const content = readFileSync(join(dir, `${stamp}.md`), "utf8");
+    await writeFile(abs, content);
+    await this.indexer?.indexFile(abs);
+    return { path: safe, bytes: Buffer.byteLength(content) };
+  }
+
+  async writeAnswerStyle(code: string, content: string, requestId?: string): Promise<{ path: string; bytes: number }> {
+    if (!/^[A-Za-z0-9._-]+$/.test(code)) throw new VaultPathError(`invalid course code: ${code}`);
+    return this.writeTextFile(`courses/${code}/answer-style.md`, content, requestId);
+  }
+
+  async writeRubric(name: string, content: string, requestId?: string): Promise<{ path: string; bytes: number }> {
+    if (!/^[A-Za-z0-9._-]+$/.test(name)) throw new VaultPathError(`invalid rubric name: ${name}`);
+    return this.writeTextFile(`rubrics/${name}.md`, content, requestId);
+  }
+
+  async writeMastery(code: string, content: string, requestId?: string): Promise<{ path: string; bytes: number }> {
+    if (!/^[A-Za-z0-9._-]+$/.test(code)) throw new VaultPathError(`invalid course code: ${code}`);
+    return this.writeTextFile(`courses/${code}/mastery.md`, content, requestId);
   }
 }
 

@@ -1,32 +1,42 @@
 import { useEffect, useState } from "react";
-import { api, type Health, type ServerSettings } from "../api.ts";
+import { SlidersHorizontal } from "lucide-react";
+import { api, type Course, type Health, type ServerSettings } from "../api.ts";
 import { Button } from "../components/Button.tsx";
 import { Sheet } from "../components/Sheet.tsx";
 import { ThemeChoice } from "./Reader.tsx";
+import { Config } from "./Config.tsx";
 import { useTheme } from "../theme.ts";
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { theme, setTheme } = useTheme();
   const [health, setHealth] = useState<Health | null>(null);
   const [settings, setSettings] = useState<ServerSettings | null>(null);
+  const [configCourses, setConfigCourses] = useState<Course[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<"lan" | "token" | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [configCourse, setConfigCourse] = useState<Course | null>(null);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    Promise.all([api.health(), api.settings()])
-      .then(([nextHealth, nextSettings]) => {
+    Promise.all([api.health(), api.settings(), api.courses()])
+      .then(([nextHealth, nextSettings, nextCourses]) => {
         if (cancelled) return;
         setHealth(nextHealth);
         setSettings(nextSettings);
+        setConfigCourses(nextCourses);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       });
     return () => {
       cancelled = true;
+      if (!open) {
+        setConfigCourse(null);
+        setConfigOpen(false);
+      }
     };
   }, [open]);
 
@@ -152,6 +162,43 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         </section>
 
         <section>
+          <h3 className="text-sm font-semibold">Course config</h3>
+          <p className="mt-0.5 text-xs text-text-muted">
+            Edit course settings, answer style, rubrics and mastery thresholds. Files stay the source of truth.
+          </p>
+          {settings ? (
+            <div className="mt-3 space-y-3">
+              <label className="block">
+                <span className="block text-xs font-medium text-text-muted mb-1">Course</span>
+                <select
+                  value={configCourse?.code ?? ""}
+                  onChange={(event) => {
+                    const next = configCourses.find((c) => c.code === event.target.value);
+                    setConfigCourse(next ?? null);
+                  }}
+                  className="min-h-11 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                >
+                  <option value="">Select a course</option>
+                  {configCourses.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.title} ({item.code})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {configCourse && (
+                <Button variant="secondary" onClick={() => setConfigOpen(true)}>
+                  <SlidersHorizontal aria-hidden="true" className="size-4" />
+                  Open course config
+                </Button>
+              )}
+            </div>
+          ) : (
+            !error && <p className="mt-1 text-sm text-text-muted">Reading server info…</p>
+          )}
+        </section>
+
+        <section>
           <h3 className="text-sm font-semibold">Server</h3>
           {health ? (
             <dl className="mt-2 space-y-2 font-mono text-xs text-text-muted">
@@ -187,6 +234,9 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
             </p>
           )}
         </section>
+        {configOpen && configCourse && (
+          <Config course={configCourse} onClose={() => setConfigOpen(false)} open={configOpen} />
+        )}
       </div>
     </Sheet>
   );

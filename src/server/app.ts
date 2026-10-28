@@ -199,6 +199,57 @@ export function createApp(deps: AppDeps = {}) {
     return c.json(result);
   });
 
+  app.patch("/api/course/:code", async (c) => {
+    const code = c.req.param("code");
+    const patch = await c.req.json<{ title?: string | null; department?: string | null; answerStyle?: string | null; examDate?: string | null; examBlueprint?: Record<string, unknown>[] | null }>();
+    const result = await vault.updateCourse(code, {
+      title: patch.title,
+      department: patch.department,
+      answerStyle: patch.answerStyle,
+      examDate: patch.examDate,
+      examBlueprint: patch.examBlueprint,
+    });
+    return c.json(result);
+  });
+
+  app.patch("/api/course/:code/answer-style", async (c) => {
+    const code = c.req.param("code");
+    const input = await c.req.json<{ content: string; requestId?: string }>();
+    if (!input.content) return c.json({ error: "content is required" }, 400);
+    const result = await vault.writeAnswerStyle(code, input.content, input.requestId);
+    return c.json(result);
+  });
+
+  app.patch("/api/rubrics/:name", async (c) => {
+    const name = c.req.param("name");
+    const input = await c.req.json<{ content: string; requestId?: string }>();
+    if (!input.content) return c.json({ error: "content is required" }, 400);
+    const result = await vault.writeRubric(name, input.content, input.requestId);
+    return c.json(result);
+  });
+
+  app.patch("/api/course/:code/mastery", async (c) => {
+    const code = c.req.param("code");
+    const input = await c.req.json<{ content: string; requestId?: string }>();
+    if (!input.content) return c.json({ error: "content is required" }, 400);
+    const result = await vault.writeMastery(code, input.content, input.requestId);
+    return c.json(result);
+  });
+
+  app.get("/api/course/:code/history", async (c) => {
+    const code = c.req.param("code");
+    const file = c.req.query("file") ?? "course.md";
+    return c.json(await vault.listHistory(`courses/${code}/${file}`));
+  });
+
+  app.post("/api/course/:code/restore", async (c) => {
+    const code = c.req.param("code");
+    const input = await c.req.json<{ file: string; stamp: string }>();
+    if (!input.file || !input.stamp) return c.json({ error: "file and stamp are required" }, 400);
+    const result = await vault.restoreVersion(`courses/${code}/${input.file}`, input.stamp);
+    return c.json(result);
+  });
+
   app.get("/api/search", (c) => {
     const query = c.req.query("q") ?? "";
     const limit = Number(c.req.query("limit") ?? 20);

@@ -480,6 +480,24 @@ export const api = {
     contentType: string;
   }) =>
     sendJson<{ path: string; bytes: number }>("/api/asset", "POST", input),
+  updateCourse: (code: string, patch: {
+    title?: string | null;
+    department?: string | null;
+    answerStyle?: string | null;
+    examDate?: string | null;
+    examBlueprint?: unknown[] | null;
+  }) =>
+    sendJson<{ path: string; bytes: number; mode: string }>(`/api/course/${encodeURIComponent(code)}`, "PATCH", patch),
+  writeAnswerStyle: (code: string, content: string, requestId?: string) =>
+    sendJson<{ path: string; bytes: number }>(`/api/course/${encodeURIComponent(code)}/answer-style`, "PATCH", { content, requestId }),
+  writeRubric: (name: string, content: string, requestId?: string) =>
+    sendJson<{ path: string; bytes: number }>(`/api/rubrics/${encodeURIComponent(name)}`, "PATCH", { content, requestId }),
+  writeMastery: (code: string, content: string, requestId?: string) =>
+    sendJson<{ path: string; bytes: number }>(`/api/course/${encodeURIComponent(code)}/mastery`, "PATCH", { content, requestId }),
+  courseHistory: (code: string, file: string) =>
+    getJson<{ stamp: string }[]>(`/api/course/${encodeURIComponent(code)}/history?file=${encodeURIComponent(file)}`),
+  restoreCourseVersion: (code: string, file: string, stamp: string) =>
+    sendJson<{ path: string; bytes: number }>(`/api/course/${encodeURIComponent(code)}/restore`, "POST", { file, stamp }),
   search: (query: string, course?: string) =>
     getJson<NoteMeta[]>(
       `/api/search?q=${encodeURIComponent(query)}${course ? `&course=${encodeURIComponent(course)}` : ""}`,
