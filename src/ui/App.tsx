@@ -215,7 +215,7 @@ function Shell() {
     <div className="min-h-dvh">
       <a
         href="#main"
-        className="fixed top-2 left-2 z-50 -translate-y-20 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-on-primary focus:translate-y-0"
+        className="fixed top-2 left-2 z-50 inline-flex min-h-11 -translate-y-20 items-center rounded-control bg-primary px-4 py-2 text-sm font-semibold text-on-primary focus:translate-y-0"
       >
         Skip to content
       </a>
@@ -295,7 +295,7 @@ function Shell() {
             >
               <Icon aria-hidden="true" className="size-5" />
               {item.id === "grading" && pendingGrading > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-bg">
+                <span className="absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[13px] leading-none font-semibold text-bg">
                   {pendingGrading}
                 </span>
               )}
@@ -323,7 +323,7 @@ function Shell() {
         </IconButton>
       </header>
 
-      <main id="main" className="px-4 pt-6 pb-24 sm:pl-20 sm:pr-6 lg:pl-[calc(var(--sidebar)+2rem)] lg:pb-10">
+      <main id="main" className="px-4 pt-6 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] sm:pl-20 sm:pr-6 lg:pl-[calc(var(--sidebar)+2rem)] lg:pb-10">
         {error && (
           <div className="mb-4 max-w-3xl">
             <Banner tone="error">{error}</Banner>
@@ -378,7 +378,7 @@ function Shell() {
         aria-label="Main"
         className="fixed inset-x-0 bottom-0 z-20 border-t border-border-subtle bg-surface pb-[env(safe-area-inset-bottom)] sm:hidden"
       >
-        <ul className="grid grid-cols-6">
+        <ul className="grid grid-cols-7">
           {NAV.map((item) => {
             const Icon = item.icon;
             return (
@@ -387,14 +387,14 @@ function Shell() {
                   type="button"
                   onClick={() => selectTab(item.id)}
                   aria-current={tab === item.id ? "page" : undefined}
-                  className={`relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] ${
+                  className={`relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 whitespace-nowrap text-[13px] tracking-tight ${
                     tab === item.id ? "text-primary" : "text-text-muted"
                   }`}
                 >
                   <Icon aria-hidden="true" className="size-5" />
                   {item.label}
                   {item.id === "grading" && pendingGrading > 0 && (
-                    <span className="absolute top-1 right-1/4 flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-bg">
+                    <span className="absolute top-1 right-1/4 flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[13px] font-semibold text-bg">
                       {pendingGrading}
                     </span>
                   )}
@@ -435,7 +435,7 @@ function NavButton({
       <Icon aria-hidden="true" className="size-5" />
       {item.label}
       {badge > 0 && (
-        <span className="ml-auto rounded-chip bg-accent px-2 py-0.5 text-[11px] font-semibold text-bg">
+        <span className="ml-auto rounded-chip bg-accent px-2 py-0.5 text-[13px] font-semibold text-bg">
           {badge}
         </span>
       )}

@@ -1142,7 +1142,7 @@ function QuestionGrid({
           </div>
         ))}
       </div>
-      <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted">
+      <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-text-muted">
         <li className="flex items-center gap-1"><span className="size-2.5 rounded-sm border-2 border-primary" /> current</li>
         <li className="flex items-center gap-1"><span className="size-2.5 rounded-sm bg-surface-2" /> answered</li>
         <li className="flex items-center gap-1"><Flag aria-hidden="true" className="size-2.5 text-accent" /> flagged</li>

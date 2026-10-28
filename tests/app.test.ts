@@ -23,6 +23,34 @@ describe("http api", () => {
     expect(body.meta).toEqual([{ key: "schema_version", value: "8" }]);
   });
 
+  test("reads and updates LAN and MCP token settings", async () => {
+    const { app } = createApp({ config: { dbPath: ":memory:" } });
+    const initial = (await (await app.request("/api/settings")).json()) as {
+      lan: boolean;
+      mcpToken: string | null;
+    };
+    expect(initial.lan).toBe(false);
+    expect(initial.mcpToken).toBeNull();
+
+    const updated = (await (
+      await app.request("/api/settings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lan: true, regenerateToken: true }),
+      })
+    ).json()) as { lan: boolean; mcpToken: string | null; restartRequired: boolean };
+    expect(updated.lan).toBe(true);
+    expect(updated.mcpToken).toStartWith("hilum_");
+    expect(updated.restartRequired).toBe(true);
+
+    const persisted = (await (await app.request("/api/settings")).json()) as {
+      lan: boolean;
+      mcpToken: string | null;
+    };
+    expect(persisted.lan).toBe(true);
+    expect(persisted.mcpToken).toBe(updated.mcpToken);
+  });
+
   test("serves questions, updates content and verifies", async () => {
     const root = await mkdtemp(join(tmpdir(), "harness-api-"));
     await mkdir(join(root, "courses/ana-211/notes"), { recursive: true });
@@ -59,9 +87,11 @@ describe("http api", () => {
     const verify = await app.request("/api/questions/ana-211-api-01/verify", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ verified: true }),
+      body: JSON.stringify({ verified: true, by: "diamond" }),
     });
-    expect(((await verify.json()) as { verified: boolean }).verified).toBe(true);
+    const verified = (await verify.json()) as { verified: boolean; verifiedBy: string | null };
+    expect(verified.verified).toBe(true);
+    expect(verified.verifiedBy).toBe("diamond");
 
     const missing = await app.request("/api/questions/nope");
     expect(missing.status).toBe(400);

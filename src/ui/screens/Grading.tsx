@@ -91,12 +91,12 @@ export function Grading({
       </div>
 
       <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
-        <label className="block">
+        <label className="block w-full sm:w-auto">
           <span className="mb-1.5 block text-xs font-semibold text-text">Course</span>
           <select
             value={course}
             onChange={(event) => setCourse(event.target.value)}
-            className="min-h-11 rounded-control border border-border-strong bg-surface px-3 text-sm"
+            className="min-h-11 w-full max-w-full rounded-control border border-border-strong bg-surface px-3 text-sm sm:w-auto"
           >
             <option value="">All courses</option>
             {courses.map((entry) => (

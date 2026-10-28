@@ -24,6 +24,7 @@ import { Sheet } from "../components/Sheet.tsx";
 import { Markdown } from "../Markdown.tsx";
 import { plural } from "../lib/format.ts";
 import { readActiveAttempt } from "../lib/activeAttempt.ts";
+import { defaultCourse } from "../lib/courses.ts";
 import { Papers } from "./Papers.tsx";
 
 const TYPE_LABEL: Record<QuestionType, string> = {
@@ -41,7 +42,7 @@ type Mode = "bank" | "review" | "papers";
 
 export function Questions({ courses }: { courses: Course[] }) {
   const [courseCode, setCourseCode] = useState(
-    () => readActiveAttempt()?.course ?? courses[0]?.code ?? "",
+    () => readActiveAttempt()?.course ?? defaultCourse(courses, "questions"),
   );
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export function Questions({ courses }: { courses: Course[] }) {
     const next =
       active && courses.some((course) => course.code === active.course)
         ? active.course
-        : courses[0]?.code;
+        : defaultCourse(courses, "questions");
     if (next) setCourseCode(next);
   }, [courses, courseCode]);
 

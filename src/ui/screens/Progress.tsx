@@ -23,6 +23,7 @@ import { Button } from "../components/Button.tsx";
 import { MasteryRing } from "../components/MasteryRing.tsx";
 import { Sheet } from "../components/Sheet.tsx";
 import { Banner, Chip, EmptyState, ProgressBar, Skeleton } from "../components/ui.tsx";
+import { defaultCourse } from "../lib/courses.ts";
 
 const STATE_ORDER = ["unseen", "familiar", "understood", "mastered", "decayed"] as const;
 const STATE_LABELS = {
@@ -42,7 +43,7 @@ export function ProgressScreen({
   onStudy: (course: string, conceptId?: string) => void;
   onOpenNote: (path: string, anchor?: string) => void;
 }) {
-  const [courseCode, setCourseCode] = useState(courses[0]?.code ?? "");
+  const [courseCode, setCourseCode] = useState(defaultCourse(courses, "concepts"));
   const [tree, setTree] = useState<ConceptNode[]>([]);
   const [snapshot, setSnapshot] = useState<MasterySnapshot | null>(null);
   const [proposed, setProposed] = useState<ConceptSummary[]>([]);
@@ -55,8 +56,15 @@ export function ProgressScreen({
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (!courseCode && courses[0]) setCourseCode(courses[0].code);
+    if (!courseCode && courses[0]) setCourseCode(defaultCourse(courses, "concepts"));
   }, [courses, courseCode]);
+
+  useEffect(() => {
+    setSnapshot(null);
+    setTree([]);
+    setProposed([]);
+    setSelectedId(null);
+  }, [courseCode]);
 
   useEffect(() => {
     if (!courseCode) {

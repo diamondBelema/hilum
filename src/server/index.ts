@@ -6,7 +6,7 @@ indexer.startWatching((err) => console.error("vault watcher:", err));
 
 const server = Bun.serve({
   port: config.port,
-  hostname: config.hostname,
+  hostname: config.lan ? "0.0.0.0" : config.hostname,
   fetch: app.fetch,
   idleTimeout: 60,
 });

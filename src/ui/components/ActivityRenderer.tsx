@@ -39,7 +39,7 @@ export function ActivityRenderer({ activityId, spec, values, onChange, disabled,
               key={`${cite.note}-${index}`}
               type="button"
               onClick={() => onOpenNote(cite.note, cite.anchor)}
-              className="rounded-chip border border-border-subtle bg-surface px-2.5 py-1 text-xs text-text-muted hover:border-primary/40 hover:text-text"
+              className="inline-flex min-h-11 items-center rounded-chip border border-border-subtle bg-surface px-3 py-2 text-[13px] text-text-muted hover:border-primary/40 hover:text-text"
               title={cite.quote}
             >
               {cite.note.split("/").slice(-1)[0]}

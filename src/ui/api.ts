@@ -6,6 +6,8 @@ export type Course = {
   examDate: string | null;
   notes: number;
   tokens: number;
+  questions: number;
+  concepts: number;
 };
 
 export type NoteMeta = {
@@ -453,8 +455,19 @@ export type Health = {
   disk: { freeBytes: number; totalBytes: number; freePercent: number } | null;
 };
 
+export type ServerSettings = {
+  lan: boolean;
+  mcpToken: string | null;
+  vault: string;
+  db: string;
+  restartRequired?: boolean;
+};
+
 export const api = {
   health: () => getJson<Health>("/api/health"),
+  settings: () => getJson<ServerSettings>("/api/settings"),
+  updateSettings: (input: { lan?: boolean; regenerateToken?: boolean }) =>
+    sendJson<ServerSettings>("/api/settings", "POST", input),
   courses: () => getJson<Course[]>("/api/courses"),
   notes: (course: string) => getJson<NoteMeta[]>(`/api/courses/${encodeURIComponent(course)}/notes`),
   note: (path: string) => getJson<NoteDetail>(`/api/note?path=${encodeURIComponent(path)}`),

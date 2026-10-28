@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { api, type ConceptDetail, type ConceptSummary } from "../api.ts";
+import { api, type ConceptDetail, type ConceptSummary, type Course } from "../api.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
 import { Button } from "../components/Button.tsx";
 import { MasteryRing } from "../components/MasteryRing.tsx";
 import { Banner, Chip, EmptyState, Skeleton } from "../components/ui.tsx";
+import { defaultCourse } from "../lib/courses.ts";
 
 type EdgeView = { from: string; to: string; type: string };
 type GraphView = { nodes: ConceptSummary[]; edges: EdgeView[] };
@@ -56,10 +57,10 @@ export function GraphScreen({
   courses,
   onStudy,
 }: {
-  courses: { code: string; title: string }[];
+  courses: Course[];
   onStudy: (course: string, conceptId: string) => void;
 }) {
-  const [courseCode, setCourseCode] = useState(courses[0]?.code ?? "");
+  const [courseCode, setCourseCode] = useState(defaultCourse(courses, "concepts"));
   const [mode, setMode] = useState<"neighborhood" | "overview">("neighborhood");
   const [rootId, setRootId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -71,7 +72,7 @@ export function GraphScreen({
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (!courseCode && courses[0]) setCourseCode(courses[0].code);
+    if (!courseCode && courses[0]) setCourseCode(defaultCourse(courses, "concepts"));
   }, [courses, courseCode]);
 
   useEffect(() => {

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { randomBytes } from "node:crypto";
 import { serveStatic } from "hono/bun";
 import { loadConfig, paths, type Config } from "./config.ts";
 import { openDb } from "./db.ts";
@@ -25,6 +26,14 @@ export type AppDeps = {
 export function createApp(deps: AppDeps = {}) {
   const config = loadConfig(deps.config);
   const db = openDb(config.dbPath);
+  const storedLan = db.query("SELECT value FROM meta WHERE key = ?").get("setting:lan") as
+    | { value: string }
+    | null;
+  const storedToken = db.query("SELECT value FROM meta WHERE key = ?").get("setting:mcp_token") as
+    | { value: string }
+    | null;
+  if (storedLan) config.lan = storedLan.value === "1";
+  if (storedToken) config.mcpToken = storedToken.value;
   const indexer = new NoteIndexer(db, config.vaultPath);
   const vault = new VaultService(db, config.vaultPath, indexer);
   const questions = new QuestionBank(db, vault);
@@ -40,6 +49,18 @@ export function createApp(deps: AppDeps = {}) {
   const sessions = new SessionService(db, vault, events);
   const concepts = new ConceptService(db, vault);
   const app = new Hono();
+
+  const requireToken = async (c: Parameters<Parameters<typeof app.use>[1]>[0], next: () => Promise<void>) => {
+    if (config.lan && config.mcpToken) {
+      const header = c.req.header("authorization") ?? "";
+      if (header !== `Bearer ${config.mcpToken}`) {
+        return c.json({ error: "unauthorized" }, 401);
+      }
+    }
+    await next();
+  };
+  app.use("/mcp", requireToken);
+  app.use("/mcp/*", requireToken);
 
   app.onError((err, c) => {
     if (
@@ -86,12 +107,78 @@ export function createApp(deps: AppDeps = {}) {
     });
   });
 
+  app.get("/api/settings", (c) =>
+    c.json({
+      lan: config.lan,
+      mcpToken: config.mcpToken,
+      vault: config.vaultPath,
+      db: config.dbPath,
+    }),
+  );
+
+  app.post("/api/settings", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    let restartRequired = false;
+    if (typeof body.lan === "boolean" && body.lan !== config.lan) {
+      config.lan = body.lan;
+      db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+        "setting:lan",
+        config.lan ? "1" : "0",
+      );
+      restartRequired = true;
+    }
+    if (typeof body.mcpToken === "string" && body.mcpToken.trim()) {
+      config.mcpToken = body.mcpToken.trim();
+      db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+        "setting:mcp_token",
+        config.mcpToken,
+      );
+    }
+    if (body.regenerateToken === true) {
+      config.mcpToken = `hilum_${randomBytes(24).toString("base64url")}`;
+      db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+        "setting:mcp_token",
+        config.mcpToken,
+      );
+    }
+    return c.json({
+      lan: config.lan,
+      mcpToken: config.mcpToken,
+      vault: config.vaultPath,
+      db: config.dbPath,
+      restartRequired,
+    });
+  });
+
   app.get("/api/meta", (c) => {
     const rows = db.query("SELECT key, value FROM meta ORDER BY key").all();
     return c.json({ meta: rows });
   });
 
-  app.get("/api/courses", async (c) => c.json(await vault.listCourses()));
+  app.get("/api/courses", async (c) => {
+    const courses = await vault.listCourses();
+    const questionCounts = new Map(
+      (
+        db
+          .query("SELECT course, COUNT(*) AS n FROM questions GROUP BY course")
+          .all() as { course: string; n: number }[]
+      ).map((row) => [row.course, row.n]),
+    );
+    const conceptCounts = new Map(
+      (
+        db
+          .query("SELECT course, COUNT(*) AS n FROM concepts GROUP BY course")
+          .all() as { course: string; n: number }[]
+      ).map((row) => [row.course, row.n]),
+    );
+    return c.json(
+      courses.map((course) => ({
+        ...course,
+        questions: questionCounts.get(course.code) ?? 0,
+        concepts: conceptCounts.get(course.code) ?? 0,
+      })),
+    );
+  });
 
   app.get("/api/courses/:code/notes", (c) =>
     c.json(vault.notesForCourse(c.req.param("code"))),
