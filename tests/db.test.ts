@@ -7,7 +7,7 @@ describe("db", () => {
     const row = db.query("SELECT value FROM meta WHERE key = ?").get("schema_version") as {
       value: string;
     };
-    expect(row.value).toBe("6");
+    expect(row.value).toBe("7");
     const tables = db
       .query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all() as { name: string }[];
@@ -15,6 +15,9 @@ describe("db", () => {
     expect(names).toContain("sessions");
     expect(names).toContain("activities");
     expect(names).toContain("agent_requests");
+    expect(names).toContain("concepts");
+    expect(names).toContain("edges");
+    expect(names).toContain("mastery");
     db.close();
   });
 });

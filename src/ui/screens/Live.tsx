@@ -30,10 +30,12 @@ const GOALS = [
 
 export function Live({
   courses,
+  target,
   onOpenNote,
   onOpenExams,
 }: {
   courses: Course[];
+  target?: { course: string; conceptId?: string; nonce: number } | null;
   onOpenNote: (path: string, anchor?: string) => void;
   onOpenExams: () => void;
 }) {
@@ -61,13 +63,19 @@ export function Live({
   }, [courses, courseCode]);
 
   useEffect(() => {
+    if (!target) return;
+    setCourseCode(target.course);
+    setGoal("review");
+  }, [target?.nonce]);
+
+  useEffect(() => {
     let cancelled = false;
     api
       .activeSession()
       .then((active) => {
         if (cancelled) return;
         setSession(active);
-        setCourseCode(active?.course ?? courses[0]?.code ?? "");
+        setCourseCode(active?.course ?? target?.course ?? courses[0]?.code ?? "");
       })
       .catch((err: unknown) => !cancelled && setError(messageOf(err)))
       .finally(() => !cancelled && setLoading(false));
@@ -121,7 +129,8 @@ export function Live({
     setStarting(true);
     setError(null);
     try {
-      const created = await api.startSession(courseCode, goal);
+      const focus = target?.course === courseCode && target.conceptId;
+      const created = await api.startSession(courseCode, focus ? `topic:${focus}` : goal);
       setSession(created);
       setSummary("");
     } catch (err) {

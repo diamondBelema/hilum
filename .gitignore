@@ -7,6 +7,14 @@ dist/
 # Harness runtime state (never commit the database)
 state/
 
+# Personal vault (notes, concepts, past papers) is never committed
+vault/
+.study-pack/
+
+# Local tooling scratch
+.kilo/
+.playwright-mcp/
+
 # Python converter (Lane A)
 .venv/
 __pycache__/

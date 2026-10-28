@@ -9,6 +9,7 @@ import { ExamError, ExamRunner } from "./exams/attempts.ts";
 import { PaperError, PaperService } from "./exams/papers.ts";
 import { GradingError, GradingService } from "./exams/grading.ts";
 import { SessionError, SessionService } from "./sessions/service.ts";
+import { ConceptError, ConceptService } from "./concepts/service.ts";
 import { EventBus } from "./events.ts";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
@@ -37,6 +38,7 @@ export function createApp(deps: AppDeps = {}) {
     `http://${config.hostname}:${config.port}`,
   );
   const sessions = new SessionService(db, vault, events);
+  const concepts = new ConceptService(db, vault);
   const app = new Hono();
 
   app.onError((err, c) => {
@@ -46,7 +48,8 @@ export function createApp(deps: AppDeps = {}) {
       err instanceof PaperError ||
       err instanceof ExamError ||
       err instanceof GradingError ||
-      err instanceof SessionError
+      err instanceof SessionError ||
+      err instanceof ConceptError
     ) {
       return c.json({ error: err.message }, 400);
     }
@@ -271,6 +274,57 @@ export function createApp(deps: AppDeps = {}) {
     });
   });
 
+  app.get("/api/dashboard", async (c) => c.json(await concepts.dashboard()));
+
+  app.get("/api/concepts", (c) =>
+    c.json(
+      concepts.list(
+        c.req.query("course"),
+        c.req.query("status") === "proposed" || c.req.query("status") === "accepted" || c.req.query("status") === "rejected"
+          ? (c.req.query("status") as "proposed" | "accepted" | "rejected")
+          : undefined,
+      ),
+    ),
+  );
+
+  app.get("/api/concepts/:id", (c) => c.json(concepts.get(c.req.param("id"))));
+
+  app.post("/api/concepts", async (c) => {
+    const body = await c.req.json();
+    return c.json(await concepts.add(body, body.request_id), 201);
+  });
+
+  app.patch("/api/concepts/:id", async (c) => {
+    const body = await c.req.json();
+    return c.json(await concepts.update(c.req.param("id"), body));
+  });
+
+  app.get("/api/mastery", (c) => c.json(concepts.snapshot(c.req.query("course"))));
+
+  app.get("/api/mastery/tree", (c) => {
+    const course = c.req.query("course");
+    if (!course) return c.json({ error: "course is required" }, 400);
+    return c.json(concepts.tree(course));
+  });
+
+  app.get("/api/mastery/next", (c) => {
+    const course = c.req.query("course");
+    if (!course) return c.json({ error: "course is required" }, 400);
+    return c.json(concepts.next(course, Number(c.req.query("n") ?? 5)));
+  });
+
+  app.get("/api/mastery/due", (c) =>
+    c.json(concepts.due(c.req.query("course"), Number(c.req.query("limit") ?? 20))),
+  );
+
+  app.get("/api/mastery/weak", (c) => {
+    const course = c.req.query("course");
+    if (!course) return c.json({ error: "course is required" }, 400);
+    return c.json(concepts.weak(course, Number(c.req.query("limit") ?? 10)));
+  });
+
+  app.get("/api/graph", (c) => c.json(concepts.graph(c.req.query("course"), c.req.query("filter"))));
+
   app.get("/api/sessions/active", (c) => c.json(sessions.active(c.req.query("course"))));
 
   app.get("/api/sessions/history", (c) => c.json(sessions.history(c.req.query("course"))));
@@ -362,7 +416,7 @@ export function createApp(deps: AppDeps = {}) {
   });
 
   app.all("/mcp", (c) =>
-    handleMcpRequest(c.req.raw, config, vault, questions, papers, runner, grading, sessions),
+    handleMcpRequest(c.req.raw, config, vault, questions, papers, runner, grading, sessions, concepts),
   );
 
   app.get("/_design", async (c) => c.html(await Bun.file(paths.uiIndex).text()));
@@ -370,7 +424,7 @@ export function createApp(deps: AppDeps = {}) {
   app.use("/*", serveStatic({ root: paths.uiDist }));
   app.get("*", serveStatic({ path: paths.uiIndex }));
 
-  return { app, config, db, vault, indexer, questions, papers, runner, grading, sessions };
+  return { app, config, db, vault, indexer, questions, papers, runner, grading, sessions, concepts };
 }
 
 function zodMessage(err: ZodError): string {

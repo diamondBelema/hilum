@@ -28,10 +28,10 @@ async function connect() {
   const app = createApp({
     config: { vaultPath: root, dbPath: ":memory:" },
   });
-  const { config, vault, indexer, questions, papers, runner, grading, sessions } = app;
+  const { config, vault, indexer, questions, papers, runner, grading, sessions, concepts } = app;
   await indexer.reindexAll();
 
-  const server = createMcpServer(config, vault, questions, papers, runner, grading, sessions);
+  const server = createMcpServer(config, vault, questions, papers, runner, grading, sessions, concepts);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
 
@@ -415,6 +415,103 @@ describe("mcp content tools", () => {
     });
     expect(ended.isError).not.toBe(true);
     expect(text(ended)).toContain("courses/ana-211/sessions/");
+    await server.close();
+  });
+
+  test("exposes the concept graph and mastery frontier", async () => {
+    const { client, server } = await connect();
+    const names = (await client.listTools()).tools.map((tool) => tool.name);
+    for (const name of [
+      "find_concepts",
+      "add_concept",
+      "link_concepts",
+      "update_concept",
+      "get_concept",
+      "get_graph",
+      "get_next_concepts",
+      "get_mastery",
+      "get_weak_topics",
+      "record_real_result",
+    ]) {
+      expect(names).toContain(name);
+    }
+    const cite = {
+      note: "ana-211/notes/tubules.md",
+      anchor: "tubules",
+      quote: "Filtered sodium is reabsorbed",
+    };
+    const parent = await client.callTool({
+      name: "add_concept",
+      arguments: {
+        course: "ana-211",
+        id: "ana-211-tubules",
+        title: "Tubules",
+        exam_weight: 0.2,
+        cites: [cite],
+        definition: "The tubular system of the nephron.",
+      },
+    });
+    expect(parent.isError).not.toBe(true);
+    const child = await client.callTool({
+      name: "add_concept",
+      arguments: {
+        course: "ana-211",
+        id: "ana-211-sodium",
+        title: "Sodium reabsorption",
+        aliases: ["Na reabsorption"],
+        parent: "ana-211-tubules",
+        prerequisites: ["ana-211-tubules"],
+        cites: [cite],
+      },
+    });
+    expect(child.isError).not.toBe(true);
+
+    const found = await client.callTool({
+      name: "find_concepts",
+      arguments: { query: "Na reabsorption", course: "ana-211" },
+    });
+    expect(text(found)).toContain("ana-211-sodium");
+
+    const linked = await client.callTool({
+      name: "link_concepts",
+      arguments: { from_id: "ana-211-sodium", to_id: "ana-211-tubules", type: "related" },
+    });
+    expect(linked.isError).not.toBe(true);
+    expect(text(linked)).toContain('"related":[{"id":"ana-211-tubules"');
+
+    const graph = await client.callTool({
+      name: "get_graph",
+      arguments: { course: "ana-211" },
+    });
+    expect(text(graph)).toContain('"type":"related"');
+
+    const fetched = await client.callTool({
+      name: "get_concept",
+      arguments: { id: "ana-211-sodium" },
+    });
+    expect(text(fetched)).toContain("Sodium reabsorption");
+
+    const frontier = await client.callTool({
+      name: "get_next_concepts",
+      arguments: { course: "ana-211", n: 3 },
+    });
+    expect(text(frontier)).toContain("ana-211-tubules");
+    expect(text(frontier)).toContain("Start here");
+
+    const mastery = await client.callTool({
+      name: "get_mastery",
+      arguments: { course: "ana-211" },
+    });
+    expect(text(mastery)).toContain('"total":2');
+    expect(text(mastery)).toContain('"unseen":2');
+
+    const started = await client.callTool({
+      name: "session_start",
+      arguments: { course: "ana-211", goal: "review" },
+    });
+    expect(started.isError).not.toBe(true);
+    expect(text(started)).toContain("mastery_snapshot");
+    expect(text(started)).toContain("frontier");
     await server.close();
   });
 

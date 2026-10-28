@@ -6,6 +6,7 @@ import {
   NotebookText,
   Radio,
   Settings2,
+  Share2,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
@@ -16,7 +17,8 @@ import { Study } from "./screens/Study.tsx";
 import { Notes } from "./screens/Notes.tsx";
 import { Reader } from "./screens/Reader.tsx";
 import { Questions } from "./screens/Questions.tsx";
-import { ProgressScreen } from "./screens/Placeholders.tsx";
+import { ProgressScreen } from "./screens/Progress.tsx";
+import { GraphScreen } from "./screens/Graph.tsx";
 import { Settings } from "./screens/Settings.tsx";
 import { DesignGallery } from "./screens/DesignGallery.tsx";
 import { Grading } from "./screens/Grading.tsx";
@@ -24,7 +26,7 @@ import { Live } from "./screens/Live.tsx";
 import { readActiveAttempt } from "./lib/activeAttempt.ts";
 import { subscribeHarnessEvents } from "./lib/events.ts";
 
-type Tab = "study" | "live" | "exams" | "grading" | "notes" | "progress";
+type Tab = "study" | "live" | "exams" | "grading" | "notes" | "progress" | "graph";
 
 const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "study", label: "Study", icon: Home },
@@ -33,6 +35,7 @@ const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "grading", label: "Grading", icon: ClipboardList },
   { id: "notes", label: "Notes", icon: NotebookText },
   { id: "progress", label: "Progress", icon: TrendingUp },
+  { id: "graph", label: "Graph", icon: Share2 },
 ];
 
 export function App() {
@@ -52,6 +55,11 @@ function Shell() {
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
   const [pendingGrading, setPendingGrading] = useState(0);
+  const [studyTarget, setStudyTarget] = useState<{
+    course: string;
+    conceptId?: string;
+    nonce: number;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +169,16 @@ function Shell() {
 
   function selectTab(next: Tab) {
     setTab(next);
+    setNote(null);
+    setQuery("");
+    setResults(null);
+    history.replaceState(null, "", "#");
+    window.scrollTo({ top: 0 });
+  }
+
+  function study(course: string, conceptId?: string) {
+    setStudyTarget({ course, conceptId, nonce: Date.now() });
+    setTab("live");
     setNote(null);
     setQuery("");
     setResults(null);
@@ -315,7 +333,12 @@ function Shell() {
         {note ? (
           <Reader note={note} course={course} onBack={closeNote} onOpenNote={(path, anchor) => void openNote(path, anchor)} />
         ) : tab === "study" ? (
-          <Study courses={courses} openNotes={openCourse} />
+          <Study
+            courses={courses}
+            openNotes={openCourse}
+            onStudy={study}
+            onExams={() => selectTab("exams")}
+          />
         ) : tab === "notes" ? (
           <Notes
             courses={courses}
@@ -332,6 +355,7 @@ function Shell() {
         ) : tab === "live" ? (
           <Live
             courses={courses}
+            target={studyTarget}
             onOpenNote={(path, anchor) => void openNote(path, anchor)}
             onOpenExams={() => selectTab("exams")}
           />
@@ -339,8 +363,14 @@ function Shell() {
           <Questions courses={courses} />
         ) : tab === "grading" ? (
           <Grading courses={courses} onOpenExams={() => selectTab("exams")} />
+        ) : tab === "graph" ? (
+          <GraphScreen courses={courses} onStudy={study} />
         ) : (
-          <ProgressScreen />
+          <ProgressScreen
+            courses={courses}
+            onStudy={study}
+            onOpenNote={(path, anchor) => void openNote(path, anchor)}
+          />
         )}
       </main>
 

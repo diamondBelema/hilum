@@ -187,6 +187,41 @@ function migrate(db: Db): void {
     );
 
     CREATE INDEX IF NOT EXISTS agent_requests_session ON agent_requests(session_id, status);
+
+    CREATE TABLE IF NOT EXISTS concepts (
+      id TEXT PRIMARY KEY,
+      course TEXT NOT NULL,
+      title TEXT NOT NULL,
+      aliases TEXT NOT NULL DEFAULT '[]',
+      parent_id TEXT,
+      status TEXT NOT NULL DEFAULT 'proposed',
+      exam_weight REAL NOT NULL DEFAULT 0.05,
+      lecturer_flag INTEGER NOT NULL DEFAULT 0,
+      cites_json TEXT NOT NULL DEFAULT '[]',
+      unverified INTEGER NOT NULL DEFAULT 0,
+      path TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS concepts_course ON concepts(course, parent_id);
+
+    CREATE TABLE IF NOT EXISTS edges (
+      from_id TEXT NOT NULL,
+      to_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      PRIMARY KEY (from_id, to_id, type)
+    );
+
+    CREATE INDEX IF NOT EXISTS edges_to ON edges(to_id, type);
+
+    CREATE TABLE IF NOT EXISTS mastery (
+      concept_id TEXT PRIMARY KEY,
+      state TEXT NOT NULL DEFAULT 'unseen',
+      score REAL NOT NULL DEFAULT 0,
+      last_evidence_at INTEGER,
+      decay_due_at INTEGER,
+      evidence_count INTEGER NOT NULL DEFAULT 0
+    );
   `);
 
   const activityColumns = db.query("PRAGMA table_info(activities)").all() as { name: string }[];
@@ -196,6 +231,6 @@ function migrate(db: Db): void {
 
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
-    "6",
+    "7",
   );
 }

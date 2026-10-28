@@ -109,6 +109,151 @@
   }
 }
 
+
+.markdown {
+  max-width: 70ch;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > * + * {
+  margin-top: 0.85em;
+}
+
+.markdown h2 {
+  margin-top: 2.4em;
+  padding-top: 0.9em;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 1.35em;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  scroll-margin-top: 4.5rem;
+}
+
+.markdown h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.markdown h3 {
+  margin-top: 1.7em;
+  font-size: 1.15em;
+  font-weight: 650;
+  line-height: 1.3;
+  scroll-margin-top: 4.5rem;
+}
+
+.markdown h4 {
+  margin-top: 1.4em;
+  font-weight: 650;
+}
+
+.markdown p,
+.markdown li {
+  max-width: 70ch;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.4em;
+}
+
+.markdown ul {
+  list-style: disc;
+}
+
+.markdown ol {
+  list-style: decimal;
+}
+
+.markdown li + li {
+  margin-top: 0.35em;
+}
+
+.markdown li > ul,
+.markdown li > ol {
+  margin-top: 0.35em;
+}
+
+.markdown li::marker {
+  color: var(--text-muted);
+}
+
+.markdown a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown strong {
+  font-weight: 650;
+}
+
+.markdown img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.25em auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--primary);
+  padding: 0.2em 0 0.2em 1em;
+  color: var(--text-muted);
+}
+
+.markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-2);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+
+.markdown pre {
+  overflow-x: auto;
+  background: var(--surface-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-control);
+}
+
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.markdown th,
+.markdown td {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0.45em 0.6em;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown th {
+  font-weight: 650;
+  color: var(--text-muted);
+}
+
+.markdown hr {
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  margin: 2em 0;
+}
+
 @utility tap {
   min-width: 44px;
   min-height: 44px;

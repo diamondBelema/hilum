@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# One-command launcher for the Hilum exam harness.
+# Runs from any directory: ./start  or  ~/path/to/learning-harness/start
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$DIR"
+exec bun run start

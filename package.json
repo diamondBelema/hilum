@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "bun run scripts/start.ts",
+    "go": "bun run start",
     "dev": "bun run scripts/dev.ts",
     "build:ui": "vite build",
     "typecheck": "tsc --noEmit",

@@ -94,3 +94,33 @@ Append-only log. Newest entry at the bottom.
 - Banked activities are written to `courses/<code>/activities/<slug>-<id>.md` with frontmatter cites and the JSON spec; the student can keep one from the live session and the agent can bank through MCP.
 - AGENTS.md and the MCP server instructions now carry the full teacher protocol. Mobile nav grew to six tabs without clipping at 360 px.
 - Next: M6 concepts, mastery, decay, frontier, due queue and the real dashboard (session_start will start returning those snapshots).
+
+## 2026-10-27 — M6 concepts, mastery and decay
+
+- Status: done (`bun run verify`: typecheck, 74 tests across 11 files, smoke ui/api/mcp).
+- ConceptService: sync from `concepts/<id>.md` frontmatter, edges (parent/prerequisite/related/contrasts_with), cite validation, add/update/link, tree with subtree rollups, mastery derivation (unseen/familiar/understood/mastered/decayed) with SM-2-style decay intervals, `get_next_concepts` frontier (prereq ≥ understood, ranked by exam weight/decay/recent errors/lecturer flag/exam date), `get_mastery`, `get_weak_topics`, `get_graph`, dashboard, `record_real_result`. MCP tools and HTTP API all registered.
+- Tests: `concepts.test.ts` covers citation requirements, alias merging, link cycles, tree rollups, mastery state transitions, frontier prerequisite gating, dashboard counts.
+- UI: Progress screen (topic tree with mastery rings, rollups, proposed-topic accept/reject/merge, evidence timeline, practice bank) and Study screen (dashboard: Next up frontier, Due for review, exams countdown, per-course progress).
+
+## 2026-10-27 — M6b graph view
+
+- Status: done (`bun run verify`: typecheck, 74 tests across 11 files, smoke ui/api/mcp).
+- New Graph screen with neighborhood mode (2-hop neighborhood of a root concept, max ~25 nodes) and overview mode (all nodes, search filter, node cap). SVG canvas renders edges styled per type (parent solid thin, prerequisite dashed w/ arrowhead, related dotted, contrasts-with dashed w/ crossbar), node fill/size by mastery and exam weight. Concept drawer opens on node tap showing definition, citation chips, connections, evidence timeline and practice bank, plus Study/Reject/Merge actions. Added to nav as the Graph tab.
+- Review queue: ConceptPanel now offers Reject (status → rejected) and Merge (add current id as alias to a target concept, then reject source), satisfying "merge two duplicates into one concept with an alias".
+- Next: M6b remaining (overview-mode stress at 300 nodes, human graph checkpoint), then Z freeze/final checks.
+
+## 2026-10-27 — Z freeze and final checks
+
+- Status: done (`bun run verify`: typecheck clean, 74 tests across 11 files, smoke ui/api/mcp ok).
+- README.md: install, run (`bun run start`), opencode MCP config (`http://127.0.0.1:4317/mcp`), how to start a teaching session.
+- scripts/copy-db.ts: daily DB copy (state/app.db + WAL sidecars -> state/backups/), verified working.
+- scripts/export-pack.ts: offline study-pack export (vault + DB snapshot + pack README), verified working.
+- Zero external network requests: fonts local, smoke test hits only localhost health/UI/MCP.
+- Freeze begins: bug fixes only for one week.
+
+## 2026-10-27 — Image embedding fix
+
+- Status: done (`bun run verify`: typecheck clean, 74 tests pass, smoke ok).
+- Root cause: embedded images in converted notes are written as `![alt](../assets/file.jpeg) <!-- needs-description -->`. The trailing HTML comment broke ReactMarkdown's image/link parsing, causing images to render as raw text instead of `` elements.
+- Fix: added `stripHtmlComments()` to `src/ui/Markdown.tsx` which strips `<!-- ... -->` from the markdown body before passing it to ReactMarkdown. Comments are not rendered anyway, so this is safe.
+- Also confirmed `react-markdown` v10 correctly parses images with special characters (spaces, apostrophes, parentheses) in URLs and alt text when served fresh.

@@ -345,6 +345,106 @@ export type SessionSummary = {
   notePath: string | null;
 };
 
+export type MasteryState = "unseen" | "familiar" | "understood" | "mastered" | "decayed";
+
+export type MasteryView = {
+  conceptId: string;
+  state: MasteryState;
+  baseState: Exclude<MasteryState, "decayed">;
+  score: number;
+  evidenceCount: number;
+  lastEvidenceAt: number | null;
+  decayDueAt: number | null;
+  overdue: boolean;
+};
+
+export type ConceptSummary = {
+  id: string;
+  course: string;
+  title: string;
+  aliases: string[];
+  parentId: string | null;
+  status: "proposed" | "accepted" | "rejected";
+  examWeight: number;
+  lecturerFlag: boolean;
+  unverified: boolean;
+  cites: QuestionCite[];
+  path: string;
+  mastery: MasteryView;
+};
+
+export type ConceptNode = ConceptSummary & {
+  depth: number;
+  childCount: number;
+  rollup: {
+    total: number;
+    mastered: number;
+    understood: number;
+    familiar: number;
+    unseen: number;
+    due: number;
+    weightedMastery: number;
+  };
+};
+
+export type ConceptDetail = ConceptSummary & {
+  definition: string;
+  prerequisites: ConceptSummary[];
+  related: ConceptSummary[];
+  contrasts: ConceptSummary[];
+  children: ConceptSummary[];
+  linkedFrom: ConceptSummary[];
+  timeline: {
+    id: number;
+    kind: string;
+    correct: boolean | null;
+    confidence: string | null;
+    timeSec: number;
+    excerpt: string | null;
+    createdAt: number;
+    sessionId: string | null;
+    sessionNotePath: string | null;
+    activityTitle: string | null;
+    attemptId: string | null;
+    questionType: string | null;
+  }[];
+  practice: { id: string; type: string; prompt: string; marks: number; verified: boolean }[];
+};
+
+export type FrontierItem = {
+  concept: ConceptSummary;
+  rank: number;
+  reason: string;
+  recentErrors: number;
+  daysUntilExam: number | null;
+};
+
+export type MasterySnapshot = {
+  counts: Record<MasteryState, number> & { total: number };
+  concepts: ConceptSummary[];
+};
+
+export type CourseProgress = {
+  code: string;
+  title: string;
+  examDate: string | null;
+  total: number;
+  mastered: number;
+  understood: number;
+  due: number;
+  highWeightTotal: number;
+  highWeightMastered: number;
+  percent: number;
+};
+
+export type Dashboard = {
+  next: FrontierItem[];
+  due: ConceptSummary[];
+  courses: CourseProgress[];
+  exams: { course: string; title: string; examDate: string; days: number }[];
+  counts: MasterySnapshot["counts"];
+};
+
 export type Health = {
   status: string;
   version: string;
@@ -468,6 +568,40 @@ export const api = {
     getJson<SessionSummary[]>(
       `/api/sessions/history${course ? `?course=${encodeURIComponent(course)}` : ""}`,
     ),
+  dashboard: () => getJson<Dashboard>("/api/dashboard"),
+  concepts: (course?: string, status?: string) => {
+    const search = new URLSearchParams();
+    if (course) search.set("course", course);
+    if (status) search.set("status", status);
+    return getJson<ConceptSummary[]>(`/api/concepts${search.size ? `?${search}` : ""}`);
+  },
+  concept: (id: string) => getJson<ConceptDetail>(`/api/concepts/${encodeURIComponent(id)}`),
+  updateConcept: (id: string, patch: Record<string, unknown>) =>
+    sendJson<ConceptDetail>(`/api/concepts/${encodeURIComponent(id)}`, "PATCH", patch),
+  mastery: (course?: string) =>
+    getJson<MasterySnapshot>(`/api/mastery${course ? `?course=${encodeURIComponent(course)}` : ""}`),
+  masteryTree: (course: string) =>
+    getJson<ConceptNode[]>(`/api/mastery/tree?course=${encodeURIComponent(course)}`),
+  frontier: (course: string, n = 5) =>
+    getJson<FrontierItem[]>(
+      `/api/mastery/next?course=${encodeURIComponent(course)}&n=${encodeURIComponent(String(n))}`,
+    ),
+  due: (course?: string, limit = 20) =>
+    getJson<ConceptSummary[]>(
+      `/api/mastery/due?limit=${limit}${course ? `&course=${encodeURIComponent(course)}` : ""}`,
+    ),
+  weak: (course: string, limit = 10) =>
+    getJson<ConceptSummary[]>(
+      `/api/mastery/weak?course=${encodeURIComponent(course)}&limit=${limit}`,
+    ),
+  graph: (course?: string, filter?: string) => {
+    const search = new URLSearchParams();
+    if (course) search.set("course", course);
+    if (filter) search.set("filter", filter);
+    return getJson<{ nodes: ConceptSummary[]; edges: { from: string; to: string; type: string }[] }>(
+      `/api/graph${search.size ? `?${search}` : ""}`,
+    );
+  },
 };
 
 export function assetUrl(notePath: string, src: string): string {
