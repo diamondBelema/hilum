@@ -171,10 +171,12 @@ function Shell() {
 
   function selectTab(next: Tab) {
     setTab(next);
-    setNote(null);
+    // Keep the open note when switching tabs so reading is not lost.
     setQuery("");
     setResults(null);
-    history.replaceState(null, "", "#");
+    if (!note) {
+      history.replaceState(null, "", "#");
+    }
     window.scrollTo({ top: 0 });
   }
 
