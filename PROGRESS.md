@@ -135,3 +135,18 @@ Append-only log. Newest entry at the bottom.
 - Real results: `record_real_result` now writes to a new `real_results` table (concept, course, kind, correct, confidence, excerpt) and no longer creates evidence or changes mastery; a regression test locks that in.
 - Maintenance: `bun run maintain` checkpoints the WAL, vacuums and prints database, vault and free-space figures. `/api/health` reports disk space; Settings warns when free space is under 10% (currently 5.8%).
 - Next: W1 quick UI fixes, then W2 graph rework.
+
+## 2026-10-28 — W1 quick UI fixes
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ui/api/mcp ok; `bun run check:ui` ok).
+- 360px layouts: seven-tab navigation fits with 13px labels and no horizontal overflow; main content clears the bottom bar; citation chips and grading controls no longer overflow.
+- Defaults: `defaultCourse()` picks the first course with concepts/questions; Progress shows a skeleton instead of stale totals while switching courses.
+- Settings: LAN toggle (takes effect on restart) and a masked MCP token with copy/regenerate; persisted in `meta` through `/api/settings` and enforced as a bearer token on `/mcp` when LAN is on.
+- Added `scripts/check-ui.ts` (`bun run check:ui`) as a Playwright guard for 360px tabs, tap targets, defaults and course switching.
+
+## 2026-10-28 — W2 graph rework
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok; `bun run check:ui` ok; manual Playwright graph check ok at 360px).
+- `Graph.tsx` rewritten: wheel zoom and pointer-drag pan, memoized 2-hop neighborhood layout (25-node cap) and overview grid (300-node cap), edge lines with `fill="none"`, per-type dash/arrow/contrast marks, HTML labels with `MasteryRing` nodes sized by exam weight, legend, and the shared `Sheet` concept drawer with Study this.
+- Fixed a read-path stall: `ConceptService.sync()` rewrote every concept on each call, so `/api/dashboard` performed ~30 full syncs and held the SQLite write lock long enough to block grading; sync now skips when the concepts directory fingerprint is unchanged (dashboard 1.3s → 0.02s after warmup). Live step Back/Next and the footer End session now meet the 44px tap target.
+- Not yet exercised: 300-node overview with synthetic data (real vault has 18 concepts); label collision at high zoom is handled by truncation only.

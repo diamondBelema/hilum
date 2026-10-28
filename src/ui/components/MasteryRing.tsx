@@ -22,11 +22,11 @@ export function MasteryRing({
   label,
 }: {
   state: MasteryState;
-  size?: 16 | 24 | 40;
+  size?: number;
   label?: string;
 }) {
   const name = label ?? labels[state];
-  const stroke = size === 40 ? 3 : size === 24 ? 3.5 : 5;
+  const stroke = size >= 40 ? 3 : size >= 24 ? 3.5 : 5;
   const radius = 20 - stroke / 2;
   const circumference = 2 * Math.PI * radius;
   const gap = state === "mastered" ? 0 : 3;

@@ -407,7 +407,7 @@ function Stepper({ title, steps }: { title: string; steps: { title: string; body
           type="button"
           disabled={step === 0}
           onClick={() => setStep((value) => Math.max(0, value - 1))}
-          className="inline-flex min-h-10 items-center gap-1 rounded-control border border-border-subtle px-3 text-sm disabled:opacity-40"
+          className="inline-flex min-h-11 items-center gap-1 rounded-control border border-border-subtle px-3 text-sm disabled:opacity-40"
         >
           <ArrowLeft aria-hidden="true" className="size-4" /> Back
         </button>
@@ -415,7 +415,7 @@ function Stepper({ title, steps }: { title: string; steps: { title: string; body
           type="button"
           disabled={last}
           onClick={() => setStep((value) => Math.min(steps.length - 1, value + 1))}
-          className="inline-flex min-h-10 items-center gap-1 rounded-control bg-primary px-3 text-sm font-semibold text-on-primary disabled:opacity-40"
+          className="inline-flex min-h-11 items-center gap-1 rounded-control bg-primary px-3 text-sm font-semibold text-on-primary disabled:opacity-40"
         >
           Next <ArrowRight aria-hidden="true" className="size-4" />
         </button>

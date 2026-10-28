@@ -504,7 +504,7 @@ export function Live({
               {" · "}
               {session.evidenceCount} evidence {session.evidenceCount === 1 ? "record" : "records"}
             </span>
-            <button type="button" onClick={() => setEndOpen(true)} className="hover:text-text">
+            <button type="button" onClick={() => setEndOpen(true)} className="inline-flex min-h-11 items-center px-1 hover:text-text">
               End session
             </button>
           </div>

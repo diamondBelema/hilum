@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { stringify as stringifyYaml } from "yaml";
 import type { Db } from "../db.ts";
@@ -174,6 +174,7 @@ export function masteryLabel(state: MasteryState): string {
 
 export class ConceptService {
   private readonly dir: string;
+  private syncKey: string | null = null;
 
   constructor(
     private readonly db: Db,
@@ -190,6 +191,17 @@ export class ConceptService {
     } catch {
       files = [];
     }
+    const key = files
+      .map((file) => {
+        try {
+          const stat = statSync(join(this.dir, file));
+          return `${file}:${stat.mtimeMs}:${stat.size}`;
+        } catch {
+          return file;
+        }
+      })
+      .join("|");
+    if (key === this.syncKey) return;
     const seen = new Set<string>();
     for (const file of files) {
       const path = `concepts/${file}`;
@@ -252,6 +264,7 @@ export class ConceptService {
       this.db.query("DELETE FROM edges WHERE from_id = ? OR to_id = ?").run(row.id, row.id);
       this.db.query("DELETE FROM mastery WHERE concept_id = ?").run(row.id);
     }
+    this.syncKey = key;
   }
 
   find(query: string, course?: string | null, limit = 10): ConceptSummary[] {
