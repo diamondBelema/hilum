@@ -221,3 +221,13 @@ Append-only log. Newest entry at the bottom.
 - Tests: activities.test.tsx covers all 25 component types (was 11).
 - Tagged `catalog-components`.
 
+## 2026-10-29 — WP1 real session transcript (session-first shell)
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok).
+- SessionScreen renders every activity with ActivityRenderer instead of JSON.stringify(response). Answered activities are read-only; newest pending activity is interactive with respondActivity + elapsed time. SSE via subscribeHarnessEvents replaces the 4-second full refetch. Render failures call api.renderError with a calm inline message. Back button has accessible name; status strip uses text plus icon. Submit disabled with "Still needed" hint until valid.
+- Session-first shell: sidebar-only session list (topic titles, course code, relative time, status dot, active highlight); body default is composer home ("What do you want to learn?" + course picker + send icon button); top bar shows course chip on Home, session title in session view; Settings sheet stub. Sidebar is full viewport height with header top, scrollable list, Settings pinned bottom.
+- Copied audit document to docs/AUDIT.md ("Hilum audit and session-first plan", 2026-10-29) defining WP1-WP8.
+- Added PRODUCT.md with session-first product principles.
+- Server-side vault, MCP, exams, grading logic, light-dark() token structure and contrast test untouched.
+- Tagged `wp1-pass`.
+
