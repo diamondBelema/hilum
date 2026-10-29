@@ -473,7 +473,7 @@ export function GraphScreen({
                   Clear
                 </button>
               )}
-              <p className="text-[13px] text-text-muted">Search centers a topic and zooms in.</p>
+              <p className="text-xs text-text-muted">Search centers a topic and zooms in.</p>
             </div>
           )}
 
@@ -601,7 +601,7 @@ export function GraphScreen({
                     />
                     {labelVisible && labelBox && (
                       <span
-                        className="pointer-events-none absolute left-1/2 -translate-x-1/2 mt-1.5 rounded bg-bg px-1.5 py-0.5 text-[13px] text-text leading-none"
+                        className="pointer-events-none absolute left-1/2 -translate-x-1/2 mt-1.5 rounded bg-bg px-1.5 py-0.5 text-xs text-text leading-none"
                         style={{
                           width: `${labelBox.width}px`,
                           textShadow: `0 0 4px var(--bg)`,
@@ -633,7 +633,7 @@ export function GraphScreen({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[13px] text-text-muted">
+            <p className="text-xs text-text-muted">
               {mode === "neighborhood"
                 ? `2-hop neighborhood of ${rootTitle || "this topic"} (${layout.visible.length}${extra > 0 ? ` of ${layout.allCount}` : ""} topics)`
                 : `${layout.visible.length}${extra > 0 ? ` of ${layout.allCount}` : ""} topics`}
@@ -642,13 +642,13 @@ export function GraphScreen({
               <Button variant="secondary" onClick={() => setMode("overview")}>+{extra} more</Button>
             )}
             {mode === "overview" && extra > 0 && (
-              <span className="text-[13px] text-warning">Showing the first {MAX_OVERVIEW} topics.</span>
+              <span className="text-xs text-warning">Showing the first {MAX_OVERVIEW} topics.</span>
             )}
           </div>
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-text-muted">
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-text-muted">
         <span className="flex items-center gap-1.5">
           <svg width="24" height="8" aria-hidden="true"><line x1="0" y1="4" x2="24" y2="4" stroke="var(--border-strong)" strokeWidth="1.5" /></svg>
           Parent
@@ -734,7 +734,7 @@ function TreeView({
               onClick={() => toggle(node.id)}
               disabled={!kids}
               aria-label={kids ? (open ? "Collapse" : "Expand") : "No subtopics"}
-              className={`shrink-0 size-5 rounded border border-border-subtle bg-surface text-[10px] text-text-muted flex items-center justify-center ${
+              className={`shrink-0 size-5 rounded border border-border-subtle bg-surface text-xs text-text-muted flex items-center justify-center ${
                 !kids ? "opacity-40" : ""
               }`}
             >
@@ -750,7 +750,7 @@ function TreeView({
               <span className="truncate text-sm text-text">{node.title}</span>
               {node.mastery.state === "decayed" && <span className="text-xs text-warning" title="Review due">review due</span>}
             </button>
-            <span className="text-[13px] text-text-muted">
+            <span className="text-xs text-text-muted">
               {node.rollup.mastered + node.rollup.understood + node.rollup.familiar + node.rollup.unseen === 0
                 ? "No evidence yet"
                 : `${node.rollup.mastered} of ${node.rollup.total} mastered`}
@@ -764,10 +764,10 @@ function TreeView({
 
   return (
     <div className="space-y-3">
-      <p className="text-[13px] text-text-muted">Indented topic tree. Tap a topic for its drawer; chevrons expand subtopics.</p>
+      <p className="text-xs text-text-muted">Indented topic tree. Tap a topic for its drawer; chevrons expand subtopics.</p>
       <div className="border border-border-subtle rounded-panel bg-surface p-3 max-h-[70vh] overflow-y-auto">
         {roots.length === 0 ? (
-          <p className="text-[13px] text-text-muted">No topics yet.</p>
+          <p className="text-xs text-text-muted">No topics yet.</p>
         ) : (
           render(roots)
         )}
@@ -789,17 +789,17 @@ function FrontierView({
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-[13px] text-text-muted">Topics ready to study next — prerequisites met, ranked by exam weight and review need.</p>
+      <p className="text-xs text-text-muted">Topics ready to study next — prerequisites met, ranked by exam weight and review need.</p>
       <div className="border border-border-subtle rounded-panel bg-surface p-3 max-h-[70vh] overflow-y-auto space-y-2">
         {items.length === 0 ? (
-          <p className="text-[13px] text-text-muted">No topics ready yet. Finish prerequisites or wait for a review to come due.</p>
+          <p className="text-xs text-text-muted">No topics ready yet. Finish prerequisites or wait for a review to come due.</p>
         ) : (
           items.map((item) => (
             <div key={item.concept.id} className="flex items-center gap-3 p-2 rounded-control border border-transparent hover:border-border-subtle cursor-pointer hover:bg-surface-2 transition-colors" onClick={() => onOpen(item.concept)}>
               <MasteryRing state={item.concept.mastery.state} size={24} label={`${item.concept.title}: ${stateLabel(item.concept.mastery.state)}`} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-text">{item.concept.title}</p>
-                <p className="mt-0.5 text-[13px] text-text-muted">{item.reason}</p>
+                <p className="mt-0.5 text-xs text-text-muted">{item.reason}</p>
               </div>
               <Button variant="primary" className="text-xs px-2" onClick={(e) => { e.stopPropagation(); void onStudy(course, item.concept.id); }}>
                 Study this

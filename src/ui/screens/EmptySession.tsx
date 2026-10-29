@@ -50,7 +50,7 @@ export function EmptySession({
   return (
     <div className="h-full flex flex-col items-center justify-center p-6">
       <div className="max-w-3xl w-full">
-        <h1 className="text-3xl font-prose font-bold text-text mb-2">What do you want to learn?</h1>
+        <h1 className="text-3xl font-prose font-semibold text-text mb-2">What do you want to learn?</h1>
         <p className="text-text-muted mb-6">
           Pick a course, type your question, and start a new session.
         </p>
@@ -70,7 +70,7 @@ export function EmptySession({
             {selectedCourse ? (
               <>
                 <span className="font-medium text-text">{selectedCourse.title}</span>
-                <span className="font-mono text-[10px] text-text-muted">
+                <span className="font-mono text-xs text-text-muted">
                   · {selectedCourse.code}
                 </span>
               </>
@@ -89,7 +89,7 @@ export function EmptySession({
         </div>
 
         {!selectedCourse && (
-          <p className="mt-2 text-[10px] text-text-muted">
+          <p className="mt-2 text-xs text-text-muted">
             Pick a course from the list above to enable starting a session.
           </p>
         )}

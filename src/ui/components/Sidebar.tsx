@@ -81,10 +81,10 @@ export function Sidebar({
 
       {/* Search */}
       <div className="shrink-0 mx-3 mb-2 flex items-center gap-2">
-        <span className="text-xs font-mono uppercase tracking-wider text-text-muted/70">Sessions</span>
+        <span className="text-xs font-mono uppercase tracking-wider text-text-muted">Sessions</span>
         <div className="relative flex-1">
           <SearchIcon
-            className="pointer-events-none absolute left-1.5 top-1/2 size-3 -translate-y-1/2 text-text-muted/70"
+            className="pointer-events-none absolute left-1.5 top-1/2 size-3 -translate-y-1/2 text-text-muted"
             aria-hidden="true"
           />
           <Input
@@ -93,7 +93,7 @@ export function Sidebar({
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search…"
             aria-label="Search sessions"
-            className="min-h-11 rounded-control border border-border-strong bg-surface px-8 text-xs focus:border-primary focus:outline-none placeholder:text-text-muted/60"
+            className="min-h-11 rounded-control border border-border-strong bg-surface px-8 text-xs focus:border-primary focus:outline-none placeholder:text-text-muted"
           />
         </div>
       </div>
@@ -130,7 +130,7 @@ export function Sidebar({
                   <span className="block truncate text-sm font-medium text-text">
                     {course?.title ?? s.course}
                   </span>
-                  <span className="block font-mono text-[10px] text-text-muted mt-0.5">
+                  <span className="block font-mono text-xs text-text-muted mt-0.5">
                     {course?.code ?? s.course}
                     {course ? " · " : ""}
                     {relativeTime(s.startedAt)}

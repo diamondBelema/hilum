@@ -1,7 +1,24 @@
 @import "tailwindcss";
-@import "@fontsource/jetbrains-mono/index.css";
-@import "@fontsource/source-sans-3/index.css";
 @import "./tokens.css";
+
+/* Variable faces, Latin subset only. We deliberately point at the package's
+   Latin WOFF2 files instead of its index.css, which would bundle Cyrillic,
+   Greek, Vietnamese and Latin-ext. */
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 600;
+  src: url("@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "Source Sans 3 Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 600;
+  src: url("@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2") format("woff2-variations");
+}
 
 @theme inline {
   --color-bg: var(--bg);
@@ -60,6 +77,15 @@
     -webkit-text-size-adjust: 100%;
     scroll-padding-top: 4rem;
     scroll-padding-bottom: 6rem;
+    font-variant-ligatures: none;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp,
+  .font-mono {
+    font-variant-ligatures: contextual;
   }
 
   body {
@@ -269,11 +295,84 @@
   max-width: 68ch;
 }
 
+/* Type roles. Every text node in the shell picks one of these instead of an
+   arbitrary size. Weights are limited to 400, 500 and 600. */
+@utility type-display {
+  font-family: var(--font-ui);
+  font-size: var(--text-2xl);
+  line-height: var(--text-2xl--line-height);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+@utility type-title {
+  font-family: var(--font-ui);
+  font-size: var(--text-xl);
+  line-height: var(--text-xl--line-height);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+@utility type-heading {
+  font-family: var(--font-ui);
+  font-size: var(--text-lg);
+  line-height: var(--text-lg--line-height);
+  font-weight: 600;
+}
+
+@utility type-body {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
+  font-weight: 400;
+}
+
+@utility type-body-sm {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  font-weight: 400;
+}
+
+@utility type-meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+@utility type-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@utility type-prose {
+  font-family: var(--font-prose);
+  font-size: var(--text-read);
+  line-height: var(--text-read--line-height);
+  font-weight: 400;
+}
+
+@utility type-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  font-weight: 400;
+  font-variant-ligatures: contextual;
+}
+
+/* Kept for older screens that still use the section label utility. */
 @utility sectionLabel {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   line-height: var(--text-xs--line-height);
-  letter-spacing: 0.06em;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
