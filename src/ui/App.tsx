@@ -25,7 +25,6 @@ function AppShell() {
   const [details, setDetails] = useState<Record<string, SessionDetail>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,7 +75,6 @@ function AppShell() {
         navigate("/");
         return;
       }
-      setSelectedCourse(course);
       try {
         const created = await api.startSession(course.code, goal ?? "learn");
         setSessions((previous) => [created, ...previous]);
@@ -152,8 +150,7 @@ function AppShell() {
           {route.name === "home" && (
             <EmptySession
               courses={courses}
-              selectedCourse={selectedCourse}
-              setSelectedCourse={setSelectedCourse}
+              sessions={sessions}
               activeSessionId={activeSessionId}
               onNewSession={createSession}
             />

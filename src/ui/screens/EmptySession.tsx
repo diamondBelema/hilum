@@ -1,97 +1,132 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRightIcon, ChevronDownIcon } from "lucide-react";
-import { type Course } from "../api.ts";
-import { cn } from "../lib/cn.ts";
-import { Button } from "../components/Button.tsx";
-import { Input } from "../components/Input.tsx";
+import { useEffect, useState } from "react";
+import { ArrowRight, BookOpen, ChevronRight } from "lucide-react";
+import type { Course, SessionSummary } from "../api.ts";
+import { Composer } from "../components/Composer.tsx";
+import { Link } from "../lib/router.ts";
+import { relativeTime, sessionTitle } from "../components/Sidebar.tsx";
+import {
+  chooseInitialCourse,
+  readLastCourse,
+  writeLastCourse,
+} from "../components/CoursePicker.tsx";
 
 type EmptySessionProps = {
   courses: Course[];
-  selectedCourse: Course | null;
-  setSelectedCourse: (course: Course | null) => void;
+  sessions: SessionSummary[];
   activeSessionId: string | null;
   onNewSession: (course: Course | null, goal?: string) => void;
 };
 
 export function EmptySession({
   courses,
-  selectedCourse,
-  setSelectedCourse,
+  sessions,
   activeSessionId,
   onNewSession,
 }: EmptySessionProps) {
-  const [inputValue, setInputValue] = useState("");
-  const [textareaRef, setTextareaRef] = useState<HTMLTextAreaElement | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const recent = sessions.slice(0, 3);
 
-  const canSubmit = Boolean(selectedCourse && inputValue.trim());
-
-  const handleSend = useCallback(() => {
-    if (!canSubmit || !selectedCourse) return;
-    onNewSession(selectedCourse, inputValue.trim());
-  }, [canSubmit, selectedCourse, inputValue, onNewSession]);
-
-  const onKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend],
-  );
-
-  // Auto-grow textarea to about 6 lines
   useEffect(() => {
-    if (!textareaRef) return;
-    textareaRef.style.height = "auto";
-    textareaRef.style.height = `${Math.min(textareaRef.scrollHeight, 6 * 24)}px`;
-  }, [inputValue, textareaRef]);
+    if (selectedCourse || courses.length === 0) return;
+    const remembered = chooseInitialCourse(courses, readLastCourse());
+    if (remembered) setSelectedCourse(remembered);
+  }, [courses, selectedCourse]);
+
+  useEffect(() => {
+    if (selectedCourse) writeLastCourse(selectedCourse.code);
+  }, [selectedCourse]);
+
+  function chooseCourse(course: Course) {
+    setSelectedCourse(course);
+    document.getElementById("composer-goal")?.focus();
+  }
 
   return (
-    <div className="h-full flex flex-col items-center justify-center p-6">
-      <div className="max-w-3xl w-full">
-        <h1 className="text-3xl font-prose font-semibold text-text mb-2">What do you want to learn?</h1>
-        <p className="text-text-muted mb-6">
-          Pick a course, type your question, and start a new session.
-        </p>
+    <div className="mx-auto w-full max-w-3xl p-4 sm:p-6 lg:py-12">
+      <h1 className="type-title sm:type-display text-text">What do you want to learn?</h1>
+      <p className="type-body mt-2 max-w-[60ch] text-text-muted">
+        Pick a course and say what you want to work on. Teaching sessions wait for an agent over MCP;
+        practice uses banked questions.
+      </p>
 
-        <textarea
-          ref={setTextareaRef}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder="Type your question or topic here…"
-          rows={3}
-          className="w-full rounded-control border border-border-strong bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
-        />
+      <Composer
+        courses={courses}
+        selectedCourse={selectedCourse}
+        onSelectCourse={setSelectedCourse}
+        onStart={(course, goal) => onNewSession(course, goal)}
+      />
 
-        <div className="mt-4 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 rounded-control border border-border-subtle bg-surface px-2 py-1.5 text-xs text-text-muted">
-            {selectedCourse ? (
-              <>
-                <span className="font-medium text-text">{selectedCourse.title}</span>
-                <span className="font-mono text-xs text-text-muted">
-                  · {selectedCourse.code}
-                </span>
-              </>
-            ) : (
-              <span>Select a course</span>
-            )}
-          </div>
-          <Button
-            variant="default"
-            onClick={handleSend}
-            disabled={!canSubmit}
-            size="icon"
+      <div className="mt-10 grid gap-6 lg:grid-cols-2">
+        {recent.length > 0 && (
+          <section aria-labelledby="recent-heading">
+            <h2 id="recent-heading" className="type-heading text-text">
+              Recent sessions
+            </h2>
+            <ul className="mt-3 divide-y divide-border-subtle rounded-panel border border-border-subtle bg-surface">
+              {recent.map((session) => (
+                <li key={session.id}>
+                  <Link
+                    to={`/sessions/${session.id}`}
+                    aria-current={activeSessionId === session.id ? "page" : undefined}
+                    className="flex min-h-12 items-center justify-between gap-3 px-3 py-2 hover:bg-surface-2"
+                  >
+                    <span className="min-w-0">
+                      <span className="type-body-sm block truncate font-medium text-text">
+                        {sessionTitle(session.goal)}
+                      </span>
+                      <span className="type-meta block truncate text-text-muted">
+                        {session.course} · {relativeTime(session.startedAt)}
+                      </span>
+                    </span>
+                    <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-text-muted" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {courses.length > 0 ? (
+          <section aria-labelledby="courses-heading">
+            <h2 id="courses-heading" className="type-heading text-text">
+              Start from a course
+            </h2>
+            <ul className="mt-3 divide-y divide-border-subtle rounded-panel border border-border-subtle bg-surface">
+              {courses.map((course) => (
+                <li key={course.code}>
+                  <button
+                    type="button"
+                    onClick={() => chooseCourse(course)}
+                    className="flex min-h-12 w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-surface-2"
+                  >
+                    <span className="min-w-0">
+                      <span className="type-body-sm block truncate font-medium text-text">
+                        {course.title}
+                      </span>
+                      <span className="type-meta block truncate text-text-muted">
+                        {course.code} · {course.notes} {course.notes === 1 ? "note" : "notes"} ·{" "}
+                        {course.questions} {course.questions === 1 ? "question" : "questions"}
+                      </span>
+                    </span>
+                    <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-text-muted" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <section
+            aria-labelledby="no-courses-heading"
+            className="rounded-panel border border-border-subtle bg-surface p-4"
           >
-            <ArrowRightIcon className="size-4" />
-          </Button>
-        </div>
-
-        {!selectedCourse && (
-          <p className="mt-2 text-xs text-text-muted">
-            Pick a course from the list above to enable starting a session.
-          </p>
+            <h2 id="no-courses-heading" className="type-heading flex items-center gap-2 text-text">
+              <BookOpen aria-hidden="true" className="size-5 text-primary" />
+              No courses yet
+            </h2>
+            <p className="type-body-sm mt-2 max-w-[60ch] text-text-muted">
+              Add a course to the vault, then reload. The composer will pick it up here.
+            </p>
+          </section>
         )}
       </div>
     </div>
