@@ -84,7 +84,7 @@ function AppShell() {
   }
 
   return (
-    <div className="h-dvh overflow-x-hidden flex flex-col md:flex-row">
+    <div className="h-dvh overflow-x-hidden overflow-y-auto flex flex-col md:flex-row">
       <a
         href="#main"
         className="fixed top-2 left-2 z-50 inline-flex min-h-11 -translate-y-20 items-center rounded-control bg-primary px-4 py-2 text-sm font-semibold text-on-primary focus:translate-y-0"
@@ -106,10 +106,10 @@ function AppShell() {
         activeSessionId={activeSessionId}
       />
 
-      <div className="h-full flex-1 min-w-0 flex-col overflow-hidden">
+      <div className="h-full flex-1 min-w-0 flex-col overflow-y-auto">
         <TopBar drag open={sidebarOpen} onToggle={() => setSidebarOpen((prev) => !prev)} course={selectedCourse} sessionTitle={sessionId ? "Session" : null} />
 
-        <main id="main" className="flex-1 min-w-0 overflow-hidden relative">
+        <main id="main" className="flex-1 min-w-0 overflow-y-auto relative">
           {error && (
             <div className="absolute top-16 left-4 right-4 z-40 max-w-md pointer-events-none">
               <div className="mx-auto max-w-md">
