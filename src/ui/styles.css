@@ -1,12 +1,13 @@
 @import "tailwindcss";
-@import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
-@import "@fontsource-variable/atkinson-hyperlegible-mono/wght.css";
+@import "@fontsource/jetbrains-mono/index.css";
+@import "@fontsource/source-sans-3/index.css";
 @import "./tokens.css";
 
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
   --color-border-subtle: var(--border-subtle);
   --color-border-strong: var(--border-strong);
   --color-text: var(--text);
@@ -23,40 +24,38 @@
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --color-focus: var(--focus);
+  --color-ring: var(--focus);
 
-  --font-sans:
-    "Atkinson Hyperlegible Next Variable", "Atkinson Hyperlegible Next", system-ui,
-    -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono:
-    "Atkinson Hyperlegible Mono Variable", "Atkinson Hyperlegible Mono", "JetBrains Mono",
-    ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-ui: var(--font-ui);
+  --font-prose: var(--font-prose);
+  --font-mono: var(--font-mono);
 
-  --text-xs: 0.8125rem;
-  --text-xs--line-height: 1.4;
-  --text-sm: 0.875rem;
-  --text-sm--line-height: 1.45;
-  --text-base: 1rem;
-  --text-base--line-height: 1.5;
-  --text-read: 1.0625rem;
-  --text-read--line-height: 1.65;
-  --text-lg: 1.25rem;
-  --text-lg--line-height: 1.4;
-  --text-xl: 1.5rem;
-  --text-xl--line-height: 1.3;
-  --text-2xl: 1.875rem;
-  --text-2xl--line-height: 1.25;
+  --text-xs: var(--text-xs);
+  --text-xs--line-height: var(--text-xs--line-height);
+  --text-sm: var(--text-sm);
+  --text-sm--line-height: var(--text-sm--line-height);
+  --text-base: var(--text-base);
+  --text-base--line-height: var(--text-base--line-height);
+  --text-read: var(--text-read);
+  --text-read--line-height: var(--text-read--line-height);
+  --text-lg: var(--text-lg);
+  --text-lg--line-height: var(--text-lg--line-height);
+  --text-xl: var(--text-xl);
+  --text-xl--line-height: var(--text-xl--line-height);
+  --text-2xl: var(--text-2xl);
+  --text-2xl--line-height: var(--text-2xl--line-height);
 
-  --radius-control: 8px;
-  --radius-panel: 12px;
-  --radius-dialog: 16px;
-  --radius-chip: 999px;
+  --radius-control: var(--radius-control);
+  --radius-panel: var(--radius-panel);
+  --radius-dialog: var(--radius-dialog);
+  --radius-chip: var(--radius-chip);
 
-  --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.18);
+  --shadow-popover: var(--shadow-popover);
 }
 
 @layer base {
   html {
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 100%;
     -webkit-text-size-adjust: 100%;
     scroll-padding-top: 4rem;
@@ -87,6 +86,7 @@
   h2,
   h3 {
     text-wrap: balance;
+    font-family: var(--font-prose);
   }
 
   p {
@@ -107,11 +107,17 @@
   button:disabled {
     cursor: not-allowed;
   }
-}
 
+  a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
 
 .markdown {
   max-width: 70ch;
+  font-family: var(--font-prose);
 }
 
 .markdown > :first-child {
@@ -127,7 +133,7 @@
   padding-top: 0.9em;
   border-top: 1px solid var(--border-subtle);
   font-size: 1.35em;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.01em;
   scroll-margin-top: 4.5rem;
@@ -142,14 +148,14 @@
 .markdown h3 {
   margin-top: 1.7em;
   font-size: 1.15em;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.3;
   scroll-margin-top: 4.5rem;
 }
 
 .markdown h4 {
   margin-top: 1.4em;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .markdown p,
@@ -190,7 +196,7 @@
 }
 
 .markdown strong {
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .markdown img {
@@ -244,7 +250,7 @@
 }
 
 .markdown th {
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-muted);
 }
 

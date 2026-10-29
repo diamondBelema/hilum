@@ -1,39 +1,57 @@
 /*
- * Design tokens from DESIGN.md sections 3, 3.1 and 3.1b.
- * Light theme (DESIGN 3.1) and Black theme (DESIGN 3.1b, default dark) via light-dark().
- * The color-scheme property selects the active side; [data-theme] overrides the system.
+ * Design tokens — reference chrome + H&E brand.
+ *
+ * Chrome (bg, surface, borders, text, muted) adopts the reference scheme:
+ *   dark bg #141414, raised #1C1C1C, hairline #434343, text #e6e6e6, muted #8d8d8d.
+ * Brand keeps H&E: hematoxylin primary, eosin accent (DESIGN 3.1).
+ * Expressed via light-dark() so both themes parse in the contrast test.
  */
 :root {
   color-scheme: light;
 
-  --bg: light-dark(#f6f5fb, #0a0a0c);
-  --surface: light-dark(#ffffff, #121215);
-  --surface-2: light-dark(#eeedf6, #1a1a1f);
-  --border-subtle: light-dark(#e2e0ee, #25252b);
-  --border-strong: light-dark(#8a88a6, #6a6a78);
-  --text: light-dark(#1b1b2e, #ededf0);
-  --text-muted: light-dark(#4f4e6b, #a3a3b0);
-  --primary: light-dark(#4338a8, #a9a3ff);
-  --on-primary: light-dark(#ffffff, #0a0a0c);
+  /* Chrome — reference */
+  --bg: light-dark(#f7f6fb, #141414);
+  --surface: light-dark(#ffffff, #1C1C1C);
+  --surface-2: light-dark(#eeedf6, #252525);
+  --surface-3: light-dark(#f5f4fb, #1a1821);
+  --border-subtle: light-dark(#e2e0ee, #434343);
+  /* Input and control outlines (3:1 or better) */
+  --border-strong: light-dark(#8a88a6, #686868);
+
+  --text: light-dark(#1b1b2e, #e6e6e6);
+  --text-muted: light-dark(#4f4e6b, #8d8d8d);
+
+  /* Brand — H&E (DESIGN 3.1) */
+  --primary: light-dark(#4338a8, #8a82ff);   /* hematoxylin */
+  --on-primary: light-dark(#ffffff, #141414);
   --primary-soft: light-dark(#e6e3fa, #1f1d45);
-  --accent: light-dark(#b3345f, #f08cb0);
+  --accent: light-dark(#b3345f, #d48db0);   /* eosin */
   --accent-soft: light-dark(#fbe4ec, #2e1a24);
   --correct: light-dark(#17703f, #6fd59a);
   --correct-soft: light-dark(#e3f4ea, #11261a);
-  --incorrect: light-dark(#b3261e, #ff8a80);
+  --incorrect: light-dark(#b3261e, #f08a80);
   --incorrect-soft: light-dark(#fbe6e4, #301614);
-  --warning: light-dark(#8a5100, #f2b544);
+  --warning: light-dark(#8a5100, #e2b566);
   --warning-soft: light-dark(#fff0d6, #2b2209);
-  --focus: light-dark(#4338a8, #a9a3ff);
+  --focus: light-dark(#4338a8, #8a82ff);
 
+  /* Type scale (rem) */
   --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.4;
   --text-sm: 0.875rem;
+  --text-sm--line-height: 1.45;
   --text-base: 1rem;
+  --text-base--line-height: 1.5;
   --text-read: 1.0625rem;
+  --text-read--line-height: 1.65;
   --text-lg: 1.25rem;
+  --text-lg--line-height: 1.4;
   --text-xl: 1.5rem;
+  --text-xl--line-height: 1.3;
   --text-2xl: 1.875rem;
+  --text-2xl--line-height: 1.25;
 
+  /* Spacing (4px base) */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -43,6 +61,7 @@
   --space-12: 3rem;
   --space-16: 4rem;
 
+  /* Radius ladder (4px multiples) */
   --radius-control: 8px;
   --radius-panel: 12px;
   --radius-dialog: 16px;
@@ -53,6 +72,11 @@
   --sidebar: 240px;
   --context-panel: 320px;
   --rail: 64px;
+
+  /* Font stacks — self-hosted via @fontsource */
+  --font-ui: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-prose: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 @media (prefers-color-scheme: dark) {

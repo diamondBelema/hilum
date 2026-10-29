@@ -1,251 +1,90 @@
-import { useEffect, useState } from "react";
-import {
-  ClipboardCheck,
-  ClipboardList,
-  Home,
-  NotebookText,
-  Radio,
-  Settings2,
-  Share2,
-  TrendingUp,
-  type LucideIcon,
-} from "lucide-react";
-import { api, type Course, type NoteDetail, type NoteMeta } from "./api.ts";
-import { IconButton } from "./components/Button.tsx";
-import { Banner } from "./components/ui.tsx";
-import { Study } from "./screens/Study.tsx";
-import { Notes } from "./screens/Notes.tsx";
-import { Reader } from "./screens/Reader.tsx";
-import { Questions } from "./screens/Questions.tsx";
-import { ProgressScreen } from "./screens/Progress.tsx";
-import { GraphScreen } from "./screens/Graph.tsx";
-import { Settings } from "./screens/Settings.tsx";
+import { useCallback, useEffect, useState } from "react";
+import { api, type Course, type SessionSummary } from "./api.ts";
+import { Sidebar } from "./components/Sidebar.tsx";
+import { TopBar } from "./components/TopBar.tsx";
+import { Sheet } from "./components/Sheet.tsx";
 import { DesignGallery } from "./screens/DesignGallery.tsx";
-import { Grading } from "./screens/Grading.tsx";
-import { Live } from "./screens/Live.tsx";
-import { Editor } from "./screens/Editor.tsx";
-import { readActiveAttempt } from "./lib/activeAttempt.ts";
-import { subscribeHarnessEvents } from "./lib/events.ts";
-
-type Tab = "study" | "live" | "exams" | "grading" | "notes" | "progress" | "graph";
-
-const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
-  { id: "study", label: "Study", icon: Home },
-  { id: "live", label: "Live", icon: Radio },
-  { id: "exams", label: "Exams", icon: ClipboardCheck },
-  { id: "grading", label: "Grading", icon: ClipboardList },
-  { id: "notes", label: "Notes", icon: NotebookText },
-  { id: "progress", label: "Progress", icon: TrendingUp },
-  { id: "graph", label: "Graph", icon: Share2 },
-];
+import { EmptySession } from "./screens/EmptySession.tsx";
+import { SessionScreen } from "./screens/SessionScreen.tsx";
 
 export function App() {
   if (location.pathname === "/_design") return <DesignGallery />;
-  return <Shell />;
+  return <AppShell />;
 }
 
-function Shell() {
-  const [tab, setTab] = useState<Tab>("study");
+function AppShell() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
-  const [course, setCourse] = useState<Course | null>(null);
-  const [notes, setNotes] = useState<NoteMeta[]>([]);
-  const [note, setNote] = useState<NoteDetail | null>(null);
-  const [editingNote, setEditingNote] = useState<{ path: string | null; course: Course | null } | null>(null);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<NoteMeta[] | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState(false);
-  const [pendingGrading, setPendingGrading] = useState(0);
-  const [studyTarget, setStudyTarget] = useState<{
-    course: string;
-    conceptId?: string;
-    nonce: number;
-  } | null>(null);
+  const [search, setSearch] = useState("");
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [route, setRoute] = useState<"home" | "session">("home");
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    const refresh = () => {
-      api
-        .pendingGrading()
-        .then((items) => !cancelled && setPendingGrading(items.length))
-        .catch(() => {});
-    };
-    refresh();
-    const unsubscribe = subscribeHarnessEvents((event) => {
-      if (event.type === "graded" || event.type === "submitted") refresh();
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    api
-      .courses()
-      .then((list) => {
-        setCourses(list);
-        const match = /^#note=(.+)$/.exec(location.hash);
-        if (match?.[1]) {
-          const path = decodeURIComponent(match[1]);
-          const owner = list.find((item) => path.startsWith(`courses/${item.code}/`));
-          if (owner) {
-            setCourse(owner);
-            setTab("notes");
-          }
-          void openNote(path);
-        } else if (readActiveAttempt()) {
-          setTab("exams");
-        }
+    Promise.all([api.courses(), api.sessionHistory()])
+      .then(([courseList, sessionList]) => {
+        if (cancelled) return;
+        setCourses(courseList);
+        setSessions(sessionList);
+        setLoading(false);
       })
-      .catch((err: unknown) => setError(message(err)))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const onHash = () => {
-      const match = /^#note=(.+)$/.exec(location.hash);
-      const path = match?.[1] ? decodeURIComponent(match[1]) : null;
-      if (!path) {
-        setNote(null);
-        return;
-      }
-      const owner = courses.find((item) => path.startsWith(`courses/${item.code}/`));
-      if (owner) setCourse(owner);
-      setTab("notes");
-      void openNote(path);
-    };
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courses]);
-
-  useEffect(() => {
-    if (!course) return;
-    let cancelled = false;
-    api
-      .notes(course.code)
-      .then((list) => !cancelled && setNotes(list))
-      .catch((err: unknown) => !cancelled && setError(message(err)));
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [course]);
+  }, []);
 
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults(null);
-      return;
+    const match = /^\/sessions\/(.+)$/.exec(location.pathname);
+    if (match?.[1]) {
+      setSessionId(match[1]);
+      setActiveSessionId(match[1]);
+      setRoute("session");
+      setSidebarOpen(false);
     }
-    const timer = setTimeout(() => {
-      api
-        .search(query.trim())
-        .then(setResults)
-        .catch((err: unknown) => setError(message(err)));
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [query]);
+  }, []);
 
-  async function openNote(path: string, anchor?: string) {
-    setError(null);
-    try {
-      const detail = await api.note(path);
-      setNote(detail);
-      setTab("notes");
-      setQuery("");
-      setResults(null);
-      history.replaceState(null, "", `#note=${encodeURIComponent(path)}`);
-      if (anchor) {
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: "start" })),
-        );
-      } else {
-        window.scrollTo({ top: 0 });
-      }
-    } catch (err) {
-      setError(message(err));
-    }
+  async function openSession(id: string) {
+    setActiveSessionId(id);
+    setSessionId(id);
+    setRoute("session");
+    setSidebarOpen(false);
+    window.history.pushState(null, "", `/sessions/${id}`);
   }
 
-  function selectTab(next: Tab) {
-    setTab(next);
-    // Keep the open note when switching tabs so reading is not lost.
-    setQuery("");
-    setResults(null);
-    if (!note) {
-      history.replaceState(null, "", "#");
-    }
-    window.scrollTo({ top: 0 });
+  function goHome() {
+    setRoute("home");
+    setSessionId(null);
+    setActiveSessionId(null);
+    window.history.pushState(null, "", "/");
   }
 
-  function study(course: string, conceptId?: string) {
-    setStudyTarget({ course, conceptId, nonce: Date.now() });
-    setTab("live");
-    setNote(null);
-    setQuery("");
-    setResults(null);
-    history.replaceState(null, "", "#");
-    window.scrollTo({ top: 0 });
-  }
-
-  function openCourse(next: Course) {
-    setCourse(next);
-    setNote(null);
-    setQuery("");
-    setResults(null);
-    setTab("notes");
-    history.replaceState(null, "", "#");
-    window.scrollTo({ top: 0 });
-  }
-
-  function clearCourse() {
-    setCourse(null);
-    setNote(null);
-    setQuery("");
-    setResults(null);
-    history.replaceState(null, "", "#");
-    window.scrollTo({ top: 0 });
-  }
-
-  function closeNote() {
-    setNote(null);
-    history.replaceState(null, "", "#");
-    window.scrollTo({ top: 0 });
-  }
-
-  function closeEditor() {
-    setEditingNote(null);
-  }
-
-  function createNextNote(course: Course | null) {
+  async function createSession(course: Course | null, goal?: string) {
     if (!course) {
-      selectTab("notes");
+      goHome();
       return;
     }
-    setEditingNote({ path: null, course });
-    setTab("notes");
-  }
-
-  async function deleteNote(path: string) {
-    if (!window.confirm("Delete this note?")) return;
+    setSelectedCourse(course);
     try {
-      await api.deleteNote(path);
-      setNote(null);
-      setEditingNote(null);
-      // Refresh notes list for the current course
-      if (course) {
-        const updated = await api.notes(course.code);
-        setNotes(updated);
-      }
+      const created = await api.startSession(course.code, goal ?? "learn");
+      setSessions((prev) => [created, ...prev]);
+      openSession(created.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   }
 
   return (
-    <div className="min-h-dvh">
+    <div className="h-dvh overflow-x-hidden flex flex-col md:flex-row">
       <a
         href="#main"
         className="fixed top-2 left-2 z-50 inline-flex min-h-11 -translate-y-20 items-center rounded-control bg-primary px-4 py-2 text-sm font-semibold text-on-primary focus:translate-y-0"
@@ -253,240 +92,60 @@ function Shell() {
         Skip to content
       </a>
 
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar)] flex-col bg-surface lg:flex border-r border-border-subtle">
-        <div className="flex items-center gap-3 px-5 py-6">
-          <img src="/icon.svg" alt="" aria-hidden="true" className="size-9 rounded-[10px]" />
-          <div>
-            <p className="text-base font-semibold tracking-tight">Hilum</p>
-            <p className="mt-0.5 text-xs text-text-muted">Local study</p>
-          </div>
-        </div>
-        <nav aria-label="Main" className="px-2 pt-3">
-          {NAV.map((item) => (
-            <NavButton
-              key={item.id}
-              item={item}
-              active={tab === item.id}
-              badge={item.id === "grading" ? pendingGrading : 0}
-              onClick={() => selectTab(item.id)}
+      <Sidebar
+        courses={courses}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((prev) => !prev)}
+        onSelectSession={openSession}
+        onNewSession={createSession}
+        onSettings={() => setSettingsOpen(true)}
+        sessions={sessions}
+        loading={loading}
+        search={search}
+        onSearchChange={setSearch}
+        activeSessionId={activeSessionId}
+      />
+
+      <div className="h-full flex-1 min-w-0 flex-col overflow-hidden">
+        <TopBar drag open={sidebarOpen} onToggle={() => setSidebarOpen((prev) => !prev)} course={selectedCourse} sessionTitle={sessionId ? "Session" : null} />
+
+        <main id="main" className="flex-1 min-w-0 overflow-hidden relative">
+          {error && (
+            <div className="absolute top-16 left-4 right-4 z-40 max-w-md pointer-events-none">
+              <div className="mx-auto max-w-md">
+                <div className="rounded-control border border-incorrect/40 bg-incorrect-soft p-3 text-sm text-incorrect">
+                  {error}
+                </div>
+              </div>
+            </div>
+          )}
+          {route === "home" ? (
+            <EmptySession
+              courses={courses}
+              selectedCourse={selectedCourse}
+              setSelectedCourse={setSelectedCourse}
+              activeSessionId={activeSessionId}
+              onNewSession={createSession}
             />
-          ))}
-        </nav>
-        {tab === "notes" && course && courses.length > 0 && (
-          <div className="mt-6 min-h-0 flex-1 overflow-y-auto px-2">
-            <h2 className="px-3 py-2 text-xs font-semibold text-text-muted">Courses</h2>
-            <ul className="space-y-0.5">
-              {courses.map((item) => (
-                <li key={item.code}>
-                  <button
-                    type="button"
-                    onClick={() => openCourse(item)}
-                    aria-current={course?.code === item.code ? "true" : undefined}
-                    className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-control px-3 text-left text-sm ${
-                      course?.code === item.code
-                        ? "bg-primary-soft font-semibold text-text"
-                        : "text-text-muted hover:bg-surface-2 hover:text-text"
-                    }`}
-                  >
-                    <span className="truncate">{item.title}</span>
-                    <span className="shrink-0 font-mono text-xs text-text-muted">{item.notes}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <div className="mt-auto p-2">
-          <button
-            type="button"
-            onClick={() => setSettings(true)}
-            className="flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-sm text-text-muted hover:bg-surface-2 hover:text-text"
-          >
-            <Settings2 aria-hidden="true" className="size-5" />
-            Settings
-          </button>
+          ) : (
+            <SessionScreen
+              sessionId={sessionId!}
+              onClose={goHome}
+              onNewSession={createSession}
+            />
+          )}
+        </main>
+      </div>
+
+      <Sheet
+        open={settingsOpen}
+        title="Settings"
+        onClose={() => setSettingsOpen(false)}
+      >
+        <div className="p-4">
+          <p className="text-sm text-text-muted">Settings coming soon — vault path, LAN, MCP token, theme.</p>
         </div>
-      </aside>
-
-      <nav
-        aria-label="Main"
-        className="fixed inset-y-0 left-0 z-20 hidden w-16 flex-col items-center gap-1 border-r border-border-subtle bg-surface py-3 sm:flex lg:hidden"
-      >
-        {NAV.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              title={item.label}
-              aria-label={item.label}
-              aria-current={tab === item.id ? "page" : undefined}
-              onClick={() => selectTab(item.id)}
-              className={`relative flex size-12 items-center justify-center rounded-control ${
-                tab === item.id ? "bg-primary-soft text-text" : "text-text-muted hover:bg-surface-2"
-              }`}
-            >
-              <Icon aria-hidden="true" className="size-5" />
-              {item.id === "grading" && pendingGrading > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[13px] leading-none font-semibold text-bg">
-                  {pendingGrading}
-                </span>
-              )}
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          title="Settings"
-          aria-label="Settings"
-          onClick={() => setSettings(true)}
-          className="mt-auto flex size-12 items-center justify-center rounded-control text-text-muted hover:bg-surface-2"
-        >
-          <Settings2 aria-hidden="true" className="size-5" />
-        </button>
-      </nav>
-
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border-subtle bg-bg px-4 py-2 sm:hidden">
-        <span className="flex items-center gap-2 text-sm font-semibold">
-          <img src="/icon.svg" alt="" aria-hidden="true" className="size-7 rounded-lg" />
-          Hilum
-        </span>
-        <IconButton label="Settings" onClick={() => setSettings(true)}>
-          <Settings2 aria-hidden="true" className="size-5" />
-        </IconButton>
-      </header>
-
-      <main id="main" className="px-4 pt-6 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] sm:pl-20 sm:pr-6 lg:pl-[calc(var(--sidebar)+2rem)] lg:pb-10">
-        {error && (
-          <div className="mb-4 max-w-3xl">
-            <Banner tone="error">{error}</Banner>
-          </div>
-        )}
-
-        {editingNote ? (
-          <Editor course={editingNote.course} onBack={closeEditor} notePath={editingNote.path ?? undefined} />
-        ) : note ? (
-          <Reader
-            note={note}
-            course={course}
-            onBack={closeNote}
-            onOpenNote={(path, anchor) => void openNote(path, anchor)}
-            onEditNote={(path) => { setEditingNote({ path, course }); setTab("notes"); }}
-            onDeleteNote={(path) => void deleteNote(path)}
-          />
-        ) : tab === "study" ? (
-          <Study
-            courses={courses}
-            openNotes={openCourse}
-            onStudy={study}
-            onExams={() => selectTab("exams")}
-          />
-        ) : tab === "notes" ? (
-          <Notes
-            courses={courses}
-            course={course}
-            notes={notes}
-            results={results}
-            query={query}
-            onQuery={setQuery}
-            onSelectCourse={openCourse}
-            onClearCourse={clearCourse}
-            onOpenNote={(path) => void openNote(path)}
-            onNewNote={createNextNote}
-            onDeleteNote={(path) => void deleteNote(path)}
-            loading={loading}
-          />
-        ) : tab === "live" ? (
-          <Live
-            courses={courses}
-            target={studyTarget}
-            onOpenNote={(path, anchor) => void openNote(path, anchor)}
-            onOpenExams={() => selectTab("exams")}
-          />
-        ) : tab === "exams" ? (
-          <Questions courses={courses} />
-        ) : tab === "grading" ? (
-          <Grading courses={courses} onOpenExams={() => selectTab("exams")} />
-        ) : tab === "graph" ? (
-          <GraphScreen courses={courses} onStudy={study} />
-        ) : (
-          <ProgressScreen
-            courses={courses}
-            onStudy={study}
-            onOpenNote={(path, anchor) => void openNote(path, anchor)}
-          />
-        )}
-      </main>
-
-      <nav
-        aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-border-subtle bg-surface pb-[env(safe-area-inset-bottom)] sm:hidden"
-      >
-        <ul className="grid grid-cols-7">
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            return (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => selectTab(item.id)}
-                  aria-current={tab === item.id ? "page" : undefined}
-                  className={`relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 whitespace-nowrap text-[13px] tracking-tight ${
-                    tab === item.id ? "text-primary" : "text-text-muted"
-                  }`}
-                >
-                  <Icon aria-hidden="true" className="size-5" />
-                  {item.label}
-                  {item.id === "grading" && pendingGrading > 0 && (
-                    <span className="absolute top-1 right-1/4 flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[13px] font-semibold text-bg">
-                      {pendingGrading}
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-
-      <Settings open={settings} onClose={() => setSettings(false)} />
+      </Sheet>
     </div>
   );
-}
-
-function NavButton({
-  item,
-  active,
-  badge = 0,
-  onClick,
-}: {
-  item: { label: string; icon: LucideIcon };
-  active: boolean;
-  badge?: number;
-  onClick: () => void;
-}) {
-  const Icon = item.icon;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-      aria-label={badge > 0 ? `${item.label}, ${badge} waiting` : item.label}
-      className={`flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-sm ${
-        active ? "bg-surface-2 font-semibold text-primary" : "text-text-muted hover:bg-surface-2 hover:text-text"
-      }`}
-    >
-      <Icon aria-hidden="true" className="size-5" />
-      {item.label}
-      {badge > 0 && (
-        <span className="ml-auto rounded-chip bg-accent px-2 py-0.5 text-[13px] font-semibold text-bg">
-          {badge}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }

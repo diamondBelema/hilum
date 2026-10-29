@@ -1,57 +1,90 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 
-type Variant = "primary" | "secondary" | "ghost" | "destructive";
+import { cn } from "../lib/cn.ts";
 
-const variants: Record<Variant, string> = {
-  primary: "bg-primary text-on-primary hover:opacity-90 active:opacity-80",
-  secondary:
-    "border border-border-strong bg-surface text-text hover:bg-surface-2 active:bg-surface-2",
-  ghost: "text-text-muted hover:bg-surface-2 hover:text-text active:bg-surface-2",
-  destructive: "bg-incorrect text-white hover:opacity-90 active:opacity-80",
-};
+const buttonVariants = cva(
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-on-primary hover:bg-primary/90",
+        primary: "bg-primary text-on-primary hover:bg-primary/90",
+        destructive:
+          "bg-incorrect text-white hover:bg-incorrect/90 focus-visible:ring-incorrect/20",
+        outline:
+          "border bg-bg shadow-xs hover:bg-surface-2 hover:text-text dark:border-border-strong dark:bg-surface/30 dark:hover:bg-surface-2",
+        secondary:
+          "bg-surface-2 text-text hover:bg-surface-2/80",
+        ghost:
+          "hover:bg-surface-2 hover:text-text dark:hover:bg-surface-2/50",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-11 px-4 py-2 has-[>svg]:px-3",
+        xs: "h-11 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-5",
+        sm: "h-11 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5",
+        lg: "h-12 rounded-md px-6 has-[>svg]:px-4",
+        icon: "size-11",
+        "icon-xs": "size-11 rounded-md [&_svg:not([class*='size-'])]:size-5",
+        "icon-sm": "size-10",
+        "icon-lg": "size-12",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+);
 
-type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: Variant;
-  loading?: boolean;
-  loadingLabel?: string;
-  children: ReactNode;
-};
-
-export function Button({
-  variant = "secondary",
+function Button({
+  className,
+  variant = "default",
+  size = "default",
   loading = false,
   loadingLabel = "Working…",
   disabled,
-  className = "",
   children,
-  type = "button",
-  ...rest
-}: Props) {
+  ...props
+}: React.ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & {
+    loading?: boolean;
+    loadingLabel?: string;
+  }) {
   return (
     <button
-      type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-control px-4 text-sm font-semibold transition-opacity duration-150 disabled:opacity-50 ${variants[variant]} ${className}`}
-      {...rest}
+      data-slot="button"
+      data-variant={variant}
+      data-size={size}
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
     >
-      {loading ? loadingLabel : children}
+      {loading ? <span className="flex items-center gap-1">{loadingLabel}</span> : children}
     </button>
   );
 }
 
-type IconProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  label: string;
-  children: ReactNode;
-};
+export { Button, buttonVariants };
 
-export function IconButton({ label, className = "", children, type = "button", ...rest }: IconProps) {
+export function IconButton({
+  label,
+  className = "",
+  children,
+  type = "button",
+  variant = "ghost",
+  size = "icon-sm",
+  ...rest
+}: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants> & {
+  label: string;
+}) {
   return (
     <button
       type={type}
       aria-label={label}
-      title={label}
-      className={`inline-flex size-11 shrink-0 items-center justify-center rounded-control text-text-muted hover:bg-surface-2 hover:text-text active:bg-surface-2 ${className}`}
+      className={cn(buttonVariants({ variant, size, className }))}
       {...rest}
     >
       {children}
