@@ -1,7 +1,8 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { Button } from "./Button.tsx";
-import { cn } from "../lib/cn.ts";
+import { IconButton } from "./Button.tsx";
+import { useDialogFocus } from "./Drawer.tsx";
 
 export function Sheet({
   open,
@@ -14,50 +15,33 @@ export function Sheet({
   onClose: () => void;
   children: ReactNode;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [open]);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = "sheet-title";
+  useDialogFocus(open, panelRef, onClose);
 
   if (!open) return null;
 
-  return (
-    <>
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={onClose}
-          />
-          <div
-            ref={ref}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="sheet-title"
-            className={cn(
-              "relative z-50 w-full max-w-lg rounded-dialog border border-border-subtle bg-surface p-0 text-text shadow-popover",
-            )}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-2">
-              <h2 id="sheet-title" className="text-sm font-medium text-text">{title}</h2>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Close"
-                onClick={onClose}
-              >
-                <X aria-hidden="true" className="size-5" />
-              </Button>
-            </div>
-            <div className="max-h-[70dvh] overflow-y-auto p-4">{children}</div>
-          </div>
-        </>
-      );
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" aria-hidden="true" onClick={onClose} />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative z-10 flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-dialog border border-border-subtle bg-surface text-text shadow-popover"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-2">
+          <h2 id={titleId} className="type-heading text-text">
+            {title}
+          </h2>
+          <IconButton label="Close" onClick={onClose} variant="ghost" size="icon-sm">
+            <X aria-hidden="true" className="size-5" />
+          </IconButton>
+        </div>
+        <div className="min-h-0 overflow-y-auto p-4">{children}</div>
+      </div>
+    </div>,
+    document.body,
+  );
 }

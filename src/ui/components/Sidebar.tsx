@@ -1,208 +1,207 @@
-"use client";
-
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  DumbbellIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
-  PlusIcon,
-  SearchIcon,
-  Settings2,
-} from "lucide-react";
-import { api, type Course, type SessionSummary } from "../api.ts";
+import { useMemo, useState } from "react";
+import { BookOpen, Library, Plus, Search, Settings2 } from "lucide-react";
+import type { Course, SessionDetail, SessionSummary } from "../api.ts";
+import { Link } from "../lib/router.ts";
 import { cn } from "../lib/cn.ts";
-import { Button } from "./Button.tsx";
 import { Input } from "./Input.tsx";
+import { SegmentedControl } from "./SegmentedControl.tsx";
 
-type SidebarProps = {
-  courses: Course[];
-  open: boolean;
-  onToggle: () => void;
-  onSelectSession: (id: string) => void;
-  onNewSession: (course: Course | null, goal?: string) => void;
-  onSettings: () => void;
-  sessions: SessionSummary[];
-  loading: boolean;
-  search: string;
-  onSearchChange: (value: string) => void;
-  activeSessionId: string | null;
-};
+type Filter = "teaching" | "practice" | "all";
 
 export function Sidebar({
   courses,
-  open,
-  onToggle,
-  onSelectSession,
-  onNewSession,
-  onSettings,
   sessions,
+  details,
   loading,
-  search,
-  onSearchChange,
   activeSessionId,
-}: SidebarProps) {
-  const searchRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  onNavigate,
+}: {
+  courses: Course[];
+  sessions: SessionSummary[];
+  details: Record<string, SessionDetail>;
+  loading: boolean;
+  activeSessionId: string | null;
+  onNavigate?: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
 
-  const filtered = sessions.filter(
-    (s) =>
-      !search ||
-      s.course.toLowerCase().includes(search.toLowerCase()) ||
-      s.goal.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return sessions.filter((session) => {
+      const practice = isPractice(session.goal);
+      if (filter === "teaching" && practice) return false;
+      if (filter === "practice" && !practice) return false;
+      if (!query) return true;
+      const course = courses.find((item) => item.code === session.course);
+      return (
+        session.goal.toLowerCase().includes(query) ||
+        session.course.toLowerCase().includes(query) ||
+        (course?.title.toLowerCase().includes(query) ?? false)
+      );
+    });
+  }, [courses, filter, search, sessions]);
 
   return (
-    <aside
-      className={cn(
-        "shrink-0 overflow-hidden duration-200 border-r border-border-subtle bg-surface flex h-full flex-col z-20",
-        open ? "w-72" : "w-0",
-      )}
-      aria-hidden={!open}
-    >
-      {/* Wordmark band */}
-      <div className="shrink-0 flex items-center justify-between border-b border-border-subtle px-4 py-3">
-        <div className="flex items-center gap-2">
-          <img src="/icon.svg" alt="" aria-hidden="true" className="size-7 rounded-lg" />
-          <span className="font-prose text-sm font-semibold tracking-tight">Hilum</span>
-        </div>
+    <div className="flex h-full min-h-0 flex-col bg-surface">
+      <div className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border-subtle px-3">
+        <img src="/icon.svg" alt="" aria-hidden="true" className="size-6 rounded-control" />
+        <span className="type-body-sm font-semibold tracking-tight text-text">Hilum</span>
       </div>
 
-      {/* New session */}
-      <div className="shrink-0 mx-3 mb-2 flex flex-col gap-1">
-        <button
-          type="button"
-          onClick={() => onNewSession(null)}
-          className="flex w-full items-center gap-2 rounded-control border border-border-subtle bg-surface min-h-11 px-2 py-2 text-xs text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
+      <div className="shrink-0 space-y-2 p-3">
+        <Link
+          to="/"
+          onClick={onNavigate}
+          className="type-body-sm flex min-h-11 items-center gap-2 rounded-control border border-border-subtle px-3 font-medium text-text hover:bg-surface-2"
         >
-          <PlusIcon className="size-3" />
+          <Plus aria-hidden="true" className="size-5" />
           New session
-        </button>
-      </div>
+        </Link>
 
-      {/* Search */}
-      <div className="shrink-0 mx-3 mb-2 flex items-center gap-2">
-        <span className="text-xs font-mono uppercase tracking-wider text-text-muted/70">Sessions</span>
-        <div className="relative flex-1">
-          <SearchIcon
-            className="pointer-events-none absolute left-1.5 top-1/2 size-3 -translate-y-1/2 text-text-muted/70"
+        <div className="relative">
+          <Search
             aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted"
           />
           <Input
-            ref={searchRef}
             value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search…"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search sessions"
             aria-label="Search sessions"
-            className="min-h-11 rounded-control border border-border-strong bg-surface px-8 text-xs focus:border-primary focus:outline-none placeholder:text-text-muted/60"
+            className="pl-9"
           />
         </div>
+
+        <SegmentedControl
+          label="Session type"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: "teaching", label: "Teaching" },
+            { value: "practice", label: "Practice" },
+            { value: "all", label: "All" },
+          ]}
+          className="flex w-full"
+        />
       </div>
 
-      {/* Session list */}
-      <div
-        ref={listRef}
-        className="flex-1 min-h-0 overflow-y-auto p-2"
-      >
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <p className="type-label px-2 py-2 text-text-muted">Sessions</p>
         {loading ? (
-          <div className="px-2 py-4 text-xs text-text-muted">Loading…</div>
+          <p className="type-body-sm px-2 py-3 text-text-muted">Loading sessions…</p>
         ) : filtered.length === 0 ? (
-          <div className="px-2 py-4 text-xs text-text-muted">
-            {search.trim() ? "No sessions match." : "No sessions yet."}
-          </div>
+          <p className="type-body-sm px-2 py-3 text-text-muted">
+            {search.trim()
+              ? "No sessions match that search."
+              : filter === "all"
+                ? "No sessions yet. Start with a goal above."
+                : `No ${filter} sessions yet.`}
+          </p>
         ) : (
-          filtered.map((s) => {
-            const course = courses.find((c) => c.code === s.course || c.title === s.course);
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => onSelectSession(s.id)}
-                aria-current={activeSessionId === s.id ? "page" : undefined}
-                title={course?.title ?? s.course}
-                className={cn(
-                  "mb-0.5 flex w-full items-center gap-2 rounded-control border min-h-11 px-2 py-2 text-left text-sm transition-colors",
-                  activeSessionId === s.id
-                    ? "border-primary bg-primary/10 text-text"
-                    : "border-transparent text-text-muted hover:bg-surface-2 hover:text-text hover:border-border-subtle",
-                )}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-text">
-                    {course?.title ?? s.course}
-                  </span>
-                  <span className="block font-mono text-[10px] text-text-muted mt-0.5">
-                    {course?.code ?? s.course}
-                    {course ? " · " : ""}
-                    {relativeTime(s.startedAt)}
-                    {s.endedAt ? " · ended" : " · active"}
-                  </span>
-                </span>
-                <span className="shrink-0 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-border-subtle" />
-                </span>
-              </button>
-            );
-          })
+          <ul className="space-y-1">
+            {filtered.map((session) => {
+              const course = courses.find((item) => item.code === session.course);
+              const detail = details[session.id];
+              const title = sessionTitle(session.goal);
+              const status = statusFor(session, detail);
+              return (
+                <li key={session.id}>
+                  <Link
+                    to={`/sessions/${session.id}`}
+                    onClick={onNavigate}
+                    aria-current={activeSessionId === session.id ? "page" : undefined}
+                    title={`${title} — ${status}`}
+                    className={cn(
+                      "flex min-h-11 flex-col justify-center gap-1 rounded-control border px-3 py-2",
+                      activeSessionId === session.id
+                        ? "border-primary bg-primary-soft"
+                        : "border-transparent hover:border-border-subtle hover:bg-surface-2",
+                    )}
+                  >
+                    <span className="type-body-sm truncate font-medium text-text">{title}</span>
+                    <span className="type-meta truncate text-text-muted">
+                      {course?.code ?? session.course} · {relativeTime(session.startedAt)} ·{" "}
+                      {shortStatus(status)}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 
-      {/* Settings pinned to bottom */}
-      <div className="shrink-0 mt-auto px-3 pb-3 pt-1 border-t border-border-subtle">
-        <button
-          type="button"
-          onClick={onSettings}
-          className="flex items-center gap-2 rounded-control border border-transparent min-h-11 px-2 py-2 text-xs text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
+      <nav aria-label="Secondary" className="shrink-0 border-t border-border-subtle p-2">
+        <Link
+          to="/library"
+          onClick={onNavigate}
+          className="type-body-sm flex min-h-11 items-center gap-2 rounded-control px-2 font-medium text-text-muted hover:bg-surface-2 hover:text-text"
         >
-          <Settings2 className="size-3" />
+          <Library aria-hidden="true" className="size-5" />
+          Library
+        </Link>
+        <Link
+          to="/settings"
+          onClick={onNavigate}
+          className="type-body-sm flex min-h-11 items-center gap-2 rounded-control px-2 font-medium text-text-muted hover:bg-surface-2 hover:text-text"
+        >
+          <Settings2 aria-hidden="true" className="size-5" />
           Settings
-        </button>
-      </div>
-    </aside>
+        </Link>
+        <p className="type-meta mt-1 flex items-start gap-2 px-2 py-1 text-text-muted">
+          <BookOpen aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          Sessions are the product. Library is quiet.
+        </p>
+      </nav>
+    </div>
   );
+}
 
-  function relativeTime(timestamp: number): string {
-    const ms = Date.now() - timestamp;
-    if (ms < 60_000) return "just now";
-    const min = Math.floor(ms / 60_000);
-    if (min < 60) return `${min}m ago`;
-    const h = Math.floor(min / 60);
-    if (h < 24) return `${h}h ago`;
-    const d = Math.floor(h / 24);
-    if (d < 7) return `${d}d ago`;
-    const date = new Date(timestamp);
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const dd = String(date.getDate()).padStart(2, "0");
-    return `${date.getFullYear()}-${mm}-${dd}`;
+export function sessionTitle(goal: string): string {
+  const title = goal.replace(/^practice:\s*/i, "").trim();
+  return title || "Untitled session";
+}
+
+export function isPractice(goal: string): boolean {
+  return /^practice\b/i.test(goal.trim());
+}
+
+export function shortStatus(status: string): string {
+  switch (status) {
+    case "Waiting for your answer":
+      return "Waiting";
+    case "Agent working":
+      return "Working";
+    case "Agent connected":
+      return "Connected";
+    case "Agent not connected":
+      return "No agent";
+    default:
+      return status;
   }
 }
 
-export function SidebarToggle({
-  open,
-  onToggle,
-}: {
-  open: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <span className={cn("sidebar-motion lh-no-drag relative flex h-9 shrink-0 overflow-hidden duration-200", open ? "w-0 -mr-3" : "w-9 mr-0")}>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label={open ? "Close sidebar" : "Open sidebar"}
-        aria-hidden={open}
-        tabIndex={open ? -1 : 0}
-        onClick={onToggle}
-        className={cn(
-          "sidebar-motion duration-200",
-          open ? "pointer-events-none opacity-0" : "opacity-100",
-        )}
-      >
-        {open ? (
-          <PanelLeftCloseIcon className="size-4" />
-        ) : (
-          <PanelLeftOpenIcon className="size-4" />
-        )}
-      </Button>
-    </span>
-  );
+export function statusFor(summary: SessionSummary, detail?: SessionDetail): string {
+  if (summary.endedAt) return "Ended";
+  if (!detail) return "Active";
+  if (detail.activities.some((activity) => activity.status === "pending")) return "Waiting for your answer";
+  if (detail.agentConnected && detail.agentPreparing) return "Agent working";
+  if (detail.agentConnected) return "Agent connected";
+  return "Agent not connected";
+}
+
+export function relativeTime(timestamp: number): string {
+  const ms = Date.now() - timestamp;
+  if (ms < 60_000) return "just now";
+  const min = Math.floor(ms / 60_000);
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  const date = new Date(timestamp);
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${mm}-${dd}`;
 }

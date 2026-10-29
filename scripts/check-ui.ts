@@ -1,82 +1,106 @@
 import { chromium } from "playwright";
 
-const base = process.env.HILUM_URL ?? "http://127.0.0.1:4317";
+const port = process.env.PORT ?? "4747";
+const base = process.env.HILUM_URL ?? `http://127.0.0.1:${port}`;
 
 type Failure = string;
 const failures: Failure[] = [];
 const fail = (message: string) => failures.push(message);
 
-const browser = await chromium.launch({ headless: true });
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${base}${path}`, init);
+  if (!response.ok) throw new Error(`${path} -> ${response.status}`);
+  return (await response.json()) as T;
+}
+
+async function ensureSession(): Promise<{ id: string; goal: string }> {
+  const history = await api<{ id: string; goal: string }[]>("/api/sessions/history");
+  if (history[0]) return history[0];
+
+  const courses = await api<{ code: string }[]>("/api/courses");
+  const course = courses[0];
+  if (!course) throw new Error("no course in the vault; cannot check the session screen");
+  const created = await api<{ id: string; goal: string }>("/api/sessions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ course: course.code, goal: "UI check session" }),
+  });
+  return created;
+}
+
+const session = await ensureSession();
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
+});
 const page = await browser.newPage({ viewport: { width: 360, height: 800 } });
 
-try {
-  await page.goto(base, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("main");
-  await page.waitForTimeout(1500);
-
-  // 1. No horizontal overflow at 360px
+async function checkScreen(name: string, heading: string) {
+  await page.waitForTimeout(500);
   const size = await page.evaluate(() => ({
     scroll: document.documentElement.scrollWidth,
     width: window.innerWidth,
   }));
-  if (size.scroll > size.width + 1) fail(`Home: horizontal overflow ${size.scroll}/${size.width}`);
+  if (size.scroll > size.width + 1) fail(`${name}: horizontal overflow ${size.scroll}/${size.width}`);
 
-  // 2. Hamburger toggle exists
-  const hamburger = page.getByRole("button", { name: /Open sidebar|Close sidebar/ });
-  if ((await hamburger.count()) !== 1) fail(`Hamburger toggle: expected 1, found ${await hamburger.count()}`);
+  const visibleHeading = await page.getByRole("heading", { name: heading }).first().isVisible().catch(() => false);
+  if (!visibleHeading) fail(`${name}: missing visible heading "${heading}"`);
 
-  // 3. Open sidebar - check sessions list, settings pinned at bottom
-  await page.evaluate(() => {
-    const btn = document.querySelector('[aria-label="Open sidebar"]') as HTMLElement;
-    if (btn) btn.click();
-  });
-  await page.waitForTimeout(800);
+  const main = await page.locator("main#main").count();
+  if (main !== 1) fail(`${name}: expected one main landmark`);
+}
 
-  const sidebar = page.locator("aside");
-  if ((await sidebar.count()) !== 1) fail("Sidebar not found");
+async function openDrawer() {
+  await page.getByRole("button", { name: "Open sessions" }).click();
+  await page.waitForTimeout(200);
+  const dialog = page.getByRole("dialog", { name: "Sessions" });
+  if ((await dialog.count()) !== 1) {
+    fail("Drawer: did not open");
+  }
+  return dialog;
+}
 
-  // Check sidebar has settings at bottom
-  const settingsBtn = page.getByRole("button", { name: "Settings" });
-  if ((await settingsBtn.count()) !== 1) fail("Settings button not found in sidebar");
+try {
+  await page.goto(`${base}/`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("main#main");
+  await checkScreen("Home", "What do you want to learn?");
+  if ((await page.getByRole("button", { name: /Course|Choose a course/i }).count()) < 1) {
+    fail("Home: course chip is not a control");
+  }
 
-  // Check sidebar items exist (sessions list)
-  const sessionItems = page.locator('aside button');
-  const sessionCount = await sessionItems.count();
-  console.log(`Sidebar items: ${sessionCount}`);
-
-  // 4. Close sidebar
-  await page.evaluate(() => {
-    const btn = document.querySelector('[aria-label="Close sidebar"]') as HTMLElement;
-    if (btn) btn.click();
-  });
-  await page.waitForTimeout(300);
-
-  // 5. Re-open sidebar, then open Settings modal
-  await page.evaluate(() => {
-    const btn = document.querySelector('[aria-label="Open sidebar"]') as HTMLElement;
-    if (btn) btn.click();
-  });
-  await page.waitForTimeout(500);
-  await page.evaluate(() => {
-    const btns = Array.from(document.querySelectorAll('button'));
-    const settings = btns.find(b => b.textContent?.includes('Settings'));
-    if (settings) settings.click();
-  });
-  await page.waitForTimeout(800);
-
-  // Check modal opened
-  const dialog = page.locator('[role="dialog"]');
-  if ((await dialog.count()) !== 1) fail("Settings dialog not found");
-
-  // 6. Close settings
+  await openDrawer();
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(200);
+  if ((await page.getByRole("dialog", { name: "Sessions" }).count()) !== 0) {
+    fail("Drawer: Escape did not close it");
+  }
 
-  // 7. Check health API
-  const health = await (await fetch(`${base}/api/health`)).json() as any;
-  console.log(`Vault: ${health.vault}`);
-  console.log(`DB: ${health.db}`);
-  console.log(`Free disk: ${health.disk.freePercent}%`);
+  const sessionDrawer = await openDrawer();
+  await sessionDrawer.getByRole("link", { name: new RegExp(session.goal) }).first().click();
+  await page.waitForTimeout(800);
+  await checkScreen("Session", "Transcript");
+
+  const libraryDrawer = await openDrawer();
+  await libraryDrawer.getByRole("link", { name: "Library" }).click();
+  await checkScreen("Library", "Library");
+  if (!page.url().endsWith("/library")) fail(`Library: unexpected url ${page.url()}`);
+
+  const settingsDrawer = await openDrawer();
+  await settingsDrawer.getByRole("link", { name: "Settings" }).click();
+  await checkScreen("Settings", "Settings");
+
+  await page.getByRole("radio", { name: "Dark" }).click();
+  if ((await page.evaluate(() => document.documentElement.dataset.theme)) !== "dark") {
+    fail("Settings: dark theme did not apply");
+  }
+  await checkScreen("Settings (dark)", "Settings");
+  await page.getByRole("radio", { name: "Light" }).click();
+  if ((await page.evaluate(() => document.documentElement.dataset.theme)) !== "light") {
+    fail("Settings: light theme did not apply");
+  }
+
+  const health = await api<{ status: string }>("/api/health");
+  if (health.status !== "ok") fail("Health endpoint is not ok");
 } finally {
   await browser.close();
 }
@@ -85,4 +109,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL ${failure}`);
   process.exit(1);
 }
-console.log("ui check ok: 360px sidebar, settings modal, no overflow");
+console.log("ui check ok: home, session, library and settings at 360px");

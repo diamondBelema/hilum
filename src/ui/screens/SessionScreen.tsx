@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Timer } from "lucide-react";
-import { api, type SessionDetail, type SessionActivity } from "../api.ts";
-import { type Cite } from "../../server/questions/citations";
+import { api, type Course, type SessionDetail, type SessionActivity, type Cite } from "../api.ts";
 import { Button } from "../components/Button.tsx";
 import { Banner } from "../components/ui.tsx";
 import { ActivityRenderer } from "../components/ActivityRenderer.tsx";
+import { Composer, type ComposerMode } from "../components/Composer.tsx";
 import { Markdown } from "../Markdown.tsx";
 import { buildResponse, initialValues, missingAnswers } from "../lib/activity.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
@@ -18,11 +18,10 @@ type SessionScreenProps = {
 
 export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScreenProps) {
   const [session, setSession] = useState<SessionDetail | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [inputValue, setInputValue] = useState("");
   const [sending, setSending] = useState(false);
-  const composerRef = useRef<HTMLTextAreaElement>(null);
   const [renderErrorCount, setRenderErrorCount] = useState(0);
 
   // Fetch the session once on mount; keep it in sync via SSE instead of polling.
@@ -47,6 +46,20 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
     };
   }, [sessionId]);
 
+  // Load courses for the composer course chip.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .courses()
+      .then((list) => {
+        if (!cancelled) setCourses(list);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // SSE subscription for live session updates (replaces the 4-second full refetch).
   useEffect(() => {
     if (!session) return;
@@ -61,6 +74,8 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
     });
     return unsubscribe;
   }, [session?.id]);
+
+  const currentCourse = courses.find((c) => c.code === session?.course) ?? null;
 
   // Find the newest unanswered activity for the interactive area.
   const activity = session?.activities.find((a) => a.status === "pending") ?? null;
@@ -107,27 +122,24 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
     }
   }, [session, activity, values, activityStartedAt]);
 
-  const sendMessage = useCallback(async () => {
-    const text = inputValue.trim();
-    if (!text || sending) return;
-    setSending(true);
-    setError(null);
-    try {
-      await api.askAgent(sessionId, text);
-      setInputValue("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSending(false);
-    }
-  }, [sessionId, inputValue, sending]);
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      void sendMessage();
-    }
-  };
+  const sendMessage = useCallback(
+    (_course: Course, goal: string, _mode: ComposerMode) => {
+      const text = goal.trim();
+      if (!text || sending || !session) return;
+      setSending(true);
+      setError(null);
+      void api
+        .askAgent(sessionId, text)
+        .then(() => {
+          setSending(false);
+        })
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : String(err));
+          setSending(false);
+        });
+    },
+    [sessionId, sending, session],
+  );
 
   const reportRenderError = useCallback(
     (activityId: string, message: string) => {
@@ -219,7 +231,7 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
         )}
         {!loading && session && (
           <div className="space-y-4">
-            <h2 className="text-xs font-mono uppercase tracking-wider text-text-muted mb-2">
+            <h2 className="type-meta mb-2">
               Transcript
             </h2>
             {session.transcript.length === 0 && (
@@ -238,8 +250,8 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                         └─
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-text-muted mb-1">
-                          Agent<span className="font-mono text-[10px] text-text-muted ml-1">
+                        <p className="type-label mb-1">
+                          Agent<span className="type-meta ml-1">
                             · {msg.kind}{msg.unverified ? " · unverified" : ""}
                           </span>
                         </p>
@@ -256,7 +268,7 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                                     .then(() => {})
                                     .catch(() => {});
                                 }}
-                                className="inline-flex min-h-9 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 text-[12px] text-text-muted hover:border-primary/40 hover:text-text"
+                                className="inline-flex min-h-9 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 type-meta text-text-muted hover:border-primary/40 hover:text-text"
                               >
                                 {cite.note.split("/").slice(-1)[0]}
                                 {cite.anchor ? ` #${cite.anchor}` : ""}
@@ -264,7 +276,7 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                             ))}
                           </div>
                         )}
-                        <p className="mt-1 text-[11px] text-text-muted">
+                        <p className="type-meta mt-1">
                           {new Date(msg.createdAt).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -287,11 +299,11 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                         ▸
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-text-muted mb-1">
+                        <p className="type-label mb-1">
                           You
                         </p>
-                        <p className="text-sm text-text whitespace-pre-wrap">{req.text}</p>
-                        <p className="mt-1 text-[11px] text-text-muted">
+                        <p className="type-body whitespace-pre-wrap">{req.text}</p>
+                        <p className="type-meta mt-1">
                           {new Date(req.createdAt).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -315,8 +327,8 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-text truncate">{act.title}</p>
-                      <p className="mt-1 text-xs text-text-muted">
+                      <p className="type-heading truncate">{act.title}</p>
+                      <p className="type-meta mt-1">
                         {act.status} ·
                         {new Date(act.createdAt).toLocaleTimeString([], {
                           hour: "2-digit",
@@ -335,7 +347,7 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                                   .then(() => {})
                                   .catch(() => {});
                               }}
-                              className="inline-flex min-h-9 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 text-[12px] text-text-muted hover:border-primary/40 hover:text-text"
+                              className="inline-flex min-h-9 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 type-meta text-text-muted hover:border-primary/40 hover:text-text"
                             >
                               {cite.note.split("/").slice(-1)[0]}
                               {cite.anchor ? ` #${cite.anchor}` : ""}
@@ -382,7 +394,7 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                   )}
 
                   {isPending && missingAnswers(act.spec, values).length > 0 && (
-                    <p className="mt-2 text-xs text-warning">
+                    <p className="type-meta mt-2 text-warning">
                       Still needed: {missingAnswers(act.spec, values).join(", ")}.
                     </p>
                   )}
@@ -395,31 +407,12 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
 
       {/* Composer pinned at bottom */}
       <div className="border-t border-border-subtle bg-surface p-3">
-        <div className="flex items-end gap-2">
-          <textarea
-            ref={composerRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Type to ask the agent…"
-            rows={1}
-            className="flex-1 min-h-[44px] rounded-control border border-border-strong bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
-          />
-          <Button
-            variant="default"
-            onClick={sendMessage}
-            disabled={!inputValue.trim() || sending || !session}
-            loading={sending}
-          >
-            Send
-          </Button>
-        </div>
-        {session && !session.agentConnected && (
-          <p className="mt-1 text-[11px] text-text-muted">
-            No agent connected. Your message is queued and will be delivered when an agent connects
-            over MCP.
-          </p>
-        )}
+        <Composer
+          courses={courses}
+          selectedCourse={currentCourse}
+          onSelectCourse={() => {}}
+          onStart={sendMessage}
+        />
       </div>
     </div>
   );

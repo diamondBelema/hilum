@@ -124,7 +124,7 @@ export function Settings({ open, onClose }: SettingsProps) {
             </span>
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="icon-xs" onClick={() => setTokenMasked(token ? token : "")}>
-                <span className="font-mono text-[10px]" aria-hidden="true">{token ? "show" : "hide"}</span>
+                <span className="font-mono text-xs" aria-hidden="true">{token ? "show" : "hide"}</span>
               </Button>
               <Button variant="ghost" size="icon-xs" onClick={regenerateToken}>Regenerate</Button>
             </div>
