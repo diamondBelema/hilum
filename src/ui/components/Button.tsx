@@ -4,30 +4,27 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/cn.ts";
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "type-body-sm inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-control font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
   {
     variants: {
       variant: {
         default: "bg-primary text-on-primary hover:bg-primary/90",
         primary: "bg-primary text-on-primary hover:bg-primary/90",
-        destructive:
-          "bg-incorrect text-white hover:bg-incorrect/90 focus-visible:ring-incorrect/20",
+        destructive: "bg-incorrect text-on-primary hover:bg-incorrect/90",
         outline:
-          "border bg-bg shadow-xs hover:bg-surface-2 hover:text-text dark:border-border-strong dark:bg-surface/30 dark:hover:bg-surface-2",
-        secondary:
-          "bg-surface-2 text-text hover:bg-surface-2/80",
-        ghost:
-          "hover:bg-surface-2 hover:text-text dark:hover:bg-surface-2/50",
-        link: "text-primary underline-offset-4 hover:underline",
+          "border border-border-strong bg-surface text-text hover:bg-surface-2",
+        secondary: "bg-surface-2 text-text hover:bg-surface",
+        ghost: "text-text hover:bg-surface-2",
+        link: "text-primary underline underline-offset-4 hover:no-underline",
       },
       size: {
         default: "h-11 px-4 py-2 has-[>svg]:px-3",
-        xs: "h-11 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-5",
-        sm: "h-11 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5",
-        lg: "h-12 rounded-md px-6 has-[>svg]:px-4",
+        xs: "type-meta h-11 gap-1 px-2 has-[>svg]:px-1.5",
+        sm: "h-11 gap-2 px-3 has-[>svg]:px-2",
+        lg: "h-12 px-6 has-[>svg]:px-4",
         icon: "size-11",
-        "icon-xs": "size-11 rounded-md [&_svg:not([class*='size-'])]:size-5",
-        "icon-sm": "size-10",
+        "icon-xs": "size-11 [&_svg:not([class*='size-'])]:size-5",
+        "icon-sm": "size-11",
         "icon-lg": "size-12",
       },
     },

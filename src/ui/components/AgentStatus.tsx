@@ -79,9 +79,9 @@ export function AgentStatus({ sessionId }: { sessionId: string | null }) {
       </button>
       <Popover
         open={open}
-        onClose={() => {
+        onClose={(reason) => {
           setOpen(false);
-          triggerRef.current?.focus();
+          if (reason === "escape") triggerRef.current?.focus();
         }}
         labelledBy={labelId}
         initialFocusRef={copyRef}

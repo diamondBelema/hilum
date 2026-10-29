@@ -378,7 +378,7 @@ function Cloze({
               }}
               disabled={disabled}
               aria-label={`Blank ${current + 1}`}
-              className="min-h-10 w-40 rounded-control border border-border bg-bg px-2 text-base focus:border-primary focus:outline-none"
+              className="min-h-10 w-40 rounded-control border border-border-subtle bg-bg px-2 text-base"
             />
           );
         })}
@@ -509,7 +509,7 @@ function Theory({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         rows={6}
-        className="reading mt-3 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+        className="reading mt-3 w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
         placeholder="Write your answer…"
       />
     </div>
@@ -585,7 +585,7 @@ function Predict({
         onChange={(event) => onChange(event.target.value)}
         rows={3}
         placeholder="Commit to a prediction first…"
-        className="reading mt-3 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+        className="reading mt-3 w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
       />
       {shown ? (
         <div className="reading mt-3 rounded-control border border-correct/30 bg-correct-soft p-3 text-sm text-text">
@@ -627,7 +627,7 @@ function ShortAnswer({
         onChange={(event) => onChange(event.target.value)}
         rows={3}
         placeholder="Type your answer…"
-        className="reading mt-3 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+        className="reading mt-3 w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
       />
       {revealed && modelAnswer && (
         <div className="mt-3 rounded-control border border-correct/30 bg-correct-soft p-3 text-sm text-text">
@@ -679,7 +679,7 @@ function Matching({
                 value={value[pair.left] ?? ""}
                 onChange={(event) => setMatch(pair.left, event.target.value)}
                 disabled={disabled}
-                className="min-h-10 flex-1 rounded-control border border-border-strong bg-surface px-2 text-sm focus:border-primary focus:outline-none"
+                className="min-h-10 flex-1 rounded-control border border-border-strong bg-surface px-2 text-sm"
               >
                 <option value="">—</option>
                 {rightIds.map((rightId) => (
@@ -846,7 +846,7 @@ function Calculation({
           onChange={(event) => onChange(event.target.value === "" ? null : Number(event.target.value))}
           disabled={disabled || revealed}
           placeholder="0"
-          className="min-h-10 w-48 rounded-control border border-border bg-bg px-2 text-sm focus:border-primary focus:outline-none"
+          className="min-h-10 w-48 rounded-control border border-border-subtle bg-bg px-2 text-sm"
         />
         {tolerance !== undefined && numeric !== null && (
           <span className="text-xs text-text-muted">± {tolerance}</span>
@@ -944,7 +944,7 @@ function TeachBack({
         onChange={(event) => onChange(event.target.value)}
         rows={5}
         placeholder="Explain as if teaching a peer…"
-        className="reading mt-3 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+        className="reading mt-3 w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
       />
       <p className={`mt-1 text-xs ${words < target ? "text-text-muted" : "text-correct"}`}>
         {words} / {target} words
@@ -984,7 +984,7 @@ function CaseVignette({
             }}
             rows={3}
             placeholder="Your answer…"
-            className="w-full rounded-control border border-border bg-bg p-2 text-sm focus:border-primary focus:outline-none"
+            className="w-full rounded-control border border-border-subtle bg-bg p-2 text-sm"
           />
         </div>
       ))}
@@ -1035,7 +1035,7 @@ function LabelDiagram({
             }}
             disabled={disabled}
             placeholder={label}
-            className="flex-1 min-h-10 rounded-control border border-border bg-bg px-2 text-sm focus:border-primary focus:outline-none"
+            className="flex-1 min-h-10 rounded-control border border-border-subtle bg-bg px-2 text-sm"
           />
         </div>
       ))}
@@ -1126,7 +1126,7 @@ function AnnotatedImage({
         onChange={(event) => onChange(event.target.value)}
         rows={4}
         placeholder="Describe what you see…"
-        className="reading w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+        className="reading w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
       />
     </div>
   );
@@ -1158,7 +1158,7 @@ function SpotterStation({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         placeholder="Name the structure…"
-        className="min-h-10 w-full rounded-control border border-border bg-surface px-3 text-sm focus:border-primary focus:outline-none"
+        className="min-h-10 w-full rounded-control border border-border-subtle bg-surface px-3 text-sm"
       />
     </div>
   );
@@ -1184,7 +1184,7 @@ function MuddyPoint({
         onChange={(event) => onChange(event.target.value)}
         rows={4}
         placeholder="What don't you understand yet?…"
-        className="reading w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+        className="reading w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
       />
     </div>
   );
@@ -1245,7 +1245,7 @@ function ThinkAloud({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         rows={4}
-        className="reading mt-2 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+        className="reading mt-2 w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
         placeholder="Say what you notice, what you rule out, and why…"
       />
       <p className={`mt-1 text-xs ${words < minWords ? "text-text-muted" : "text-correct"}`}>

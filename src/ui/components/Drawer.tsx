@@ -96,7 +96,7 @@ export function Drawer({
         aria-modal="true"
         aria-label={label}
         className={cn(
-          "relative flex h-dvh w-72 max-w-[85vw] flex-col border-r border-border-subtle bg-surface shadow-popover",
+          "relative flex h-dvh w-72 max-w-[85vw] flex-col border-r border-border-subtle bg-surface",
           className,
         )}
       >

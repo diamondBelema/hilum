@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseRoute } from "../src/ui/lib/router.ts";
-import { isPractice, sessionTitle, statusFor } from "../src/ui/components/Sidebar.tsx";
+import { isPractice, sessionTitle, shortStatus, statusFor } from "../src/ui/components/Sidebar.tsx";
 import type { SessionDetail, SessionSummary } from "../src/ui/api.ts";
 
 describe("router", () => {
@@ -65,5 +65,13 @@ describe("session rows", () => {
       "Agent not connected",
     );
     expect(statusFor(base, undefined)).toBe("Active");
+  });
+
+  test("row meta uses a compact status that fits two lines", () => {
+    expect(shortStatus("Waiting for your answer")).toBe("Waiting");
+    expect(shortStatus("Agent working")).toBe("Working");
+    expect(shortStatus("Agent connected")).toBe("Connected");
+    expect(shortStatus("Agent not connected")).toBe("No agent");
+    expect(shortStatus("Ended")).toBe("Ended");
   });
 });

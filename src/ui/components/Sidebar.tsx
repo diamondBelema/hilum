@@ -99,7 +99,7 @@ export function Sidebar({
                 : `No ${filter} sessions yet.`}
           </p>
         ) : (
-          <ul className="space-y-0.5">
+          <ul className="space-y-1">
             {filtered.map((session) => {
               const course = courses.find((item) => item.code === session.course);
               const detail = details[session.id];
@@ -113,7 +113,7 @@ export function Sidebar({
                     aria-current={activeSessionId === session.id ? "page" : undefined}
                     title={`${title} — ${status}`}
                     className={cn(
-                      "flex min-h-11 flex-col justify-center gap-0.5 rounded-control border px-2.5 py-2",
+                      "flex min-h-11 flex-col justify-center gap-1 rounded-control border px-3 py-2",
                       activeSessionId === session.id
                         ? "border-primary bg-primary-soft"
                         : "border-transparent hover:border-border-subtle hover:bg-surface-2",

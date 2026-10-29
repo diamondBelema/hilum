@@ -18,7 +18,7 @@ export function SegmentedControl<T extends string>({
       role="radiogroup"
       aria-label={label}
       className={cn(
-        "inline-flex min-w-0 items-center gap-0.5 rounded-control border border-border-strong bg-surface p-0.5",
+        "inline-flex min-w-max items-center rounded-control border border-border-strong bg-surface p-0",
         className,
       )}
     >
@@ -32,7 +32,7 @@ export function SegmentedControl<T extends string>({
             aria-checked={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              "type-meta min-h-11 min-w-0 flex-1 whitespace-nowrap rounded-[6px] px-1 font-medium",
+              "type-meta min-h-11 min-w-fit flex-1 whitespace-nowrap rounded-control px-2 font-medium",
               selected ? "bg-primary-soft text-primary" : "text-text-muted hover:bg-surface-2 hover:text-text",
             )}
           >

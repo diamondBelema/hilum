@@ -11,7 +11,7 @@ export function Popover({
   children,
 }: {
   open: boolean;
-  onClose: () => void;
+  onClose: (reason: "escape" | "outside") => void;
   labelledBy: string;
   role?: "dialog" | "listbox";
   initialFocusRef?: RefObject<HTMLElement | null>;
@@ -26,12 +26,12 @@ export function Popover({
     if (!open) return;
     initialFocusRef?.current?.focus();
     const onPointerDown = (event: PointerEvent) => {
-      if (!panelRef.current?.contains(event.target as Node)) closeRef.current();
+      if (!panelRef.current?.contains(event.target as Node)) closeRef.current("outside");
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        closeRef.current();
+        closeRef.current("escape");
       }
     };
     document.addEventListener("pointerdown", onPointerDown);
