@@ -203,6 +203,18 @@ function migrate(db: Db): void {
 
     CREATE INDEX IF NOT EXISTS agent_requests_session ON agent_requests(session_id, status);
 
+    CREATE TABLE IF NOT EXISTS agent_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'say',
+      text TEXT NOT NULL,
+      cites_json TEXT NOT NULL DEFAULT '[]',
+      unverified INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS agent_messages_session ON agent_messages(session_id, created_at);
+
     CREATE TABLE IF NOT EXISTS concepts (
       id TEXT PRIMARY KEY,
       course TEXT NOT NULL,
@@ -250,6 +262,14 @@ function migrate(db: Db): void {
   }
   if (!questionColumns.some((column) => column.name === "verified_at")) {
     db.exec("ALTER TABLE questions ADD COLUMN verified_at INTEGER");
+  }
+
+  const messageColumns = db.query("PRAGMA table_info(agent_messages)").all() as { name: string }[];
+  if (!messageColumns.some((column) => column.name === "cites_json")) {
+    db.exec("ALTER TABLE agent_messages ADD COLUMN cites_json TEXT NOT NULL DEFAULT '[]'");
+  }
+  if (!messageColumns.some((column) => column.name === "unverified")) {
+    db.exec("ALTER TABLE agent_messages ADD COLUMN unverified INTEGER NOT NULL DEFAULT 0");
   }
 
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(

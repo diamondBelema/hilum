@@ -89,6 +89,13 @@ export type SessionDetail = {
   activity: SessionActivity | null;
   activities: SessionActivity[];
   requests: { id: number; text: string; status: string; createdAt: number }[];
+  messages: { id: number; kind: string; text: string; cites: Cite[]; unverified: boolean; createdAt: number }[];
+  transcript: {
+    kind: "activity" | "message" | "request";
+    id: string | number;
+    createdAt: number;
+    data: SessionActivity | { id: number; kind: string; text: string; cites: Cite[]; unverified: boolean; createdAt: number } | { id: number; text: string; status: string; createdAt: number };
+  }[];
   evidenceCount: number;
 };
 
@@ -144,7 +151,7 @@ export class SessionService {
     this.db.query("UPDATE sessions SET agent_seen_at = ? WHERE id = ?").run(Date.now(), id);
   }
 
-  async start(course: string, goal = "learn", actor: "agent" | "app" = "agent"): Promise<SessionDetail> {
+  async start(course: string, goal = "learn", actor: "agent" | "app" = "app"): Promise<SessionDetail> {
     if (!course.trim()) throw new SessionError("course is required");
     const exists = (await this.vault.listCourses()).some((item) => item.code === course);
     if (!exists) throw new SessionError(`course not found: ${course}`);
@@ -191,6 +198,8 @@ export class SessionService {
     const evidence = this.db
       .query("SELECT COUNT(*) AS count FROM evidence WHERE session_id = ?")
       .get(id) as { count: number };
+    const messages = this.messages(row.id);
+    const transcript = this.transcript(row.id);
     const agentSeenAt = row.agent_seen_at;
     const unseenResponse = rows.some((item) => item.status === "answered" && item.response_seen === 0);
     const openRequests = requests.some((item) => item.status === "open");
@@ -213,6 +222,8 @@ export class SessionService {
         status: item.status,
         createdAt: item.created_at,
       })),
+      messages,
+      transcript,
       evidenceCount: evidence.count,
     };
   }
@@ -366,6 +377,104 @@ export class SessionService {
         .run(id, sessionId);
     }
   }
+
+  activities(sessionId: string): SessionActivity[] {
+    this.sessionRow(sessionId);
+    const rows = this.db
+      .query("SELECT * FROM activities WHERE session_id = ? ORDER BY created_at ASC")
+      .all(sessionId) as ActivityRow[];
+    return rows.map(toActivity);
+  }
+
+  say(
+    sessionId: string,
+    text: string,
+    kind = "say",
+    cites: Cite[] = [],
+    unverified = false,
+  ): { id: number; text: string; kind: string; cites: Cite[]; unverified: boolean; createdAt: number } {
+    const session = this.sessionRow(sessionId);
+    if (session.ended_at) throw new SessionError("session has ended");
+    const clean = text.trim();
+    if (!clean) throw new SessionError("message is empty");
+    if (clean.length > 2000) throw new SessionError("message is too long (max 2000 characters)");
+    let normalized: Cite[] = [];
+    if (cites && cites.length > 0) {
+      try {
+        normalized = validateCites(this.vault, cites);
+      } catch (err) {
+        throw new SessionError(err instanceof Error ? err.message : String(err));
+      }
+    }
+    const now = Date.now();
+    const result = this.db
+      .query(
+        "INSERT INTO agent_messages (session_id, kind, text, cites_json, unverified, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(sessionId, kind, clean, JSON.stringify(normalized), unverified ? 1 : 0, now);
+    this.touch(sessionId);
+    this.events.publish({
+      type: "activity",
+      course: session.course,
+      sessionId,
+      activityId: "",
+      state: "agent_message",
+      at: now,
+    });
+    return { id: Number(result.lastInsertRowid), text: clean, kind, cites: normalized, unverified: unverified ? true : false, createdAt: now };
+  }
+
+  messages(sessionId: string): {
+    id: number;
+    kind: string;
+    text: string;
+    cites: Cite[];
+    unverified: boolean;
+    createdAt: number;
+  }[] {
+    this.sessionRow(sessionId);
+    const rows = this.db
+      .query(
+        "SELECT * FROM agent_messages WHERE session_id = ? ORDER BY created_at ASC",
+      )
+      .all(sessionId) as {
+        id: number;
+        session_id: string;
+        kind: string;
+        text: string;
+        cites_json: string;
+        unverified: number;
+        created_at: number;
+      }[];
+    return rows.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      text: row.text,
+      cites: JSON.parse(row.cites_json ?? "[]"),
+      unverified: row.unverified === 1,
+      createdAt: row.created_at,
+    }));
+  }
+
+  transcript(sessionId: string): SessionDetail["transcript"] {
+    this.sessionRow(sessionId);
+    const items: SessionDetail["transcript"] = [];
+
+    for (const act of this.messages(sessionId)) {
+      items.push({ kind: "message", id: act.id, createdAt: act.createdAt, data: act });
+    }
+    for (const req of this.requests(sessionId)) {
+      items.push({ kind: "request", id: req.id, createdAt: req.createdAt, data: req });
+    }
+    for (const act of this.activities(sessionId)) {
+      items.push({ kind: "activity", id: act.id, createdAt: act.createdAt, data: act });
+    }
+
+    return items.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+  }
+
 
   renderError(sessionId: string, activityId: string, message: string): void {
     const session = this.sessionRow(sessionId);
@@ -560,6 +669,7 @@ export class SessionService {
     const evidence = this.db
       .query("SELECT COUNT(*) AS count FROM evidence WHERE session_id = ?")
       .get(sessionId) as { count: number };
+    const messages = this.messages(sessionId);
     const clean = summary.trim();
     const date = new Date(session.started_at).toISOString().slice(0, 10);
     const path = `courses/${session.course}/sessions/${date}-${session.id}.md`;
@@ -595,6 +705,13 @@ export class SessionService {
       ).map((row) => {
         const spec = parseSpec(row);
         return `- ${spec.title ?? spec.components[0]?.type ?? "Activity"} (${row.status})`;
+      }),
+      "",
+      "## Agent messages",
+      "",
+      ...messages.map((msg) => {
+        const cites = msg.cites.length ? ` (${msg.cites.map((c) => c.note).join(", ")})` : "";
+        return `- [${msg.kind}] ${msg.text}${cites}`;
       }),
       "",
     ].join("\n");
