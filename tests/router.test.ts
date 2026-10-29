@@ -42,6 +42,8 @@ const detail: SessionDetail = {
   activity: null,
   activities: [],
   requests: [],
+  messages: [],
+  transcript: [],
   evidenceCount: 0,
 };
 

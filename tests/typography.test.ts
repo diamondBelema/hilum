@@ -7,8 +7,6 @@ const UI_ROOT = join(import.meta.dir, "../src/ui");
 // Files owned by another workstream. Each entry names the person/workstream
 // that will remove it once that file is redesigned.
 const ALLOWLIST = new Map<string, string>([
-  // Removed by WP2 (server and transcript work) when SessionScreen is rebuilt.
-  ["screens/SessionScreen.tsx", "WP2"],
   // Reader text size is a user preference, applied inline on purpose.
   ["screens/Reader.tsx", "Library/reader owner"],
 ]);

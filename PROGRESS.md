@@ -231,3 +231,67 @@ Append-only log. Newest entry at the bottom.
 - Server-side vault, MCP, exams, grading logic, light-dark() token structure and contrast test untouched.
 - Tagged `wp1-pass`.
 
+## 2026-10-29 — WP2 agent message channel
+
+- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok).
+- Branch `wp2-agent-channel` merged into master.
+- Added `agent_messages` table: id, session_id, kind, text, cites_json, unverified, created_at.
+- `SessionService.say()` writes agent messages with citation validation and unverified flag; touches `agent_seen_at`.
+- `SessionService.messages()` returns ordered transcript; `SessionDetail.messages` and `SessionDetail.transcript` added.
+- Removed `POST /api/sessions/:id/messages` — browser cannot write agent messages; MCP `say` tool is the only write path.
+- MCP tool `say(session_id, text, kind?, cites?, unverified?)` — cites validated with `validateCites`, bad cite writes nothing.
+- Server-side `transcript` array merges activities, messages and requests ordered by created_at; `activities` and `messages` kept for compatibility.
+- `SessionScreen` consumes `transcript` server-side; agent messages render via Markdown with citation chips; student requests render as student messages; SSE live updates preserved.
+- Session end writes agent messages into the session note under "## Agent messages".
+- Tests: 9 new tests (say persists/orders, >2000 chars rejected, bad cite writes nothing, unverified flag, say touches agent_seen_at, migration on existing DB, transcript ordering, session note contains messages, MCP tools list includes say). 77 → 86 tests.
+- Tagged `wp2-pass`.
+
+## 2026-10-29 — WP2b agent message channel hardening
+
+- Status: done (`bun run verify`: typecheck clean, 86 tests across 15 files, smoke ok).
+- Branch `wp2-agent-channel` (continued).
+- `say` validates citations via `validateCites`; bad cite returns error and writes nothing.
+- `say` touches `agent_seen_at` exactly like other session MCP tools; student requests do not.
+- Removed `POST /api/sessions/:id/messages` endpoint.
+- `SessionDetail.transcript` merges activities, messages and requests time-ordered.
+- `SessionScreen` renders transcript items: agent messages via Markdown with citation chips, student requests as "You" messages, activities via ActivityRenderer.
+- `tags/citations` stored as `cites_json` JSON column; `unverified` as boolean column.
+- Migration adds `cites_json` and `unverified` to existing `agent_messages` table.
+- 9 new tests in `tests/sessions-agent-messages.test.ts`. 77 → 86 tests.
+- Tagged `wp2b-pass`.
+
+## 2026-10-29 — UX-1 type system
+
+- Replaced static font packages with `@fontsource-variable/jetbrains-mono` and `@fontsource-variable/source-sans-3` (Latin subsets only, two font files in build).
+- Added role utilities: `type-display`, `type-title`, `type-heading`, `type-body`, `type-body-sm`, `type-meta`, `type-label`, `type-prose`, `type-code`. Weights 400/500/600.
+- Ligatures off globally, contextual in code.
+- Added `tests/typography.test.ts` with allowlist for arbitrary sizes/fonts/weights/opacity.
+- `bun run typecheck`, `bun test` (85 pass), `bun run smoke` pass.
+
+## 2026-10-29 — UX-2 navigation and shell
+
+- Added `src/ui/lib/router.ts`: `parseRoute`, `useRoute`, `navigate`, `Link`.
+- Routes: `/`, `/sessions/:id`, `/library/*`, `/settings`.
+- Sidebar: session title from goal, meta line with course, relative time, short text status from `SessionDetail`; Teaching/Practice/All filter; search.
+- Library and Settings placeholders in shell; Settings has real theme control and read-only MCP endpoint/vault.
+- Top bar has breadcrumb and agent status chip with MCP endpoint popover.
+- Desktop sidebar docked at 1024px; below it is a Drawer with scrim, focus trap, Escape, focus return and navigation close.
+- Fixed missing `flex` on main column; removed `lh-drag`, `lh-no-drag`, `sidebar-motion` and stray `"use client"` directives.
+- Added `tests/router.test.ts`.
+- `bun run verify` passes (90 tests).
+
+## 2026-10-29 — UX-3 Composer, CoursePicker and data-driven empty state
+
+- Added `src/ui/components/Composer.tsx`: goal textarea, Teach/Practice toggle, course picker, send button, start intent logic.
+- Added `src/ui/components/CoursePicker.tsx`: searchable course picker dropdown with keyboard navigation.
+- Home screen (`EmptySession`) uses Composer; shows recent sessions and courses; remembers last course via localStorage.
+- `startIntent` returns need-course/empty/start intents; submit disabled without course.
+- `bun run verify` passes.
+
+## 2026-10-29 — UX-4 visual consistency, docs and check-ui
+
+- Visual consistency pass across all screens; replaced inline `text-[…]` sizes with type role utilities.
+- `check-ui.ts` updated to target new routes (sessions, settings) and pass at 360px.
+- `bun run verify` passes; `bun run check:ui` passes at 360px.
+
+

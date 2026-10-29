@@ -596,7 +596,18 @@ export function createApp(deps: AppDeps = {}) {
   app.get("/_design", async (c) => c.html(await Bun.file(paths.uiIndex).text()));
 
   app.use("/*", serveStatic({ root: paths.uiDist }));
-  app.get("*", serveStatic({ path: paths.uiIndex }));
+  app.get("*", async (c) => {
+    const path = c.req.path;
+    if (
+      path.startsWith("/api/") ||
+      path.startsWith("/mcp") ||
+      path.startsWith("/assets/") ||
+      /\.\w+$/.test(path)
+    ) {
+      return c.json({ error: "not found" }, 404);
+    }
+    return c.html(await Bun.file(paths.uiIndex).text());
+  });
 
   return { app, config, db, vault, indexer, questions, papers, runner, grading, sessions, concepts };
 }

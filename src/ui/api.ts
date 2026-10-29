@@ -1,5 +1,3 @@
-import { type Cite } from "../server/questions/citations.ts";
-
 export type Course = {
   code: string;
   title: string;
@@ -312,6 +310,7 @@ export type ActivityComponent = {
 };
 
 export type ActivityCite = { note: string; anchor?: string; quote?: string };
+export type Cite = { note: string; anchor?: string; quote?: string };
 
 export type ActivitySpec = {
   title?: string;
