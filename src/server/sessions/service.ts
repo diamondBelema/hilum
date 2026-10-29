@@ -89,6 +89,7 @@ export type SessionDetail = {
   activity: SessionActivity | null;
   activities: SessionActivity[];
   requests: { id: number; text: string; status: string; createdAt: number }[];
+  messages: { id: number; kind: string; text: string; createdAt: number }[];
   evidenceCount: number;
 };
 
@@ -191,6 +192,7 @@ export class SessionService {
     const evidence = this.db
       .query("SELECT COUNT(*) AS count FROM evidence WHERE session_id = ?")
       .get(id) as { count: number };
+    const messages = this.messages(row.id);
     const agentSeenAt = row.agent_seen_at;
     const unseenResponse = rows.some((item) => item.status === "answered" && item.response_seen === 0);
     const openRequests = requests.some((item) => item.status === "open");
@@ -213,6 +215,7 @@ export class SessionService {
         status: item.status,
         createdAt: item.created_at,
       })),
+      messages,
       evidenceCount: evidence.count,
     };
   }
@@ -365,6 +368,55 @@ export class SessionService {
         .query("UPDATE agent_requests SET status = 'delivered' WHERE id = ? AND session_id = ?")
         .run(id, sessionId);
     }
+  }
+
+  say(
+    sessionId: string,
+    text: string,
+    kind = "say",
+  ): { id: number; text: string; kind: string; createdAt: number } {
+    const session = this.sessionRow(sessionId);
+    if (session.ended_at) throw new SessionError("session has ended");
+    const clean = text.trim();
+    if (!clean) throw new SessionError("message is empty");
+    if (clean.length > 2000) throw new SessionError("message is too long (max 2000 characters)");
+    const now = Date.now();
+    const result = this.db
+      .query(
+        "INSERT INTO agent_messages (session_id, kind, text, created_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(sessionId, kind, clean, now);
+    this.touch(sessionId);
+    this.events.publish({
+      type: "activity",
+      course: session.course,
+      sessionId,
+      activityId: "",
+      state: "agent_message",
+      at: now,
+    });
+    return { id: Number(result.lastInsertRowid), text: clean, kind, createdAt: now };
+  }
+
+  messages(sessionId: string): {
+    id: number;
+    kind: string;
+    text: string;
+    createdAt: number;
+  }[] {
+    this.sessionRow(sessionId);
+    const rows = this.db
+      .query(
+        "SELECT * FROM agent_messages WHERE session_id = ? ORDER BY created_at ASC",
+      )
+      .all(sessionId) as {
+        id: number;
+        session_id: string;
+        kind: string;
+        text: string;
+        created_at: number;
+      }[];
+    return rows.map((row) => ({ id: row.id, kind: row.kind, text: row.text, createdAt: row.created_at }));
   }
 
   renderError(sessionId: string, activityId: string, message: string): void {

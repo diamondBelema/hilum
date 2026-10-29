@@ -203,6 +203,16 @@ function migrate(db: Db): void {
 
     CREATE INDEX IF NOT EXISTS agent_requests_session ON agent_requests(session_id, status);
 
+    CREATE TABLE IF NOT EXISTS agent_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'say',
+      text TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS agent_messages_session ON agent_messages(session_id, created_at);
+
     CREATE TABLE IF NOT EXISTS concepts (
       id TEXT PRIMARY KEY,
       course TEXT NOT NULL,

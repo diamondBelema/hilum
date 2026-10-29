@@ -360,6 +360,7 @@ export type SessionDetail = {
   activity: SessionActivity | null;
   activities: SessionActivity[];
   requests: AgentRequest[];
+  messages: { id: number; kind: string; text: string; createdAt: number }[];
   evidenceCount: number;
 };
 
@@ -627,6 +628,12 @@ export const api = {
     ),
   askAgent: (id: string, text: string) =>
     sendJson<AgentRequest>(`/api/sessions/${encodeURIComponent(id)}/requests`, "POST", { text }),
+  say: (id: string, text: string, kind?: string) =>
+    sendJson<{ id: number; kind: string; text: string; createdAt: number }>(
+      `/api/sessions/${encodeURIComponent(id)}/messages`,
+      "POST",
+      { text, kind },
+    ),
   bankActivity: (activityId: string, tags: string[] = []) =>
     sendJson<{ path: string; id: string }>(
       `/api/activities/${encodeURIComponent(activityId)}/bank`,

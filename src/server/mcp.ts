@@ -689,6 +689,26 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
   );
 
   server.registerTool(
+    "say",
+    {
+      description:
+        "Send a message to the student in the live session. Use it to speak directly, explain, probe, or coach. The message appears in the session transcript.",
+      inputSchema: {
+        session_id: z.string().min(1),
+        text: z.string().min(1).max(2000),
+        kind: z.enum(["say", "teach", "probe", "coach"]).default("say"),
+      },
+    },
+    async ({ session_id, text, kind }) => {
+      try {
+        return json(sessions.say(session_id, text, kind));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "bank_activity",
     {
       description: "Save a session activity as a reusable, cited item in the vault and return its path.",

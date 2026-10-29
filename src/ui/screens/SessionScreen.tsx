@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Timer } from "lucide-react";
-import { api, type SessionDetail } from "../api.ts";
+import { api, type SessionDetail, type SessionActivity } from "../api.ts";
 import { Button } from "../components/Button.tsx";
 import { Banner } from "../components/ui.tsx";
 import { ActivityRenderer } from "../components/ActivityRenderer.tsx";
@@ -220,17 +220,47 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
             <h2 className="text-xs font-mono uppercase tracking-wider text-text-muted mb-2">
               Transcript
             </h2>
-            {session.activities.length === 0 && (
+            {session.activities.length === 0 && session.messages.length === 0 && (
               <p className="text-text-muted">No activities yet. Type below to start.</p>
             )}
-            {session.activities.map((act) => {
+            {buildTranscript(session).map((item, index) => {
+              if (item.kind === "message") {
+                const msg = item.data;
+                return (
+                  <div
+                    key={`msg-${msg.id}`}
+                    className="rounded-control border border-border-subtle bg-surface-2 p-3 text-sm flex flex-col gap-2"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="shrink-0 mt-0.5 font-mono text-xs text-primary">
+                        └─
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-text-muted mb-1">
+                          Agent<span className="font-mono text-[10px] text-text-muted ml-1">
+                            · {msg.kind}
+                          </span>
+                        </p>
+                        <p className="text-sm text-text whitespace-pre-wrap">{msg.text}</p>
+                        <p className="mt-1 text-[11px] text-text-muted">
+                          {new Date(msg.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              const act = item.data;
               const isPending = act.status === "pending" && act.id === activity?.id;
               const showRenderError = act.renderError && act.id === activity?.id;
               return (
                 <div
                   key={act.id}
                   className={cn(
-                    "rounded-control border p-3 text-sm",
+                    "rounded-control border p-3 text-sm flex flex-col gap-2",
                     isPending ? "border-primary bg-primary/5" : "border-border-subtle bg-surface",
                   )}
                 >
@@ -268,7 +298,7 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                   </div>
 
                   {showRenderError && (
-                    <div className="mt-3 rounded-control border border-incorrect/40 bg-incorrect-soft p-3 text-sm text-incorrect">
+                    <div className="rounded-control border border-incorrect/40 bg-incorrect-soft p-3 text-sm text-incorrect">
                       This activity could not be displayed. The agent has been told.
                     </div>
                   )}
@@ -283,7 +313,9 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                         next[index] = value;
                         setValues(next);
                       }}
-                      disabled={!isPending || submitting}
+                      disabled={
+                        act.status !== "pending" || act.id !== activity?.id || submitting
+                      }
                       onOpenNote={(path, anchor) => {
                         void api.note(path).catch(() => {});
                       }}
@@ -300,9 +332,9 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                     </p>
                   )}
 
-                  {isPending && missingAnswers(activity.spec, values).length > 0 && (
+                  {isPending && missingAnswers(act.spec, values).length > 0 && (
                     <p className="mt-2 text-xs text-warning">
-                      Still needed: {missingAnswers(activity.spec, values).join(", ")}.
+                      Still needed: {missingAnswers(act.spec, values).join(", ")}.
                     </p>
                   )}
                 </div>
@@ -341,6 +373,27 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
         )}
       </div>
     </div>
+  );
+}
+
+function buildTranscript(session: SessionDetail) {
+  const items: Array<{ kind: "activity"; data: SessionActivity } | { kind: "message"; data: { id: number; kind: string; text: string; createdAt: number } }> = [];
+
+  for (const act of session.activities) {
+    items.push({ kind: "activity", data: act });
+  }
+  for (const msg of session.messages) {
+    items.push({ kind: "message", data: msg });
+  }
+
+  return items.sort(
+    (a, b) =>
+      new Date(
+        a.kind === "activity" ? a.data.createdAt : a.data.createdAt,
+      ).getTime() -
+      new Date(
+        b.kind === "activity" ? b.data.createdAt : b.data.createdAt,
+      ).getTime(),
   );
 }
 
