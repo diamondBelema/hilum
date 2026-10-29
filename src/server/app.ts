@@ -525,13 +525,6 @@ export function createApp(deps: AppDeps = {}) {
     return c.json(sessions.request(c.req.param("id"), String(body.text ?? "")), 201);
   });
 
-  app.post("/api/sessions/:id/messages", async (c) => {
-    const body = await c.req.json<{ text?: string; kind?: string }>();
-    if (!body.text) return c.json({ error: "text is required" }, 400);
-    const result = sessions.say(c.req.param("id"), body.text, body.kind);
-    return c.json(result, 201);
-  });
-
   app.post("/api/sessions/:id/activities/:activityId/respond", async (c) => {
     const body = await c.req.json<{ response?: unknown; time_sec?: number }>();
     return c.json(

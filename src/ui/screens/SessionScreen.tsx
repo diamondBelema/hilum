@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Timer } from "lucide-react";
 import { api, type SessionDetail, type SessionActivity } from "../api.ts";
+import { type Cite } from "../../server/questions/citations";
 import { Button } from "../components/Button.tsx";
 import { Banner } from "../components/ui.tsx";
 import { ActivityRenderer } from "../components/ActivityRenderer.tsx";
+import { Markdown } from "../Markdown.tsx";
 import { buildResponse, initialValues, missingAnswers } from "../lib/activity.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
 import { cn } from "../lib/cn.ts";
@@ -220,12 +222,12 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
             <h2 className="text-xs font-mono uppercase tracking-wider text-text-muted mb-2">
               Transcript
             </h2>
-            {session.activities.length === 0 && session.messages.length === 0 && (
+            {session.transcript.length === 0 && (
               <p className="text-text-muted">No activities yet. Type below to start.</p>
             )}
-            {buildTranscript(session).map((item, index) => {
+            {session.transcript.map((item) => {
               if (item.kind === "message") {
-                const msg = item.data;
+                const msg = item.data as { id: number; kind: string; text: string; cites: Cite[]; unverified: boolean; createdAt: number };
                 return (
                   <div
                     key={`msg-${msg.id}`}
@@ -238,10 +240,30 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium text-text-muted mb-1">
                           Agent<span className="font-mono text-[10px] text-text-muted ml-1">
-                            · {msg.kind}
+                            · {msg.kind}{msg.unverified ? " · unverified" : ""}
                           </span>
                         </p>
-                        <p className="text-sm text-text whitespace-pre-wrap">{msg.text}</p>
+                        <Markdown body={msg.text} notePath="" onOpenNote={() => {}} />
+                        {msg.cites.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {msg.cites.map((cite) => (
+                              <button
+                                key={`${cite.note}-${cite.anchor}`}
+                                type="button"
+                                onClick={() => {
+                                  void api
+                                    .note(cite.note)
+                                    .then(() => {})
+                                    .catch(() => {});
+                                }}
+                                className="inline-flex min-h-9 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 text-[12px] text-text-muted hover:border-primary/40 hover:text-text"
+                              >
+                                {cite.note.split("/").slice(-1)[0]}
+                                {cite.anchor ? ` #${cite.anchor}` : ""}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <p className="mt-1 text-[11px] text-text-muted">
                           {new Date(msg.createdAt).toLocaleTimeString([], {
                             hour: "2-digit",
@@ -253,12 +275,39 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
                   </div>
                 );
               }
-              const act = item.data;
+              if (item.kind === "request") {
+                const req = item.data as { id: number; text: string; status: string; createdAt: number };
+                return (
+                  <div
+                    key={`req-${req.id}`}
+                    className="rounded-control border border-border-subtle bg-surface p-3 text-sm flex flex-col gap-2"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="shrink-0 mt-0.5 font-mono text-xs text-text-muted">
+                        ▸
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-text-muted mb-1">
+                          You
+                        </p>
+                        <p className="text-sm text-text whitespace-pre-wrap">{req.text}</p>
+                        <p className="mt-1 text-[11px] text-text-muted">
+                          {new Date(req.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              const act = item.data as SessionActivity;
               const isPending = act.status === "pending" && act.id === activity?.id;
               const showRenderError = act.renderError && act.id === activity?.id;
               return (
                 <div
-                  key={act.id}
+                  key={String(act.id)}
                   className={cn(
                     "rounded-control border p-3 text-sm flex flex-col gap-2",
                     isPending ? "border-primary bg-primary/5" : "border-border-subtle bg-surface",
@@ -373,27 +422,6 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
         )}
       </div>
     </div>
-  );
-}
-
-function buildTranscript(session: SessionDetail) {
-  const items: Array<{ kind: "activity"; data: SessionActivity } | { kind: "message"; data: { id: number; kind: string; text: string; createdAt: number } }> = [];
-
-  for (const act of session.activities) {
-    items.push({ kind: "activity", data: act });
-  }
-  for (const msg of session.messages) {
-    items.push({ kind: "message", data: msg });
-  }
-
-  return items.sort(
-    (a, b) =>
-      new Date(
-        a.kind === "activity" ? a.data.createdAt : a.data.createdAt,
-      ).getTime() -
-      new Date(
-        b.kind === "activity" ? b.data.createdAt : b.data.createdAt,
-      ).getTime(),
   );
 }
 

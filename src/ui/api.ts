@@ -1,3 +1,5 @@
+import { type Cite } from "../server/questions/citations.ts";
+
 export type Course = {
   code: string;
   title: string;
@@ -360,7 +362,13 @@ export type SessionDetail = {
   activity: SessionActivity | null;
   activities: SessionActivity[];
   requests: AgentRequest[];
-  messages: { id: number; kind: string; text: string; createdAt: number }[];
+  messages: { id: number; kind: string; text: string; cites: Cite[]; unverified: boolean; createdAt: number }[];
+  transcript: {
+    kind: "activity" | "message" | "request";
+    id: string | number;
+    createdAt: number;
+    data: SessionActivity | { id: number; kind: string; text: string; cites: Cite[]; unverified: boolean; createdAt: number } | { id: number; text: string; status: string; createdAt: number };
+  }[];
   evidenceCount: number;
 };
 
@@ -628,12 +636,6 @@ export const api = {
     ),
   askAgent: (id: string, text: string) =>
     sendJson<AgentRequest>(`/api/sessions/${encodeURIComponent(id)}/requests`, "POST", { text }),
-  say: (id: string, text: string, kind?: string) =>
-    sendJson<{ id: number; kind: string; text: string; createdAt: number }>(
-      `/api/sessions/${encodeURIComponent(id)}/messages`,
-      "POST",
-      { text, kind },
-    ),
   bankActivity: (activityId: string, tags: string[] = []) =>
     sendJson<{ path: string; id: string }>(
       `/api/activities/${encodeURIComponent(activityId)}/bank`,

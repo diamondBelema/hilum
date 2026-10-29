@@ -697,11 +697,21 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         session_id: z.string().min(1),
         text: z.string().min(1).max(2000),
         kind: z.enum(["say", "teach", "probe", "coach"]).default("say"),
+        cites: z
+          .array(
+            z.object({
+              note: z.string(),
+              anchor: z.string().optional(),
+              quote: z.string().optional(),
+            })
+          )
+          .optional(),
+        unverified: z.boolean().default(false),
       },
     },
-    async ({ session_id, text, kind }) => {
+    async ({ session_id, text, kind, cites, unverified }) => {
       try {
-        return json(sessions.say(session_id, text, kind));
+        return json(sessions.say(session_id, text, kind, cites, unverified));
       } catch (err) {
         return fail(err);
       }
