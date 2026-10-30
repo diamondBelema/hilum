@@ -167,7 +167,6 @@ export function GraphScreen({
 
   const nodes = view?.nodes ?? [];
   const edges = view?.edges ?? [];
-  const root = nodes.find((node) => node.id === rootId) ?? nodes[0] ?? null;
   const drawerOpen = Boolean(selectedId && detail);
 
   const loadDetail = useCallback(
@@ -233,8 +232,8 @@ export function GraphScreen({
     [search, nodes, loadDetail],
   );
 
-  // Filtered node set for "frontier only" and 300-cap show-all
-  const filterOnly = "frontier";
+  // Keep the graph useful by default; Frontier has its own focused list view.
+  const filterOnly = mode === "frontier" ? "frontier" : null;
   const cappedNodes = useMemo(() => {
     let list = nodes;
     if (filterOnly === "frontier") {
@@ -248,7 +247,6 @@ export function GraphScreen({
     if (list.length > 300) {
       const hidden = list.length - 300;
       list = list.slice(0, 300);
-      // Attach a hidden marker so the canvas can show "+N hidden"
       return list;
     }
     return list;
@@ -333,7 +331,15 @@ export function GraphScreen({
 
       {/* Canvas area (full bleed) */}
       <div ref={containerRef} className="flex-1 min-h-0 relative overflow-hidden">
-        {containerSize.width > 0 && containerSize.height > 0 && (
+        {mode === "tree" ? (
+          <div className="h-full overflow-y-auto p-4 pt-28 sm:p-6 sm:pt-28">
+            <TreeView nodes={tree ?? []} onOpen={openNode} onStudy={onStudy} course={courseCode} />
+          </div>
+        ) : mode === "frontier" ? (
+          <div className="h-full overflow-y-auto p-4 pt-28 sm:p-6 sm:pt-28">
+            <FrontierView items={frontier ?? []} onOpen={openNode} onStudy={onStudy} course={courseCode} />
+          </div>
+        ) : containerSize.width > 0 && containerSize.height > 0 ? (
           <GraphCanvas
             nodes={cappedNodes}
             edges={edges}
@@ -347,7 +353,7 @@ export function GraphScreen({
             sessionId={showSessionOverlay ? routeSessionId : null}
             sessionConceptIds={sessionConceptIds}
           />
-        )}
+        ) : null}
       </div>
 
       {error && (
@@ -384,6 +390,9 @@ export function GraphScreen({
           onStudy={handleStudy}
           onSelectNode={openNode}
           onBack={() => setSelectedId(null)}
+          onOpenNote={(path, anchor) =>
+            navigate(`/library/notes?path=${encodeURIComponent(path)}${anchor ? `&anchor=${encodeURIComponent(anchor)}` : ""}`)
+          }
           sessions={detailSessions}
         />
       )}
@@ -405,6 +414,7 @@ function ConceptDrawerPanel({
   onStudy,
   onSelectNode,
   onBack,
+  onOpenNote,
   sessions,
 }: {
   open: boolean;
@@ -415,6 +425,7 @@ function ConceptDrawerPanel({
   onStudy: (concept: ConceptDetail) => void;
   onSelectNode: (node: ConceptSummary) => void;
   onBack: () => void;
+  onOpenNote: (path: string, anchor?: string) => void;
   sessions: Array<{
     id: string;
     course: string;
@@ -432,9 +443,9 @@ function ConceptDrawerPanel({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-50 flex justify-end">
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 z-0 bg-black/50"
         aria-hidden="true"
         onClick={onClose}
       />
@@ -443,7 +454,7 @@ function ConceptDrawerPanel({
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className="relative flex h-[75dvh] w-full max-w-[560px] flex-col border-r border-border-subtle bg-surface text-text"
+        className="relative z-10 flex h-full w-full max-w-[560px] flex-col border-l border-border-subtle bg-surface text-text shadow-popover"
       >
         <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
           <button
@@ -486,25 +497,24 @@ function ConceptDrawerPanel({
                 {concept.cites.map((cite, index) => (
                   <li
                     key={`${cite.note}-${index}`}
-                    className="flex min-h-10 items-start gap-2 rounded-control border border-border-subtle bg-surface-2 px-3 py-2 cursor-pointer hover:bg-surface hover:border-primary/40"
-                    onClick={() => {
-                      void api
-                        .note(cite.note)
-                        .then(() => {})
-                        .catch(() => {});
-                    }}
                   >
-                    <span className="min-w-0 flex-1">
-                      <span className="block type-body-sm font-medium text-text">
-                        {cite.note}
-                      </span>
-                      {cite.anchor && (
-                        <span className="mt-0.5 block type-meta text-text-muted">
-                          #{cite.anchor}
+                    <button
+                      type="button"
+                      onClick={() => onOpenNote(cite.note, cite.anchor)}
+                      className="flex min-h-11 w-full items-start gap-2 rounded-control border border-border-subtle bg-surface-2 px-3 py-2 text-left hover:border-primary/40 hover:bg-surface"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block type-body-sm font-medium text-text">
+                          {cite.note}
                         </span>
-                      )}
-                    </span>
-                    <Copy aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-text-muted" />
+                        {cite.anchor && (
+                          <span className="mt-0.5 block type-meta text-text-muted">
+                            #{cite.anchor}
+                          </span>
+                        )}
+                      </span>
+                      <Copy aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-text-muted" />
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -827,4 +837,3 @@ function FrontierView({
     </div>
   );
 }
-
