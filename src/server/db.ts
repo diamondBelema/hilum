@@ -172,6 +172,13 @@ function migrate(db: Db): void {
 
     CREATE INDEX IF NOT EXISTS sessions_course ON sessions(course, started_at);
 
+    CREATE TABLE IF NOT EXISTS session_focus (
+      id TEXT PRIMARY KEY DEFAULT 'focused',
+      session_id TEXT NOT NULL,
+      tab_id TEXT,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS activities (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
@@ -196,8 +203,9 @@ function migrate(db: Db): void {
     CREATE TABLE IF NOT EXISTS agent_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id TEXT NOT NULL,
+      client_id TEXT,
       text TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'open',
+      status TEXT NOT NULL DEFAULT 'sent',
       created_at INTEGER NOT NULL
     );
 
@@ -272,8 +280,32 @@ function migrate(db: Db): void {
     db.exec("ALTER TABLE agent_messages ADD COLUMN unverified INTEGER NOT NULL DEFAULT 0");
   }
 
+  const focusColumns = db.query("PRAGMA table_info(session_focus)").all() as { name: string }[];
+  if (!focusColumns.some((column) => column.name === "tab_id")) {
+    db.exec("ALTER TABLE session_focus ADD COLUMN tab_id TEXT");
+  }
+
+  const sessionColumns = db.query("PRAGMA table_info(sessions)").all() as { name: string }[];
+  if (!sessionColumns.some((column) => column.name === "title")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN title TEXT");
+  }
+
+  const requestColumns = db.query("PRAGMA table_info(agent_requests)").all() as { name: string }[];
+  if (!requestColumns.some((column) => column.name === "client_id")) {
+    db.exec("ALTER TABLE agent_requests ADD COLUMN client_id TEXT");
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_presence (
+      id TEXT PRIMARY KEY DEFAULT 'presence',
+      client_name TEXT,
+      last_seen_at INTEGER,
+      listening_until INTEGER
+    );
+  `);
+
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
-    "8",
+    "9",
   );
 }

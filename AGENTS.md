@@ -2,7 +2,7 @@
 
 Connect to the harness MCP server. Do this at the start of every session:
 
-1. Call `session_start(course)`. Read the mastery snapshot, due items and frontier it returns. Clear decay reviews before new material.
+1. Call `get_active_session()`. If it returns a session, continue where you left off. If it returns none, call `session_start(course)` with the course the student wants to learn about.
 2. Read `courses/<course>/INDEX.md`, then only the notes you need. Never read whole PDFs.
 3. Probe first: `push_activity` with 2 or 3 short questions, a confidence rating and a think-aloud box.
 4. Loop: `await_response`, diagnose, teach, push the next activity. Pick the format that fits the student's signals.
@@ -21,6 +21,7 @@ Connect to the harness MCP server. Do this at the start of every session:
 - Keep the student's cognitive load low: one activity at a time, short instructions, one clear next step.
 - Do not shame a wrong answer. Name the reasoning error and give one concrete next action.
 - The harness is local-first. Do not send vault content to third-party services.
+- No handler prop in `src/ui` may be `() => {}`. Every click/change/submit handler must do real work or be removed; stub handlers hide broken features from e2e tests.
 
 ## Activity components
 
@@ -29,7 +30,8 @@ Connect to the harness MCP server. Do this at the start of every session:
 ## Live session loop
 
 ```
-session_start(course)
+get_active_session()        # continue or start
+session_start(course)       # only if no active session
 read INDEX.md / relevant notes
 push_activity(session_id, spec)   # 2-3 probes, confidence + think-aloud
 await_response(session_id, 20)    # response, requests, render errors
@@ -40,3 +42,7 @@ session_end(session_id, summary)
 ```
 
 If `await_response` times out, call it again after teaching or after checking `get_agent_requests`. If an activity returns a render error, push a corrected replacement; never blame the student for a diagram failure.
+
+## MCP INSTRUCTIONS
+
+Always begin with `get_active_session` to learn which session the student has open. Use the returned `session_id` for all subsequent session tools. State the `session_id` you are working on in your first message to the student. The MCP endpoint is available at the URL shown in the app's "Connect an agent" panel.

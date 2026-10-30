@@ -168,20 +168,20 @@ export function Papers({ course, onBack }: { course: Course; onBack: () => void 
   return (
     <div className="max-w-4xl">
       <Button variant="ghost" className="px-2" onClick={onBack}>
-        <ChevronLeft aria-hidden="true" className="size-4" />
-        Question bank
+        <ChevronLeft aria-hidden="true" className="size-5" />
+        <span className="hidden sm:inline">Question bank</span>
       </Button>
 
       <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Exam papers</h1>
-          <p className="reading mt-1 text-sm text-text-muted">
+          <h1 className="type-title">Exam papers</h1>
+          <p className="reading mt-1 type-body-sm text-text-muted">
             {course.title} · built only from verified, cited questions.
           </p>
         </div>
         {view === "list" && (
           <Button variant="primary" onClick={() => setView("builder")}>
-            <LayoutGrid aria-hidden="true" className="size-4" />
+            <LayoutGrid aria-hidden="true" className="size-5" />
             Build a paper
           </Button>
         )}

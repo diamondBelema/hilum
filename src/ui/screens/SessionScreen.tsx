@@ -1,66 +1,133 @@
+import { ArrowLeft, ArrowRight, Check, Copy, MessageCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Timer } from "lucide-react";
-import { api, type Course, type SessionDetail, type SessionActivity, type Cite } from "../api.ts";
+import { Link } from "../lib/router.ts";
+import { api, type Course, type SessionDetail, type SessionActivity, type Cite, type ActivitySpec } from "../api.ts";
 import { Button } from "../components/Button.tsx";
 import { Banner } from "../components/ui.tsx";
 import { ActivityRenderer } from "../components/ActivityRenderer.tsx";
-import { Composer, type ComposerMode } from "../components/Composer.tsx";
 import { Markdown } from "../Markdown.tsx";
 import { buildResponse, initialValues, missingAnswers } from "../lib/activity.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
 import { cn } from "../lib/cn.ts";
+import { navigate } from "../lib/router.ts";
+import { Composer } from "../components/Composer.tsx";
+
+const INTERACTIVE_TYPES = new Set([
+  "mcq_single",
+  "mcq_multi",
+  "tf_multi",
+  "short_answer",
+  "cloze",
+  "matching",
+  "ordering",
+  "theory",
+  "calculation",
+  "confidence_rating",
+  "think_aloud",
+  "label_diagram",
+  "spotter_station",
+  "teach_back",
+  "case_vignette",
+  "muddy_point",
+  "spot_the_error",
+]);
+
+function isDisplayOnly(spec: ActivitySpec): boolean {
+  return !spec.components.some((component) => INTERACTIVE_TYPES.has(component.type));
+}
+
+function citeLabel(cite: Cite): string {
+  const noteTitle = (cite.note.split("/").slice(-1)[0] ?? cite.note).replace(/\.md$/, "").replace(/[-_]+/g, " ");
+  const heading = cite.anchor ? cite.anchor.replace(/^#/, "").replace(/[-_]+/g, " ") : "";
+  return heading ? `${noteTitle} · ${heading}` : noteTitle;
+}
+
+function specRepeatsTitle(act: SessionActivity): boolean {
+  const first = act.spec.components[0] as { type?: string; text?: string; title?: string; body?: string } | undefined;
+  if (!first) return false;
+  const text = String(first.text ?? first.title ?? first.body ?? "").replace(/^#+\s*/, "").trim().toLowerCase();
+  return text !== "" && text === act.title.trim().toLowerCase();
+}
 
 type SessionScreenProps = {
   sessionId: string;
   onClose: () => void;
-  onNewSession: (course: import("../api.ts").Course | null) => void;
+  onNewSession: (course: Course | null) => void;
+  onEndSession?: () => void;
+  onResume?: () => Promise<void> | void;
 };
 
-export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScreenProps) {
+function classifyError(err: unknown): { message: string; isNotFound: boolean; isNetwork: boolean } {
+  const message = err instanceof Error ? err.message : String(err);
+  const isNotFound = message.includes("404") || message.includes("no longer exists") || message.includes("not found");
+  const isNetwork = message.includes("Failed to fetch") || message.includes("network") || !message.includes("Request failed");
+  return { message, isNotFound, isNetwork };
+}
+
+export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, onResume }: SessionScreenProps) {
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; isNotFound: boolean; isNetwork: boolean } | null>(null);
+  const [focused, setFocused] = useState(false);
+  const [contextTag, setContextTag] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [renderErrorCount, setRenderErrorCount] = useState(0);
+  const [resuming, setResuming] = useState(false);
+  const [seenCount, setSeenCount] = useState(0);
 
-  // Fetch the session once on mount; keep it in sync via SSE instead of polling.
+  const [valuesByActivity, setValuesByActivity] = useState<Record<string, unknown[]>>({});
+  const valuesRef = useRef<Record<string, unknown[]>>({});
+  const [submittingByActivity, setSubmittingByActivity] = useState<Record<string, boolean>>({});
+
+  const [optimisticMessages, setOptimisticMessages] = useState<{ id: string; text: string; createdAt: number }[]>([]);
+
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [userScrolled, setUserScrolled] = useState(false);
+  const firstLoadRef = useRef(true);
+  const atBottomRef = useRef(true);
+
+  const [tabId] = useState(() => crypto.randomUUID());
+
   useEffect(() => {
+    setFocused(true);
     let cancelled = false;
+
+    void api.focusSession(sessionId, tabId);
+
     api
       .session(sessionId)
       .then((detail) => {
         if (!cancelled) {
           setSession(detail);
           setLoading(false);
+          initValues(detail);
+          atBottomRef.current = true;
+          firstLoadRef.current = true;
         }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(classifyError(err));
           setLoading(false);
         }
       });
     return () => {
+      setFocused(false);
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, tabId]);
 
-  // Load courses for the composer course chip.
   useEffect(() => {
     let cancelled = false;
-    api
-      .courses()
-      .then((list) => {
-        if (!cancelled) setCourses(list);
-      })
-      .catch(() => {});
+    api.courses().then((list) => {
+      if (!cancelled) setCourses(list);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // SSE subscription for live session updates (replaces the 4-second full refetch).
   useEffect(() => {
     if (!session) return;
     const id = session.id;
@@ -68,363 +135,478 @@ export function SessionScreen({ sessionId, onClose, onNewSession }: SessionScree
       if ((event.type === "activity" || event.type === "session") && event.sessionId === id) {
         void api
           .session(id)
-          .then((next) => setSession((current) => (current?.id === id ? next : current)))
+          .then((next) => {
+            setSession((current) => (current?.id === id ? next : current));
+            initValues(next);
+          })
           .catch(() => {});
       }
     });
     return unsubscribe;
   }, [session?.id]);
 
+  const initValues = (detail: SessionDetail) => {
+    setValuesByActivity((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const act of detail.activities) {
+        if (!current[act.id]) {
+          next[act.id] = initialValues(act.spec);
+          changed = true;
+        }
+      }
+      if (changed) valuesRef.current = next;
+      return changed ? next : current;
+    });
+  };
+
   const currentCourse = courses.find((c) => c.code === session?.course) ?? null;
 
-  // Find the newest unanswered activity for the interactive area.
-  const activity = session?.activities.find((a) => a.status === "pending") ?? null;
+  const ended = Boolean(session?.endedAt);
+  const connected = Boolean(session?.agentConnected);
+  const pendingActivities = session?.activities.filter((a) => a.status === "pending") ?? [];
+  const activeActivity = pendingActivities[0] ?? null;
+  const transcriptEmpty = session?.transcript.length === 0 && optimisticMessages.length === 0;
 
-  const [values, setValues] = useState<unknown[]>([]);
-  const [activityStartedAt, setActivityStartedAt] = useState<number | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const sessionFailed = Boolean(error) && !loading;
+  const sessionReady = Boolean(session) && !sessionFailed && !loading;
 
-  useEffect(() => {
-    if (!activity) return;
-    setValues(initialValues(activity.spec));
-    setActivityStartedAt(Date.now());
-  }, [activity?.id]);
+  const getValues = (activityId: string) => {
+    const act = session?.activities.find((a) => a.id === activityId);
+    return valuesRef.current[activityId] ?? valuesByActivity[activityId] ?? (act ? initialValues(act.spec) : []);
+  };
+  const setValues = (activityId: string, next: unknown[]) => {
+    setValuesByActivity((current) => {
+      const updated = { ...current, [activityId]: next };
+      valuesRef.current = updated;
+      return updated;
+    });
+  };
 
-  const respond = useCallback(async () => {
-    if (!session || !activity) return;
-    const missing = missingAnswers(activity.spec, values);
-    if (missing.length > 0) {
-      setError(`Still needed: ${missing.join(", ")}.`);
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const updated = await api.respondActivity(
-        session.id,
-        activity.id,
-        buildResponse(activity.spec, values),
-        Math.round((Date.now() - activityStartedAt!) / 1000),
-      );
-      setSession((current) =>
-        current
-          ? {
-              ...current,
-              activity: updated,
-              activities: [updated, ...current.activities.filter((item) => item.id !== updated.id)],
-            }
-          : current,
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [session, activity, values, activityStartedAt]);
+  const submitActivity = useCallback(
+    async (activity: SessionActivity) => {
+      const values = getValues(activity.id);
+      const spec = activity.spec;
+      const missing = missingAnswers(spec, values);
+      if (missing.length > 0) {
+        setError({ message: `Still needed: ${missing.join(", ")}.`, isNotFound: false, isNetwork: false });
+        return;
+      }
+      setSubmittingByActivity((current) => ({ ...current, [activity.id]: true }));
+      setError(null);
+      try {
+        const updated = await api.respondActivity(
+          session!.id,
+          activity.id,
+          buildResponse(spec, values),
+          0,
+        );
+        setSession((current) =>
+          current
+            ? {
+                ...current,
+                activity: updated,
+                activities: [updated, ...current.activities.filter((item) => item.id !== updated.id)],
+              }
+            : current,
+        );
+        setValues(activity.id, []);
+      } catch (err) {
+        setError(classifyError(err));
+      } finally {
+        setSubmittingByActivity((current) => ({ ...current, [activity.id]: false }));
+      }
+    },
+    [session?.id],
+  );
 
   const sendMessage = useCallback(
-    (_course: Course, goal: string, _mode: ComposerMode) => {
-      const text = goal.trim();
-      if (!text || sending || !session) return;
-      setSending(true);
-      setError(null);
-      void api
-        .askAgent(sessionId, text)
-        .then(() => {
-          setSending(false);
-        })
-        .catch((err) => {
-          setError(err instanceof Error ? err.message : String(err));
-          setSending(false);
-        });
+    async (text: string) => {
+      if (!session || !text.trim()) return;
+      const optimisticId = `opt-${Date.now()}`;
+      const body = contextTag ? `${contextTag} ${text.trim()}` : text.trim();
+      setOptimisticMessages((prev) => [...prev, { id: optimisticId, text: body, createdAt: Date.now() }]);
+      setContextTag(null);
+      try {
+        await api.askAgent(sessionId, body);
+        // Pull the stored request first, then drop the temporary row, so a message never shows twice.
+        const next = await api.session(sessionId).catch(() => null);
+        if (next) setSession((current) => (current?.id === sessionId ? next : current));
+      } finally {
+        setOptimisticMessages((prev) => prev.filter((item) => item.id !== optimisticId));
+      }
     },
-    [sessionId, sending, session],
+    [sessionId, session, contextTag],
   );
 
-  const reportRenderError = useCallback(
-    (activityId: string, message: string) => {
-      if (!session) return;
-      void api.renderError(session.id, activityId, message).catch(() => {});
-      setRenderErrorCount((n) => n + 1);
-      setError(`This activity could not be displayed. The agent has been told.`);
-    },
-    [session],
-  );
+  const resume = useCallback(async () => {
+    if (resuming) return;
+    setResuming(true);
+    try {
+      if (onResume) await onResume();
+      else {
+        await api.reopenSession(sessionId);
+        setSession(await api.session(sessionId));
+      }
+    } catch (err) {
+      setError(classifyError(err));
+    } finally {
+      setResuming(false);
+    }
+  }, [onResume, resuming, sessionId]);
+
+  const endpoint = `${window.location.origin}/mcp`;
+
+  const totalItems = (session?.transcript.length ?? 0) + optimisticMessages.length;
+  const jumpCount = userScrolled ? Math.max(0, totalItems - seenCount) : 0;
+
+  // Stay pinned to the bottom unless the reader scrolled up on purpose.
+  useEffect(() => {
+    if (!session) return;
+    if (firstLoadRef.current || atBottomRef.current) {
+      transcriptEndRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
+      firstLoadRef.current = false;
+      setSeenCount(totalItems);
+    }
+  }, [session, totalItems]);
+
+  const jumpToBottom = useCallback(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    atBottomRef.current = true;
+    setUserScrolled(false);
+    setSeenCount(totalItems);
+  }, [totalItems]);
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        if (activeActivity && !submittingByActivity[activeActivity.id]) {
+          void submitActivity(activeActivity);
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [activeActivity, submittingByActivity, submitActivity]);
 
   if (loading) {
     return (
-      <div className="max-w-3xl space-y-4">
+      <div className="max-w-3xl space-y-4 p-4">
         <Banner tone="info">Loading session…</Banner>
       </div>
     );
   }
 
+  if (sessionFailed) {
+    if (error!.isNetwork) {
+      return (
+        <div className="max-w-3xl space-y-4 p-4">
+          <Banner tone="error" action={
+            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          }>
+            Can't reach the Hilum server. Check that it is running.
+          </Banner>
+        </div>
+      );
+    }
+    if (error!.isNotFound) {
+      return (
+        <div className="max-w-3xl space-y-4 p-4">
+          <Banner tone="error" action={
+            <Link to="/" className="type-body-sm inline-flex min-h-11 items-center gap-2 font-medium">
+              Back to sessions
+              <ArrowRight aria-hidden="true" className="size-4" />
+            </Link>
+          }>
+            This session no longer exists.
+          </Banner>
+        </div>
+      );
+    }
+    return (
+      <div className="max-w-3xl space-y-4 p-4">
+        <Banner tone="error" action={
+          <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        }>
+          Something went wrong loading this session.
+          <details className="ml-2 mt-1 text-text-muted text-xs">
+            <summary className="cursor-pointer">Details</summary>
+            <p>{error!.message}</p>
+          </details>
+        </Banner>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* Session header */}
-      <header className="border-b border-border-subtle bg-surface px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onClose}
-            aria-label="Back to sessions"
-          >
-            <ArrowLeft aria-hidden="true" className="size-4" />
-          </Button>
-          <div>
-            {session && (
-              <>
-                <span className="block text-sm font-medium text-text truncate max-w-[200px]">
-                  {session.goal || "Session"}
-                </span>
-                <span className="block text-xs font-mono text-text-muted">
-                  {session.course}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => onNewSession(null)}>
-            New session
-          </Button>
-        </div>
-      </header>
-
-      {/* Agent status strip */}
-      {session && (
-        <div className="px-4 py-2 border-b border-border-subtle bg-surface-2/50 flex items-center gap-3">
-          <span
-            className={cn(
-              "flex items-center gap-1.5 rounded-control border px-2 py-1 text-xs",
-              !session.agentConnected
-                ? "border-border-subtle bg-surface-2 text-text-muted"
-                : session.agentPreparing
-                  ? "border-warning/40 bg-warning-soft text-warning"
-                  : "border-correct/30 bg-correct-soft text-correct",
-            )}
-          >
-            {!session.agentConnected ? (
-              <span className="text-text-muted" aria-label="Agent not connected">
-                ● Agent not connected
-              </span>
-            ) : session.agentPreparing ? (
-              <span className="text-warning" aria-label="Agent is preparing">
-                ● Agent is preparing… ({waitingSeconds(session)}s)
-              </span>
-            ) : (
-              <span className="text-correct" aria-label="Agent connected">
-                ● Agent connected
-              </span>
-            )}
-          </span>
-        </div>
-      )}
-
-      {/* Transcript area */}
-      <main className="flex-1 overflow-y-auto p-4 bg-bg">
-        {error && (
-          <div className="mb-4">
-            <Banner tone="error">{error}</Banner>
-          </div>
+    <div className="relative h-full w-full flex flex-col overflow-hidden bg-bg">
+      <div
+        className={cn(
+          "flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-2",
         )}
-        {!loading && session && (
-          <div className="space-y-4">
-            <h2 className="type-meta mb-2">
-              Transcript
-            </h2>
-            {session.transcript.length === 0 && (
-              <p className="text-text-muted">No activities yet. Type below to start.</p>
-            )}
-            {session.transcript.map((item) => {
-              if (item.kind === "message") {
-                const msg = item.data as { id: number; kind: string; text: string; cites: Cite[]; unverified: boolean; createdAt: number };
+        ref={scrollRef}
+        onScroll={() => {
+          const node = scrollRef.current;
+          if (!node) return;
+          const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
+          atBottomRef.current = atBottom;
+          setUserScrolled(!atBottom);
+          if (atBottom) setSeenCount(totalItems);
+        }}
+      >
+        <div className="mx-auto max-w-3xl space-y-4">
+          {session && (
+            <>
+              {transcriptEmpty && !connected && (
+                <div className="rounded-panel border border-border-subtle bg-surface p-5 type-body-sm text-text">
+                  <p className="font-medium">{session.goal}</p>
+                  <p className="mt-2 text-text-muted">
+                    Waiting for your agent. Your goal is saved and it will pick it up when it connects.
+                  </p>
+                  <div className="mt-4 rounded-control border border-border-subtle bg-surface-2 p-4 type-body-sm text-text">
+                    <p className="font-medium mb-2">Connect an agent</p>
+                    <p className="text-text-muted mb-3">
+                      Point any MCP client at this endpoint and call <code className="font-mono">get_active_session</code>, then follow <code className="font-mono">AGENTS.md</code>.
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <code className="type-code text-xs break-all truncate max-w-[260px] text-text">
+                        {endpoint}
+                      </code>
+                      <Button variant="secondary" size="sm" onClick={() => void navigator.clipboard.writeText(endpoint)}>
+                        {<Copy aria-hidden="true" className="size-4" />}
+                        Copy endpoint
+                      </Button>
+                    </div>
+                    <p className="mt-3 type-meta text-text-muted">
+                      Active session: <span className="font-mono">{session.id}</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {session.transcript.map((item) => {
+                if (item.kind === "message") {
+                  const msg = item.data as { id: number; kind: string; text: string; cites: Cite[]; unverified: boolean; createdAt: number };
+                  return (
+                    <div key={`msg-${msg.id}`} className="type-dense flex flex-col gap-2">
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="type-label mb-1">
+                            Agent <span className="type-meta ml-1">{msg.kind}{msg.unverified ? " · unverified" : ""}</span>
+                          </p>
+                          <Markdown body={msg.text} notePath={session?.course ? `courses/${session.course}` : ""} onOpenNote={(path, anchor) => navigate(`/library/notes?path=${encodeURIComponent(path)}${anchor ? `&anchor=${encodeURIComponent(anchor)}` : ""}`)} />
+                          {msg.cites.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {msg.cites.slice(0, 3).map((cite) => (
+                                <button
+                                  key={`${cite.note}-${cite.anchor}`}
+                                  type="button"
+                                  onClick={() => navigate(`/library/notes?path=${encodeURIComponent(cite.note)}${cite.anchor ? `&anchor=${encodeURIComponent(cite.anchor)}` : ""}`)}
+                                  className="inline-flex min-h-11 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 type-meta text-text-muted hover:border-primary/40 hover:text-text truncate max-w-[200px]"
+                                  title={citeLabel(cite)}
+                                >
+                                  {citeLabel(cite)}
+                                </button>
+                              ))}
+                              {msg.cites.length > 3 && (
+                                <button
+                                  type="button"
+                                  className="inline-flex min-h-11 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 type-meta text-text-muted hover:border-primary/40 hover:text-text truncate max-w-[200px]"
+                                  onClick={() => navigate(`/library/notes?path=${encodeURIComponent(msg.cites[3].note)}`)}
+                                >
+                                  +{msg.cites.length - 3} more
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                if (item.kind === "request") {
+                  const req = item.data as { id: number; text: string; status: string; createdAt: number };
+                  return (
+                    <div key={`req-${req.id}`} className="flex justify-end">
+                      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary-soft px-4 py-2.5">
+                        <p className="type-body whitespace-pre-wrap text-text">{req.text}</p>
+                      </div>
+                    </div>
+                  );
+                }
+                const act = item.data as SessionActivity;
+                const isPending = act.status === "pending";
+                const values = getValues(act.id);
+                const missing = missingAnswers(act.spec, values);
+                const displayOnly = isDisplayOnly(act.spec);
+                const submitting = Boolean(submittingByActivity[act.id]);
+                const answered = act.status === "answered";
+
                 return (
                   <div
-                    key={`msg-${msg.id}`}
-                    className="rounded-control border border-border-subtle bg-surface-2 p-3 text-sm flex flex-col gap-2"
+                    key={String(act.id)}
+                    className={cn(
+                      "rounded-panel border bg-surface p-4 flex flex-col gap-3",
+                      activeActivity?.id === act.id ? "border-l-4 border-border-subtle border-l-primary" : "border-border-subtle",
+                    )}
                   >
-                    <div className="flex items-start gap-3">
-                      <span className="shrink-0 mt-0.5 font-mono text-xs text-primary">
-                        └─
-                      </span>
+                    <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <p className="type-label mb-1">
-                          Agent<span className="type-meta ml-1">
-                            · {msg.kind}{msg.unverified ? " · unverified" : ""}
-                          </span>
-                        </p>
-                        <Markdown body={msg.text} notePath="" onOpenNote={() => {}} />
-                        {msg.cites.length > 0 && (
+                        {!specRepeatsTitle(act) && <p className="type-heading">{act.title}</p>}
+                        {act.cites.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1">
-                            {msg.cites.map((cite) => (
+                            {act.cites.slice(0, 3).map((cite) => (
                               <button
                                 key={`${cite.note}-${cite.anchor}`}
                                 type="button"
-                                onClick={() => {
-                                  void api
-                                    .note(cite.note)
-                                    .then(() => {})
-                                    .catch(() => {});
-                                }}
-                                className="inline-flex min-h-9 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 type-meta text-text-muted hover:border-primary/40 hover:text-text"
+                                onClick={() => navigate(`/library/notes?path=${encodeURIComponent(cite.note)}${cite.anchor ? `&anchor=${encodeURIComponent(cite.anchor)}` : ""}`)}
+                                className="inline-flex min-h-11 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 type-meta text-text-muted hover:border-primary/40 hover:text-text truncate max-w-[200px]"
+                                title={citeLabel(cite)}
                               >
-                                {cite.note.split("/").slice(-1)[0]}
-                                {cite.anchor ? ` #${cite.anchor}` : ""}
+                                {citeLabel(cite)}
                               </button>
                             ))}
+                            {act.cites.length > 3 && (
+                              <button
+                                type="button"
+                                className="inline-flex min-h-11 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 type-meta text-text-muted hover:border-primary/40 hover:text-text truncate max-w-[200px]"
+                                onClick={() => navigate(`/library/notes?path=${encodeURIComponent(act.cites[3].note)}`)}
+                              >
+                                +{act.cites.length - 3} more
+                              </button>
+                            )}
                           </div>
                         )}
-                        <p className="type-meta mt-1">
-                          {new Date(msg.createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
                       </div>
                     </div>
-                  </div>
-                );
-              }
-              if (item.kind === "request") {
-                const req = item.data as { id: number; text: string; status: string; createdAt: number };
-                return (
-                  <div
-                    key={`req-${req.id}`}
-                    className="rounded-control border border-border-subtle bg-surface p-3 text-sm flex flex-col gap-2"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="shrink-0 mt-0.5 font-mono text-xs text-text-muted">
-                        ▸
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="type-label mb-1">
-                          You
-                        </p>
-                        <p className="type-body whitespace-pre-wrap">{req.text}</p>
-                        <p className="type-meta mt-1">
-                          {new Date(req.createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
+
+                    {act.renderError && (
+                      <div className="rounded-control border border-incorrect/40 bg-incorrect-soft p-3 text-sm text-incorrect">
+                        This activity could not be displayed. The agent has been told.
                       </div>
-                    </div>
+                    )}
+
+                    {!act.renderError && isPending && !ended && (
+                      <ActivityRenderer
+                        activityId={act.id}
+                        spec={act.spec}
+                        values={values}
+                        onChange={(index, value) => {
+                          const next = [...values];
+                          next[index] = value;
+                          setValues(act.id, next);
+                          setError(null);
+                        }}
+                        disabled={submitting}
+                        onOpenNote={(path, anchor) => navigate(`/library/notes?path=${encodeURIComponent(path)}${anchor ? `&anchor=${encodeURIComponent(anchor)}` : ""}`)}
+                        onRenderError={(activityId, message) => {
+                          if (!session) return;
+                          void api.renderError(session.id, activityId, message).catch(() => {});
+                          setError({ message: `This activity could not be displayed. The agent has been told.`, isNotFound: false, isNetwork: false });
+                        }}
+                      />
+                    )}
+
+                    {!act.renderError && !isPending && ended && (
+                      <ActivityRenderer
+                        activityId={act.id}
+                        spec={act.spec}
+                        values={values}
+                        disabled
+                      />
+                    )}
+
+                    {missing.length > 0 && isPending && !ended && (
+                      <p className="type-meta text-warning">Still needed: {missing.join(", ")}.</p>
+                    )}
+
+                    {answered && (
+                      <div className="mt-2 rounded-control border border-correct/30 bg-correct-soft p-3 type-dense text-correct">
+                        <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                        <p className="inline ml-1">Answer sent — saved as evidence.</p>
+                      </div>
+                    )}
+
+                    {isPending && !ended && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button
+                          variant="primary"
+                          onClick={() => void submitActivity(act)}
+                          disabled={submitting || missing.length > 0}
+                          loading={submitting}
+                        >
+                          {displayOnly ? (
+                            <>Continue</>
+                          ) : (
+                            <>
+                              <Check aria-hidden="true" className="size-4" />
+                              Submit answer
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setContextTag(`About: ${act.title}`);
+                          }}
+                          disabled={!connected}
+                        >
+                          <MessageCircle aria-hidden="true" className="size-4" /> Ask agent
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
-              }
-              const act = item.data as SessionActivity;
-              const isPending = act.status === "pending" && act.id === activity?.id;
-              const showRenderError = act.renderError && act.id === activity?.id;
-              return (
-                <div
-                  key={String(act.id)}
-                  className={cn(
-                    "rounded-control border p-3 text-sm flex flex-col gap-2",
-                    isPending ? "border-primary bg-primary/5" : "border-border-subtle bg-surface",
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="type-heading truncate">{act.title}</p>
-                      <p className="type-meta mt-1">
-                        {act.status} ·
-                        {new Date(act.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                      {act.cites.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {act.cites.map((cite) => (
-                            <button
-                              key={`${cite.note}-${cite.anchor}`}
-                              type="button"
-                              onClick={() => {
-                                void api
-                                  .note(cite.note)
-                                  .then(() => {})
-                                  .catch(() => {});
-                              }}
-                              className="inline-flex min-h-9 items-center rounded-chip border border-border-subtle bg-surface px-2 py-1 type-meta text-text-muted hover:border-primary/40 hover:text-text"
-                            >
-                              {cite.note.split("/").slice(-1)[0]}
-                              {cite.anchor ? ` #${cite.anchor}` : ""}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+              })}
+
+              {optimisticMessages.map((msg) => (
+                <div key={msg.id} className="flex flex-col items-end gap-1">
+                  <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary-soft px-4 py-2.5">
+                    <p className="type-body whitespace-pre-wrap text-text">{msg.text}</p>
                   </div>
-
-                  {showRenderError && (
-                    <div className="rounded-control border border-incorrect/40 bg-incorrect-soft p-3 text-sm text-incorrect">
-                      This activity could not be displayed. The agent has been told.
-                    </div>
-                  )}
-
-                  {!showRenderError && (
-                    <ActivityRenderer
-                      activityId={act.id}
-                      spec={act.spec}
-                      values={isPending ? values : act.response?.components ?? []}
-                      onChange={(index, value) => {
-                        const next = [...values];
-                        next[index] = value;
-                        setValues(next);
-                      }}
-                      disabled={
-                        act.status !== "pending" || act.id !== activity?.id || submitting
-                      }
-                      onOpenNote={(path, anchor) => {
-                        void api.note(path).catch(() => {});
-                      }}
-                      onRenderError={reportRenderError}
-                    />
-                  )}
-
-                  {act.answeredAt && (
-                    <p className="mt-2 text-xs text-text-muted">
-                      Answered at {new Date(act.answeredAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  )}
-
-                  {isPending && missingAnswers(act.spec, values).length > 0 && (
-                    <p className="type-meta mt-2 text-warning">
-                      Still needed: {missingAnswers(act.spec, values).join(", ")}.
-                    </p>
-                  )}
+                  <span className="type-meta text-text-muted">Sending…</span>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </main>
+              ))}
 
-      {/* Composer pinned at bottom */}
-      <div className="border-t border-border-subtle bg-surface p-3">
-        <Composer
-          courses={courses}
-          selectedCourse={currentCourse}
-          onSelectCourse={() => {}}
-          onStart={sendMessage}
-        />
+              <div ref={transcriptEndRef} />
+            </>
+          )}
+        </div>
       </div>
+
+      {sessionReady && (
+        <div className="shrink-0 bg-bg px-4 pb-4 pt-2">
+          <Composer
+            view="session"
+            courses={courses}
+            currentCourse={currentCourse ?? (session ? ({ code: session.course } as Course) : null)}
+            sessionMode={session?.goal.toLowerCase().startsWith("practice") ? "practice" : "teach"}
+            onSend={(text) => sendMessage(text)}
+            sending={sending}
+            ended={ended}
+            onResume={resume}
+            resuming={resuming}
+            draftKey={`session:${sessionId}`}
+          />
+        </div>
+      )}
+
+      {!userScrolled || jumpCount === 0 ? null : (
+        <button
+          type="button"
+          onClick={jumpToBottom}
+          className="absolute bottom-28 right-6 z-40 rounded-control border border-border-subtle bg-surface px-4 py-2 type-body-sm text-text hover:bg-surface-2 shadow-popover"
+          aria-label={`New message${jumpCount > 0 ? ` (${jumpCount})` : ""}`}
+        >
+          New message{jumpCount > 0 ? ` (${jumpCount})` : ""}
+        </button>
+      )}
     </div>
   );
-}
-
-function waitingSeconds(session: SessionDetail): number {
-  const now = Date.now();
-  const base =
-    session.activity?.answeredAt ??
-    session.requests[0]?.createdAt ??
-    session.activity?.createdAt ??
-    session.startedAt ??
-    now;
-  return Math.max(0, Math.floor((now - base) / 1000));
 }

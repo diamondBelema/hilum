@@ -153,8 +153,8 @@ export function Questions({ courses }: { courses: Course[] }) {
     <div className={mode === "review" ? "max-w-6xl" : "max-w-4xl"}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Exams</h1>
-          <p className="reading mt-1 text-sm text-text-muted">
+          <h1 className="type-title">{mode === "review" ? "Review question" : "Question bank"}</h1>
+          <p className="reading mt-1 type-body-sm text-text-muted">
             {mode === "review"
               ? "Check the parsed question against its source, then mark it verified."
               : "The question bank and past-paper verification."}
@@ -292,16 +292,16 @@ function BankView({
       <section aria-label="Question bank progress" className="mt-6 rounded-panel border border-border-subtle bg-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="font-mono text-sm tabular-nums text-text">
+            <p className="type-body-sm tabular-nums text-text">
               {verified} of {total} verified
             </p>
-            <p className="mt-0.5 text-xs text-text-muted">
+            <p className="mt-0.5 type-meta text-text-muted">
               Unverified questions stay out of exam papers.
             </p>
           </div>
           {unverified > 0 && (
             <Button variant="primary" onClick={onQueue}>
-              <ListChecks aria-hidden="true" className="size-4" />
+              <ListChecks aria-hidden="true" className="size-5" />
               Review {plural(unverified, "question")}
             </Button>
           )}
@@ -349,7 +349,7 @@ function BankView({
                 type="button"
                 aria-pressed={status === value}
                 onClick={() => onStatus(value)}
-                className={`min-h-11 rounded-[calc(var(--radius-control)-2px)] px-3 text-xs font-semibold ${
+                className={`min-h-11 rounded-[calc(var(--radius-control)-2px)] px-3 type-body-sm font-medium ${
                   status === value ? "bg-primary text-on-primary" : "text-text-muted hover:bg-surface-2"
                 }`}
               >
@@ -382,10 +382,10 @@ function BankView({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <span className="text-sm font-semibold text-text">
+                    <span className="type-body-sm font-medium text-text">
                       {question.body.stem ?? question.body.prompt ?? question.id}
                     </span>
-                    <span className="font-mono text-xs text-text-muted">{question.id}</span>
+                    <span className="font-mono type-meta text-text-muted">{question.id}</span>
                   </span>
                   <span className="mt-1 flex flex-wrap gap-1.5">
                     <Chip>{TYPE_LABEL[question.type]}</Chip>
@@ -396,7 +396,7 @@ function BankView({
                     <Chip>{question.verified ? "Verified" : "Needs check"}</Chip>
                   </span>
                 </span>
-                <ChevronRight aria-hidden="true" className="mt-1 size-4 shrink-0 text-text-muted" />
+                <ChevronRight aria-hidden="true" className="mt-1 size-5 shrink-0 text-text-muted" />
               </button>
             </li>
           ))}
@@ -464,15 +464,15 @@ function ReviewView({
     <section className="mt-6" aria-label={`Review question ${question.id}`}>
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="ghost" className="px-2" onClick={onBack}>
-          <ChevronLeft aria-hidden="true" className="size-4" />
-          Question bank
+          <ChevronLeft aria-hidden="true" className="size-5" />
+          <span className="hidden sm:inline">Question bank</span>
         </Button>
-        <span className="ml-auto font-mono text-xs tabular-nums text-text-muted">
+        <span className="ml-auto font-mono type-meta text-text-muted tabular-nums">
           {verified} of {total} verified
         </span>
         <Button variant="secondary" onClick={onNext} disabled={!next}>
           Next unverified
-          <ChevronRight aria-hidden="true" className="size-4" />
+          <ChevronRight aria-hidden="true" className="size-5" />
         </Button>
       </div>
 
@@ -492,7 +492,7 @@ function ReviewView({
         <div>
           <div className="lg:hidden">
             <Button variant="secondary" onClick={() => setSourceOpen(true)}>
-              <FileText aria-hidden="true" className="size-4" />
+              <FileText aria-hidden="true" className="size-5" />
               View source
             </Button>
             <Sheet open={sourceOpen} title="Source" onClose={() => setSourceOpen(false)}>
@@ -511,20 +511,20 @@ function ReviewView({
           <div className="rounded-panel border border-border-subtle bg-surface p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="font-mono text-xs text-text-muted">{question.id}</p>
-                <h2 className="mt-1 text-base font-semibold">
+                <p className="type-meta text-text-muted">{question.id}</p>
+                <h2 className="mt-1 type-heading">
                   {TYPE_LABEL[question.type]}
                   {question.questionKind ? ` · ${question.questionKind}` : ""}
                 </h2>
               </div>
               {question.verified ? (
-                <span className="inline-flex items-center gap-1.5 rounded-chip border border-correct/40 bg-correct-soft px-2.5 py-1 text-xs font-semibold text-correct">
-                  <CheckCircle2 aria-hidden="true" className="size-4" />
+                <span className="inline-flex items-center gap-1.5 rounded-chip border border-correct/40 bg-correct-soft px-2.5 py-1 type-body-sm font-medium text-correct">
+                  <CheckCircle2 aria-hidden="true" className="size-5" />
                   Verified
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-chip border border-warning/40 bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning">
-                  <AlertTriangle aria-hidden="true" className="size-4" />
+                <span className="inline-flex items-center gap-1.5 rounded-chip border border-warning/40 bg-warning-soft px-2.5 py-1 type-body-sm font-medium text-warning">
+                  <AlertTriangle aria-hidden="true" className="size-5" />
                   Needs check
                 </span>
               )}

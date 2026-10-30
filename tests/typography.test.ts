@@ -9,6 +9,8 @@ const UI_ROOT = join(import.meta.dir, "../src/ui");
 const ALLOWLIST = new Map<string, string>([
   // Reader text size is a user preference, applied inline on purpose.
   ["screens/Reader.tsx", "Library/reader owner"],
+  // Reader size/leading are applied inline per DESIGN.md; the shell owns this.
+  ["App.tsx", "Shell/settings reader-prefs example"],
 ]);
 
 function files(dir: string): string[] {

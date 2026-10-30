@@ -221,10 +221,10 @@ export type QuestionInput = {
   source_paper?: string;
 };
 
-async function sendJson<T>(url: string, method: string, body: unknown): Promise<T> {
+async function sendJson<T>(url: string, method: string, body: unknown, headers: HeadersInit = {}): Promise<T> {
   const res = await fetch(url, {
     method,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -351,16 +351,23 @@ export type SessionDetail = {
   id: string;
   course: string;
   goal: string;
+  title: string | null;
   startedAt: number;
   endedAt: number | null;
   summary: string;
   notePath: string | null;
-  agentSeenAt: number | null;
+  agent: {
+    state: "listening" | "connected" | "idle" | "none";
+    clientName: string | null;
+    lastSeenAt: number | null;
+  };
   agentConnected: boolean;
   agentPreparing: boolean;
   activity: SessionActivity | null;
   activities: SessionActivity[];
   requests: AgentRequest[];
+  unreadUserMessages: number;
+  openRequests: AgentRequest[];
   messages: { id: number; kind: string; text: string; cites: Cite[]; unverified: boolean; createdAt: number }[];
   transcript: {
     kind: "activity" | "message" | "request";
@@ -379,6 +386,9 @@ export type SessionSummary = {
   endedAt: number | null;
   summary: string;
   notePath: string | null;
+  status: string;
+  pendingCount: number;
+  agentConnected: boolean;
 };
 
 export type MasteryState = "unseen" | "familiar" | "understood" | "mastered" | "decayed";
@@ -504,6 +514,15 @@ export const api = {
     sendJson<ServerSettings>("/api/settings", "POST", input),
   courses: () => getJson<Course[]>("/api/courses"),
   notes: (course: string) => getJson<NoteMeta[]>(`/api/courses/${encodeURIComponent(course)}/notes`),
+  notesTree: (course: string) =>
+    getJson<NoteMeta[]>(`/api/notes/tree?course=${encodeURIComponent(course)}`),
+  createNote: (input: { course: string; title: string; folder?: string }) =>
+    sendJson<{ path: string; bytes: number; mode: string }>("/api/notes", "POST", input),
+  saveNote: (input: { path: string; content: string; etag?: string }) => {
+    const headers: HeadersInit = { "content-type": "application/json" };
+    if (input.etag) headers["if-match"] = input.etag;
+    return sendJson<{ path: string; bytes: number; mode: string }>("/api/notes", "PUT", input, headers);
+  },
   note: (path: string) => getJson<NoteDetail>(`/api/note?path=${encodeURIComponent(path)}`),
   writeNote: (input: { path: string; content: string; mode?: "create" | "replace"; requestId?: string }) =>
     sendJson<{ path: string; bytes: number; mode: string }>("/api/note", "POST", input),
@@ -617,10 +636,29 @@ export const api = {
       `/api/sessions/active${course ? `?course=${encodeURIComponent(course)}` : ""}`,
     ),
   session: (id: string) => getJson<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}`),
-  startSession: (course: string, goal = "learn") =>
-    sendJson<SessionDetail>("/api/sessions", "POST", { course, goal }),
+  startSession: async (course: string, goal = "learn") => {
+    const res = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ course, goal }),
+    });
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as { error?: string; sessionId?: string };
+      const err = new Error(payload.error ?? `Request failed: ${res.status}`);
+      (err as { status?: number; sessionId?: string }).status = res.status;
+      (err as { status?: number; sessionId?: string }).sessionId = payload.sessionId;
+      throw err;
+    }
+    return res.json() as Promise<SessionDetail>;
+  },
   endSession: (id: string, summary: string) =>
     sendJson<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}/end`, "POST", { summary }),
+  reopenSession: (id: string) =>
+    sendJson<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}/reopen`, "POST", {}),
+  setSessionTitle: (id: string, title: string | null) =>
+    sendJson<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}`, "PATCH", { title }),
+  focusSession: (sessionId: string, tabId?: string) =>
+    sendJson<{ ok: boolean }>("/api/focus", "POST", { sessionId, tabId }),
   respondActivity: (id: string, activityId: string, response: ActivityResponse, timeSec: number) =>
     sendJson<SessionActivity>(
       `/api/sessions/${encodeURIComponent(id)}/activities/${encodeURIComponent(activityId)}/respond`,
@@ -679,6 +717,25 @@ export const api = {
       `/api/graph${search.size ? `?${search}` : ""}`,
     );
   },
+  conceptSessions: (conceptId: string) =>
+    getJson<Array<{
+      id: string;
+      course: string;
+      goal: string;
+      startedAt: number;
+      endedAt: number | null;
+      evidenceCount: number;
+      correctCount: number;
+      lastAt: number;
+    }>>(`/api/concepts/${encodeURIComponent(conceptId)}/sessions`),
+  sessionConcepts: (sessionId: string) =>
+    getJson<Array<{
+      id: string;
+      course: string;
+      title: string;
+      evidenceCount: number;
+      correctCount: number;
+    }>>(`/api/sessions/${encodeURIComponent(sessionId)}/concepts`),
 };
 
 export function assetUrl(notePath: string, src: string): string {

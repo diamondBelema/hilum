@@ -395,7 +395,7 @@ describe("mcp content tools", () => {
     expect(text(awaited)).toContain("sodium-reabsorption");
 
     const request = sessions.request(sessionId, "Explain the transporter");
-    expect(request.status).toBe("open");
+    expect(request.status).toBe("sent");
     const requests = await client.callTool({
       name: "get_agent_requests",
       arguments: { session_id: sessionId },

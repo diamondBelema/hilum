@@ -170,7 +170,7 @@ export function Study({
                     void queueRequest();
                   }
                 }}
-                className="reading min-h-11 flex-1 rounded-control border border-border-strong bg-bg px-3 text-sm focus:border-primary focus:outline-none"
+                className="reading min-h-11 flex-1 rounded-control border border-border-strong bg-bg px-3 text-sm focus:border-primary"
                 placeholder="For example: explain the proximal convoluted tubule"
               />
               <div className="flex items-center gap-1 border border-border-strong rounded-control bg-surface">
@@ -438,7 +438,7 @@ export function Study({
                   type="search"
                   value={sessionSearch}
                   onChange={(event) => setSessionSearch(event.target.value)}
-                  className="min-h-11 w-full rounded-control border border-border-strong bg-bg px-3 text-sm focus:border-primary focus:outline-none"
+                  className="min-h-11 w-full rounded-control border border-border-strong bg-bg px-3 text-sm focus:border-primary"
                   placeholder="Search sessions…"
                 />
               </label>
@@ -553,13 +553,7 @@ function AgentStatus({
       <p className="font-medium text-text">{label}</p>
       <p className="text-xs">{detail}</p>
       {session && (
-        <button
-          type="button"
-          onClick={() => {}}
-          className="ml-auto flex min-h-9 items-center gap-1 rounded-control border border-transparent bg-transparent px-2 text-xs hover:bg-surface-2 hover:text-primary transition-colors"
-        >
-          <Sparkles aria-hidden="true" className="size-3.5" /> Live
-        </button>
+        <span className="ml-auto text-xs text-text-muted">Live</span>
       )}
     </div>
   );

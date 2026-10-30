@@ -207,7 +207,7 @@ export function Config({
                     <input
                       value={coursePatch.title}
                       onChange={(e) => setCoursePatch((p) => ({ ...p, title: e.target.value }))}
-                      className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                      className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
                     />
                   </label>
                   <label className="block">
@@ -215,7 +215,7 @@ export function Config({
                     <input
                       value={coursePatch.department}
                       onChange={(e) => setCoursePatch((p) => ({ ...p, department: e.target.value }))}
-                      className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                      className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
                     />
                   </label>
                   <label className="block">
@@ -224,7 +224,7 @@ export function Config({
                       type="date"
                       value={coursePatch.examDate}
                       onChange={(e) => setCoursePatch((p) => ({ ...p, examDate: e.target.value }))}
-                      className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                      className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
                     />
                   </label>
                   <label className="block">
@@ -232,7 +232,7 @@ export function Config({
                     <select
                       value={coursePatch.defaultMode}
                       onChange={(e) => setCoursePatch((p) => ({ ...p, defaultMode: e.target.value }))}
-                      className="min-h-11 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                      className="min-h-11 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
                     >
                       <option value="strict">Strict</option>
                       <option value="sectioned">Sectioned</option>
@@ -357,7 +357,7 @@ export function Config({
                 value={answerStyle}
                 onChange={(e) => setAnswerStyle(e.target.value)}
                 rows={12}
-                className="reading w-full rounded-control border border-border-strong bg-surface p-3 font-mono text-xs focus:border-primary focus:outline-none"
+                className="reading w-full rounded-control border border-border-strong bg-surface p-3 font-mono text-xs focus:border-primary"
               />
             </label>
             <p className="mt-2 text-xs text-text-muted">
@@ -378,7 +378,7 @@ export function Config({
                 <input
                   value={rubricName}
                   onChange={(e) => setRubricName(e.target.value)}
-                  className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                  className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
                   placeholder="anatomy-muscle"
                 />
               </label>
@@ -389,7 +389,7 @@ export function Config({
                 value={rubricContent}
                 onChange={(e) => setRubricContent(e.target.value)}
                 rows={12}
-                className="reading w-full rounded-control border border-border-strong bg-surface p-3 font-mono text-xs focus:border-primary focus:outline-none"
+                className="reading w-full rounded-control border border-border-strong bg-surface p-3 font-mono text-xs focus:border-primary"
               />
             </label>
             <p className="mt-2 text-xs text-text-muted">
@@ -409,7 +409,7 @@ export function Config({
                 value={mastery}
                 onChange={(e) => setMastery(e.target.value)}
                 rows={12}
-                className="reading w-full rounded-control border border-border-strong bg-surface p-3 font-mono text-xs focus:border-primary focus:outline-none"
+                className="reading w-full rounded-control border border-border-strong bg-surface p-3 font-mono text-xs focus:border-primary"
               />
             </label>
             <p className="mt-2 text-xs text-text-muted">

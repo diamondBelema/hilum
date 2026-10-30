@@ -12,7 +12,8 @@
     "test": "bun test",
     "smoke": "bun run scripts/smoke.ts",
     "maintain": "bun run scripts/maintain-db.ts",
-    "verify": "bun run typecheck && bun test && bun run smoke",
+    "verify": "bun run typecheck && bun test && bun run smoke && bun run e2e",
+    "e2e": "bun run scripts/e2e.ts",
     "check:ui": "bun run scripts/check-ui.ts"
   },
   "dependencies": {

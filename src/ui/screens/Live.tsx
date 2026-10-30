@@ -525,7 +525,7 @@ export function Live({
             value={requestText}
             onChange={(event) => setRequestText(event.target.value)}
             rows={3}
-            className="reading mt-1.5 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+            className="reading mt-1.5 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary"
             placeholder="What would help right now?"
           />
         </label>
@@ -549,7 +549,7 @@ export function Live({
             value={summary}
             onChange={(event) => setSummary(event.target.value)}
             rows={5}
-            className="reading mt-1.5 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary focus:outline-none"
+            className="reading mt-1.5 w-full rounded-control border border-border bg-bg p-3 text-sm focus:border-primary"
             placeholder="What did you learn? What still feels shaky?"
           />
         </label>

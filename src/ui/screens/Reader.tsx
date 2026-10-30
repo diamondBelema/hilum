@@ -33,6 +33,7 @@ export function Reader({
   onEditNote?: (path: string) => void;
   onDeleteNote?: (path: string) => void;
 }) {
+  if (!note) return null;
   const { prefs, setPrefs, size, lineHeight } = useReaderPrefs();
   const { theme, setTheme } = useTheme();
   const [tocOpen, setTocOpen] = useState(false);
@@ -47,16 +48,16 @@ export function Reader({
   }, [note.path]);
 
   return (
-    <div className="flex max-w-[1120px] gap-8 px-4 pt-4 pb-24 sm:px-6 lg:px-8">
-      <article className="min-w-0 flex-1">
+    <div className="flex max-w-[1120px] gap-6 px-4 pt-4 pb-24 sm:px-6 lg:px-8">
+      <article className="min-w-0 flex-1 reading">
         <div className="flex items-center gap-2">
           <Button variant="ghost" className="px-2" onClick={onBack}>
-            <ArrowLeft aria-hidden="true" className="size-4" />
-            Back
+            <ArrowLeft aria-hidden="true" className="size-5" />
+            <span className="hidden sm:inline">Back</span>
           </Button>
-          <p className="hidden min-w-0 flex-1 truncate text-xs text-text-muted sm:block">
+          <p className="hidden min-w-0 flex-1 truncate type-body-sm sm:block">
             {course ? `${course.title} / ` : ""}
-            <span className="text-text">{note.title}</span>
+            <span className="type-body">{note.title}</span>
           </p>
           <Button
             variant="ghost"
@@ -65,35 +66,33 @@ export function Reader({
             aria-haspopup="dialog"
             aria-label="Contents"
           >
-            <ListTree aria-hidden="true" className="size-4" />
+            <ListTree aria-hidden="true" className="size-5" />
             <span className="hidden sm:inline">Contents</span>
           </Button>
           <Button variant="ghost" className="px-2" onClick={() => setPrefsOpen(true)} aria-haspopup="dialog">
-            <span className="font-mono text-sm" aria-hidden="true">
+            <span className="font-mono type-body-sm" aria-hidden="true">
               Aa
             </span>
             <span className="sr-only">Reading settings</span>
           </Button>
           {onEditNote && (
             <Button variant="ghost" className="px-2" onClick={() => onEditNote(note.path)}>
-              <Edit aria-hidden="true" className="size-4" />
+              <Edit aria-hidden="true" className="size-5" />
               <span className="sr-only">Edit note</span>
             </Button>
           )}
           {onDeleteNote && (
             <Button variant="destructive" className="px-2" onClick={() => onDeleteNote(note.path)}>
-              <Trash2 aria-hidden="true" className="size-4" />
+              <Trash2 aria-hidden="true" className="size-5" />
               <span className="sr-only">Delete note</span>
             </Button>
           )}
         </div>
 
-        <div style={{ fontSize: size, lineHeight }} className="mt-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{note.title}</h1>
+        <div className="mt-4" style={{ fontSize: size, lineHeight }}>
+          <h1 className="type-title">{note.title}</h1>
           {note.summary && (
-            <p className="reading mt-2 text-sm text-text-muted" style={{ fontSize: "var(--text-sm)" }}>
-              {note.summary}
-            </p>
+            <p className="type-body-sm mt-2 text-text-muted">{note.summary}</p>
           )}
           {note.tags.length > 0 && (
             <ul className="mt-3 flex flex-wrap gap-1.5">
@@ -104,7 +103,7 @@ export function Reader({
               ))}
             </ul>
           )}
-          <div className="mt-6 border-t border-border-subtle pt-1">
+          <div className="mt-6 border-t border-border-subtle pt-3">
             <Markdown
               body={stripLeadingH1(note.body)}
               notePath={note.path}
@@ -118,7 +117,7 @@ export function Reader({
       {toc.length > 0 && (
         <aside className="sticky top-4 hidden w-[320px] shrink-0 self-start xl:block">
           <nav aria-label="On this page">
-            <h2 className="text-xs font-semibold text-text-muted">On this page</h2>
+            <h2 className="type-meta text-text-muted">On this page</h2>
             <Toc items={toc} />
           </nav>
         </aside>
@@ -128,7 +127,7 @@ export function Reader({
         {toc.length > 0 ? (
           <Toc items={toc} onPick={() => setTocOpen(false)} />
         ) : (
-          <p className="text-sm text-text-muted">This note has no sections.</p>
+          <p className="type-body-sm text-text-muted">This note has no sections.</p>
         )}
       </Sheet>
 
@@ -151,10 +150,10 @@ export function Reader({
             moreDisabled={prefs.spacing === 2}
           />
           <div>
-            <h3 className="text-sm font-semibold">Theme</h3>
+            <h3 className="type-label">Theme</h3>
             <ThemeChoice theme={theme} setTheme={setTheme} />
           </div>
-          <p className="flex items-center gap-2 text-xs text-text-muted">
+          <p className="flex items-center gap-2 type-meta text-text-muted">
             <Keyboard aria-hidden="true" className="size-4" />
             Esc to close.
           </p>
@@ -168,7 +167,7 @@ export function Reader({
 
 function Toc({ items, onPick }: { items: TocItem[]; onPick?: () => void }) {
   return (
-    <ul className="mt-2 space-y-1 border-l border-border-subtle">
+    <ul className="mt-2 space-y-1 pl-2">
       {items.map((item) => (
         <li key={`${item.id}-${item.level}`}>
           <a
@@ -178,9 +177,9 @@ function Toc({ items, onPick }: { items: TocItem[]; onPick?: () => void }) {
               document.getElementById(item.id)?.scrollIntoView({ block: "start" });
               onPick?.();
             }}
-            className={`block min-h-11 border-l-2 border-transparent py-2 pl-3 text-sm text-text-muted hover:border-primary hover:text-text ${
+            className={`block min-h-11 border-transparent py-2 pl-3 type-body-sm rounded-control ${
               item.level === 3 ? "pl-6" : ""
-            }`}
+            } text-text-muted hover:bg-surface-2 hover:text-text`}
           >
             {item.title}
           </a>
@@ -208,15 +207,15 @@ function PrefRow({
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
-        <h3 className="text-sm font-semibold">{label}</h3>
-        <p className="text-xs text-text-muted">{value}</p>
+        <h3 className="type-label">{label}</h3>
+        <p className="type-body-sm text-text-muted">{value}</p>
       </div>
       <div className="flex gap-2">
         <IconButton label={`Decrease ${label.toLowerCase()}`} onClick={onLess} disabled={lessDisabled}>
-          <Minus aria-hidden="true" className="size-4" />
+          <Minus aria-hidden="true" className="size-5" />
         </IconButton>
         <IconButton label={`Increase ${label.toLowerCase()}`} onClick={onMore} disabled={moreDisabled}>
-          <Plus aria-hidden="true" className="size-4" />
+          <Plus aria-hidden="true" className="size-5" />
         </IconButton>
       </div>
     </div>
@@ -237,7 +236,7 @@ export function ThemeChoice({ theme, setTheme }: { theme: Theme; setTheme: (t: T
           type="button"
           aria-pressed={theme === option.value}
           onClick={() => setTheme(option.value)}
-          className={`min-h-11 flex-1 rounded-control border px-3 text-sm ${
+          className={`min-h-11 flex-1 rounded-control border px-3 type-body-sm ${
             theme === option.value
               ? "border-primary bg-primary-soft font-semibold text-text"
               : "border-border-subtle text-text-muted hover:bg-surface-2"
@@ -286,8 +285,8 @@ function ZoomDialog({ zoom, onClose }: { zoom: { src: string; alt: string } | nu
             </IconButton>
           </div>
           {zoom.alt && (
-            <p className="mt-2 flex items-center gap-2 text-sm text-white">
-              <ZoomIn aria-hidden="true" className="size-4" />
+            <p className="mt-2 flex items-center gap-2 type-body-sm text-text">
+              <ZoomIn aria-hidden="true" className="size-5" />
               {zoom.alt}
             </p>
           )}

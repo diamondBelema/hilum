@@ -1,6 +1,8 @@
+import { mkdirSync } from "node:fs";
 import { createApp } from "./app.ts";
 
 const { app, config, indexer } = createApp();
+mkdirSync(config.vaultPath, { recursive: true });
 const stats = await indexer.reindexAll();
 indexer.startWatching((err) => console.error("vault watcher:", err));
 

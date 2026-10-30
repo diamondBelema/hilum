@@ -20,7 +20,7 @@ describe("http api", () => {
     const res = await app.request("/api/meta");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { meta: { key: string; value: string }[] };
-    expect(body.meta).toEqual([{ key: "schema_version", value: "8" }]);
+    expect(body.meta).toEqual([{ key: "schema_version", value: "9" }]);
   });
 
   test("reads and updates LAN and MCP token settings", async () => {
@@ -99,9 +99,9 @@ describe("http api", () => {
   });
 
   describe("spa fallback", () => {
-    test("serves app shell for /library", async () => {
+    test("serves app shell for /library/graph", async () => {
       const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: "/tmp/vault" } });
-      const res = await app.request("/library");
+      const res = await app.request("/library/graph");
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
     });
@@ -133,6 +133,129 @@ describe("http api", () => {
       const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: "/tmp/vault" } });
       const res = await app.request("/assets/missing.js");
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe("message lifecycle http (A4)", () => {
+    test("POST /api/sessions/:id/requests stores sent, idempotent by clientId", async () => {
+      const root = await mkdtemp(join(tmpdir(), "harness-a4-"));
+      await mkdir(join(root, "courses/ana-211/notes"), { recursive: true });
+      await writeFile(
+        join(root, "courses/ana-211/notes/tubules.md"),
+        "---\ntitle: Tubules\n---\n\n# Tubules\n\nFiltered sodium is reabsorbed.\n",
+        "utf8",
+      );
+      const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: root } });
+      const created = await app.request("/api/sessions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ course: "ana-211", goal: "learn" }),
+      });
+      expect(created.status).toBe(201);
+      const sessionId = (await created.json()) as { id: string };
+
+      const r1 = await app.request(`/api/sessions/${sessionId.id}/requests`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: "help me", clientId: "c1" }),
+      });
+      expect(r1.status).toBe(201);
+      const r1Json = await r1.json();
+      expect(r1Json.status).toBe("sent");
+      const r1Id = r1Json.id;
+
+      const r2 = await app.request(`/api/sessions/${sessionId.id}/requests`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: "help me", clientId: "c1" }),
+      });
+      expect((await r2.json()).id).toBe(r1Id);
+
+      const r3 = await app.request(`/api/sessions/${sessionId.id}/requests`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: "other", clientId: "c2" }),
+      });
+      const r3Json = await r3.json();
+      expect(r3Json.status).toBe("sent");
+      expect(r3Json.id).not.toBe(r1Id);
+
+      await rm(root, { recursive: true, force: true });
+    });
+  });
+
+  describe("notes tree (A7)", () => {
+    async function setupVault() {
+      const root = await mkdtemp(join(tmpdir(), "harness-a7-"));
+      await mkdir(join(root, "courses/ana-211/notes"), { recursive: true });
+      await writeFile(
+        join(root, "courses/ana-211/notes/tubules.md"),
+        "---\ntitle: Tubules\n---\n\n# Tubules {#tubules}\n\nFiltered sodium is reabsorbed.\n",
+        "utf8",
+      );
+      return root;
+    }
+
+    test("GET /api/notes/tree?course= returns notes for the course", async () => {
+      const root = await setupVault();
+      const { app, vault, indexer } = createApp({ config: { dbPath: ":memory:", vaultPath: root } });
+      await vault.writeNote({
+        path: "courses/ana-211/notes/extra.md",
+        content: "---\ntitle: Extra\n---\n\n# Extra\n\nbody.\n",
+        mode: "create",
+      });
+      await indexer.reindexAll();
+      const res = await app.request("/api/notes/tree?course=ana-211");
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { path: string; course: string; title: string }[];
+      expect(body.map((n) => n.path).sort()).toEqual(
+        ["courses/ana-211/notes/extra.md", "courses/ana-211/notes/tubules.md"].sort(),
+      );
+      await rm(root, { recursive: true, force: true });
+    });
+
+    test("POST /api/notes creates a note", async () => {
+      const root = await setupVault();
+      const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: root } });
+      const res = await app.request("/api/notes", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ course: "ana-211", title: "My Note", folder: "drafts" }),
+      });
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as { path: string; bytes: number };
+      expect(body.path).toBe("courses/ana-211/drafts/My-Note.md");
+      await rm(root, { recursive: true, force: true });
+    });
+
+    test("PUT /api/notes returns 409 on etag mismatch and 200 on match", async () => {
+      const root = await setupVault();
+      const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: root } });
+      const created = await app.request("/api/notes", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ course: "ana-211", title: "Editable", folder: "drafts" }),
+      });
+      expect(created.status).toBe(201);
+      const { path } = (await created.json()) as { path: string };
+
+      const fs = await import("node:fs/promises");
+      const mtime = String((await fs.stat(join(root, path))).mtimeMs);
+
+      const mismatch = await app.request("/api/notes", {
+        method: "PUT",
+        headers: { "content-type": "application/json", "if-match": "wrong" },
+        body: JSON.stringify({ path, content: "---\ntitle: Editable\n---\n\n# Editable\n\nchanged\n" }),
+      });
+      expect(mismatch.status).toBe(409);
+
+      const match = await app.request("/api/notes", {
+        method: "PUT",
+        headers: { "content-type": "application/json", "if-match": mtime },
+        body: JSON.stringify({ path, content: "---\ntitle: Editable\n---\n\n# Editable\n\nchanged\n" }),
+      });
+      expect(match.status).toBe(200);
+      await rm(root, { recursive: true, force: true });
     });
   });
 

@@ -204,11 +204,7 @@ export function Editor({
         <div key={index} className={`mb-3 rounded-control border px-3 py-2 ${externalBannerKind(banner.kind)}`}>
           <p className="text-sm">{banner.message}</p>
           {banner.kind === "external" && (
-            <div className="mt-2 flex gap-2">
-              <Button variant="secondary" className="text-xs px-2" onClick={() => {}}>Reload</Button>
-              <Button variant="secondary" className="text-xs px-2" onClick={() => {}}>Keep mine</Button>
-              <Button variant="secondary" className="text-xs px-2" onClick={() => {}}>See changes</Button>
-            </div>
+            <p className="mt-2 text-xs text-text-muted">External changes detected.</p>
           )}
         </div>
       ))}
@@ -220,7 +216,7 @@ export function Editor({
             <input
               value={frontmatter.title}
               onChange={(event) => setFrontmatter((prev) => ({ ...prev, title: event.target.value }))}
-              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
             />
           </label>
           <label className="block w-full sm:w-48">
@@ -228,7 +224,7 @@ export function Editor({
             <input
               value={frontmatter.course}
               onChange={(event) => setFrontmatter((prev) => ({ ...prev, course: event.target.value }))}
-              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
             />
           </label>
           <label className="block w-full sm:w-48">
@@ -236,7 +232,7 @@ export function Editor({
             <input
               value={frontmatter.topics}
               onChange={(event) => setFrontmatter((prev) => ({ ...prev, topics: event.target.value }))}
-              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
             />
           </label>
           <label className="block w-full sm:w-48">
@@ -244,7 +240,7 @@ export function Editor({
             <input
               value={frontmatter.sourceType}
               onChange={(event) => setFrontmatter((prev) => ({ ...prev, sourceType: event.target.value }))}
-              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
             />
           </label>
         </div>

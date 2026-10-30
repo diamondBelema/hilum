@@ -51,7 +51,8 @@ async function readCourseAnswerStyle(
 const INSTRUCTIONS = `This server is the Exam Harness for a medical student.
 The markdown vault is the source of truth; read INDEX.md before notes.
 Each course may set answer_style in course.md. session_start returns that file: follow its command-word and answer-structure rules when probing, teaching or drafting model answers.
-Teaching protocol: session_start, read the index, probe with activities, diagnose, teach, record evidence, session_end.
+Always begin with get_active_session to learn which session the student has open, then use its session_id for all subsequent session tools.
+Teaching protocol: get_active_session (or session_start if none), read the index, probe with activities, diagnose, teach, record evidence, session_end.
 Never invent content without citations; unverified content must be marked unverified.
 Exam simulations are deterministic and run without an agent.
 Theory answers wait in the grading queue: call get_pending_grading, grade against the supplied rubric and model answer, then call submit_grade with per-heading scores, feedback and mistake tags. Use the grade_theory_answer prompt when unsure.
@@ -88,29 +89,49 @@ export function createMcpServer(
     isError: true,
   });
 
+  const clientName = (): string => {
+    const info = server.server.getClientVersion();
+    return info ? (info as { name?: string }).name ?? "unknown" : "unknown";
+  };
+  const withPresence = <T extends unknown[], R>(
+    handler: (...args: T) => Promise<R>,
+  ): ((...args: T) => Promise<R>) => {
+    return async (...args: T) => {
+      try {
+        return await handler(...args);
+      } finally {
+        try {
+          sessions.markPresence(clientName());
+        } catch {
+          // Presence tracking must never break a tool call.
+        }
+      }
+    };
+  };
+
   server.registerTool(
     "get_server_info",
     { description: "Return harness version, vault path and index stats.", inputSchema: {} },
-    async () =>
+    withPresence(async () =>
       json({
         name: "exam-harness",
         version: config.version,
         vault: config.vaultPath,
         transport: "streamable-http",
         stats: vault.stats(),
-      }),
+      })),
   );
 
   server.registerTool(
     "list_courses",
     { description: "List courses in the vault with note and token counts.", inputSchema: {} },
-    async () => {
+    withPresence(async () => {
       try {
         return json(await vault.listCourses());
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -119,13 +140,13 @@ export function createMcpServer(
       description: "Return the root INDEX.md, or a course INDEX.md when course is given.",
       inputSchema: { course: z.string().optional() },
     },
-    async ({ course }) => {
+    withPresence(async ({ course }) => {
       try {
         return json(vault.getIndex(course));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -134,13 +155,13 @@ export function createMcpServer(
       description: "Read a note by vault-relative path. Returns frontmatter and markdown body.",
       inputSchema: { path: z.string() },
     },
-    async ({ path }) => {
+    withPresence(async ({ path }) => {
       try {
         return json(vault.readNote(path));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -153,13 +174,13 @@ export function createMcpServer(
         limit: z.number().int().min(1).max(100).optional(),
       },
     },
-    async ({ query, course, limit }) => {
+    withPresence(async ({ query, course, limit }) => {
       try {
         return json(vault.search(query, course, limit));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -174,7 +195,7 @@ export function createMcpServer(
         request_id: z.string().optional(),
       },
     },
-    async (input) => {
+    withPresence(async (input) => {
       try {
         return json(
           await vault.writeNote({
@@ -187,7 +208,7 @@ export function createMcpServer(
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -196,13 +217,13 @@ export function createMcpServer(
       description: "List asset files for a course with sizes.",
       inputSchema: { course: z.string() },
     },
-    async ({ course }) => {
+    withPresence(async ({ course }) => {
       try {
         return json(await vault.listAssets(course));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -220,7 +241,7 @@ export function createMcpServer(
         request_id: z.string().optional(),
       },
     },
-    async (input) => {
+    withPresence(async (input) => {
       try {
         return json(
           await vault.updateCourse(
@@ -238,7 +259,7 @@ export function createMcpServer(
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -252,13 +273,13 @@ export function createMcpServer(
         request_id: z.string().optional(),
       },
     },
-    async ({ course, questions: inputs }) => {
+    withPresence(async ({ course, questions: inputs }) => {
       try {
         return json(await questions.addMany(course, inputs, { createdBy: "agent" }));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -274,7 +295,7 @@ export function createMcpServer(
         limit: z.number().int().min(1).max(500).optional(),
       },
     },
-    async (input) => {
+    withPresence(async (input) => {
       try {
         return json(
           await questions.list({
@@ -289,7 +310,7 @@ export function createMcpServer(
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -298,13 +319,13 @@ export function createMcpServer(
       description: "Read one question by id.",
       inputSchema: { id: z.string() },
     },
-    async ({ id }) => {
+    withPresence(async ({ id }) => {
       try {
         return json(questions.get(id));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -313,13 +334,13 @@ export function createMcpServer(
       description: "Replace a question's editable content. Verification state is changed only by verify_question.",
       inputSchema: { id: z.string(), question: questionInputSchema },
     },
-    async ({ id, question }) => {
+    withPresence(async ({ id, question }) => {
       try {
         return json(await questions.update(id, question));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -328,13 +349,13 @@ export function createMcpServer(
       description: "Mark a question verified or unverified after checking it against its source.",
       inputSchema: { id: z.string(), verified: z.boolean().default(true), by: z.string().default("agent") },
     },
-    async ({ id, verified, by }) => {
+    withPresence(async ({ id, verified, by }) => {
       try {
         return json(questions.verify(id, verified, by));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -350,7 +371,7 @@ export function createMcpServer(
         request_id: z.string().optional(),
       },
     },
-    async (input) => {
+    withPresence(async (input) => {
       try {
         return json(
           await questions.importPastPaper({
@@ -364,7 +385,7 @@ export function createMcpServer(
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -392,13 +413,13 @@ export function createMcpServer(
         ),
       },
     },
-    async (input) => {
+    withPresence(async (input) => {
       try {
         return json(await papers.create(input));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -407,13 +428,13 @@ export function createMcpServer(
       description: "List exam papers, newest first, optionally for one course.",
       inputSchema: { course: z.string().optional() },
     },
-    async ({ course }) => {
+    withPresence(async ({ course }) => {
       try {
         return json(papers.list(course));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -422,13 +443,13 @@ export function createMcpServer(
       description: "Read a paper's blueprint and its question snapshots.",
       inputSchema: { id: z.string() },
     },
-    async ({ id }) => {
+    withPresence(async ({ id }) => {
       try {
         return json(papers.get(id));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -437,13 +458,13 @@ export function createMcpServer(
       description: "Return deterministic scores, per-section totals and mistakes for a submitted attempt.",
       inputSchema: { attempt_id: z.string() },
     },
-    async ({ attempt_id }) => {
+    withPresence(async ({ attempt_id }) => {
       try {
         return json(runner.results(attempt_id));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -456,13 +477,13 @@ export function createMcpServer(
         limit: z.number().int().min(1).max(500).optional(),
       },
     },
-    async ({ course, limit }) => {
+    withPresence(async ({ course, limit }) => {
       try {
         return json(grading.pending({ course, limit }));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -485,13 +506,13 @@ export function createMcpServer(
         graded_by: z.string().optional(),
       },
     },
-    async (input) => {
+    withPresence(async (input) => {
       try {
         return json(grading.grade(submitGradeSchema.parse(input)));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerPrompt(
@@ -555,20 +576,41 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
     "session_start",
     {
       description:
-        "Start or resume a live teaching session for a course. Returns the session, the course answer style, mastery snapshot, due items, frontier and the last session summary.",
-      inputSchema: { course: z.string().min(1), goal: z.string().optional() },
+        "Start or resume a live teaching session. Without course, returns the focused session or the newest open session across courses. With course, returns the newest open session for that course, or starts one if none is open. Optionally pass a title for a new session.",
+      inputSchema: { course: z.string().optional(), goal: z.string().optional(), title: z.string().optional() },
     },
-    async ({ course, goal }) => {
+    withPresence(async ({ course, goal, title }) => {
       try {
-        const session = await sessions.start(course, goal);
-        const answerStyle = await readCourseAnswerStyle(vault, course);
+        let session;
+        if (course) {
+          session = await sessions.start(course, goal ?? "learn", title ?? null, "agent");
+        } else {
+          const focused = sessions.focused();
+          if (focused) {
+            session = focused;
+          } else {
+            const newest = sessions.active();
+            if (newest) {
+              session = newest;
+            } else {
+              const courses = await vault.listCourses();
+              return fail(
+                new Error(
+                  `No open session. Open courses: ${courses.map((c) => c.code).join(", ") || "none"}. Start a session first from the app, or pass a course.`,
+                ),
+              );
+            }
+          }
+        }
+        sessions.touch(session.id);
+        const answerStyle = await readCourseAnswerStyle(vault, session.course);
         return json({
           session,
           answer_style: answerStyle,
-          mastery_snapshot: concepts.snapshot(course),
-          due_items: concepts.due(course, 8),
-          frontier: concepts.next(course, 5),
-          last_session: sessions.history(course)[0] ?? null,
+          mastery_snapshot: concepts.snapshot(session.course),
+          due_items: concepts.due(session.course, 8),
+          frontier: concepts.next(session.course, 5),
+          last_session: sessions.history(session.course)[0] ?? null,
           note: answerStyle
             ? "Start with the decay review queue, then the frontier. Follow answer_style for command words, structure and marking expectations. Read the cited notes before probing, and record evidence for every taught concept."
             : "Start with the decay review queue, then the frontier. Read the cited notes before probing, and record evidence for every taught concept.",
@@ -576,7 +618,48 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
       } catch (err) {
         return fail(err);
       }
+    }),
+  );
+
+  server.registerTool(
+    "get_active_session",
+    {
+      description:
+        "Return the currently focused session (the one the student has open in the app). Falls back to the newest open session when the focus lease has expired. Returns the session id, title, course, mode, started_at, unread user message count and open requests, plus the full session detail.",
+      inputSchema: {},
     },
+    withPresence(async () => {
+      try {
+        const session = sessions.focused();
+        if (!session) {
+          return json({
+            session: null,
+            session_id: null,
+            title: null,
+            course: null,
+            mode: "teach",
+            started_at: null,
+            unread_user_messages: 0,
+            open_requests: [],
+            agentConnected: false,
+          });
+        }
+        sessions.touch(session.id);
+        return json({
+          session,
+          session_id: session.id,
+          title: session.title,
+          course: session.course,
+          mode: "teach",
+          started_at: session.startedAt,
+          unread_user_messages: session.unreadUserMessages,
+          open_requests: session.openRequests,
+          agentConnected: session.agentConnected,
+        });
+      } catch (err) {
+        return fail(err);
+      }
+    }),
   );
 
   server.registerTool(
@@ -585,7 +668,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
       description: "Return one session with its current activity, recent activities, open student requests and agent status.",
       inputSchema: { session_id: z.string().min(1) },
     },
-    async ({ session_id }) => {
+    withPresence(async ({ session_id }) => {
       try {
         const detail = sessions.detail(session_id);
         sessions.touch(session_id);
@@ -593,7 +676,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -606,13 +689,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         spec: z.unknown(),
       },
     },
-    async ({ session_id, spec }) => {
+    withPresence(async ({ session_id, spec }) => {
       try {
         return json(await sessions.pushActivity(session_id, spec));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -625,13 +708,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         timeout_seconds: z.number().min(0).max(25).optional(),
       },
     },
-    async ({ session_id, timeout_seconds }) => {
+    withPresence(async ({ session_id, timeout_seconds }) => {
       try {
         return json(await sessions.awaitResponse(session_id, timeout_seconds));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -648,7 +731,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         excerpt: z.string().optional(),
       },
     },
-    async (input) => {
+    withPresence(async (input) => {
       try {
         return json(
           sessions.recordEvidence({
@@ -664,7 +747,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -673,19 +756,19 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
       description: "List the student's Ask-the-agent requests for a session and mark them delivered.",
       inputSchema: { session_id: z.string().min(1) },
     },
-    async ({ session_id }) => {
+    withPresence(async ({ session_id }) => {
       try {
         sessions.touch(session_id);
         const requests = sessions.requests(session_id);
-        sessions.markRequestsDelivered(
+        sessions.markRequestsSeen(
           session_id,
-          requests.filter((item) => item.status === "open").map((item) => item.id),
+          requests.filter((item) => item.status !== "answered").map((item) => item.id),
         );
         return json(requests);
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -709,13 +792,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         unverified: z.boolean().default(false),
       },
     },
-    async ({ session_id, text, kind, cites, unverified }) => {
+    withPresence(async ({ session_id, text, kind, cites, unverified }) => {
       try {
         return json(sessions.say(session_id, text, kind, cites, unverified));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -727,7 +810,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         tags: z.array(z.string()).optional(),
       },
     },
-    async ({ activity_id, tags }) => {
+    withPresence(async ({ activity_id, tags }) => {
       try {
         const banked = await sessions.bankActivity(activity_id, tags);
         sessions.touch(banked.sessionId);
@@ -735,7 +818,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -744,13 +827,29 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
       description: "End a live session, write the session note to the vault and return the session with its note path.",
       inputSchema: { session_id: z.string().min(1), summary: z.string().optional() },
     },
-    async ({ session_id, summary }) => {
+    withPresence(async ({ session_id, summary }) => {
       try {
         return json(await sessions.end(session_id, summary));
       } catch (err) {
         return fail(err);
       }
+    }),
+  );
+
+  server.registerTool(
+    "set_session_title",
+    {
+      description: "Rename a live session. Sets the session title shown in history and get_active_session.",
+      inputSchema: { session_id: z.string().min(1), title: z.string().nullable() },
     },
+    withPresence(async ({ session_id, title }) => {
+      try {
+        sessions.setSessionTitle(session_id, title);
+        return json({ ok: true });
+      } catch (err) {
+        return fail(err);
+      }
+    }),
   );
 
   server.registerTool(
@@ -764,13 +863,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         limit: z.number().int().min(1).max(50).optional(),
       },
     },
-    async ({ query, course, limit }) => {
+    withPresence(async ({ query, course, limit }) => {
       try {
         return json(concepts.find(query, course, limit));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -780,13 +879,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         "Add one cited concept file under concepts/. New concepts default to proposed. Parent and relation ids must already exist; a citation with a real anchor or quote is required.",
       inputSchema: { ...conceptInputSchema.shape, request_id: z.string().optional() },
     },
-    async ({ request_id, ...input }) => {
+    withPresence(async ({ request_id, ...input }) => {
       try {
         return json(await concepts.add(input, request_id));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -796,13 +895,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         "Edit a concept's frontmatter or definition. Use status accepted to approve a proposed concept. Omitted fields are kept.",
       inputSchema: { id: z.string().min(1), ...conceptPatchSchema.shape },
     },
-    async ({ id, ...patch }) => {
+    withPresence(async ({ id, ...patch }) => {
       try {
         return json(await concepts.update(id, patch));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -816,13 +915,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         type: z.enum(EDGE_TYPES),
       },
     },
-    async ({ from_id, to_id, type }) => {
+    withPresence(async ({ from_id, to_id, type }) => {
       try {
         return json(await concepts.link(from_id, to_id, type));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -832,13 +931,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         "Return one concept with its mastery, definition, citations, relations, evidence timeline and linked practice items.",
       inputSchema: { id: z.string().min(1) },
     },
-    async ({ id }) => {
+    withPresence(async ({ id }) => {
       try {
         return json(concepts.get(id));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -851,13 +950,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         filter: z.enum(["all", "proposed", "due"]).optional(),
       },
     },
-    async ({ course, filter }) => {
+    withPresence(async ({ course, filter }) => {
       try {
         return json(concepts.graph(course, filter));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -870,13 +969,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         n: z.number().int().min(1).max(50).optional(),
       },
     },
-    async ({ course, n }) => {
+    withPresence(async ({ course, n }) => {
       try {
         return json(concepts.next(course, n));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -885,13 +984,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
       description: "Return mastery counts and per-concept states, scores and decay dates, optionally for one course.",
       inputSchema: { course: z.string().optional() },
     },
-    async ({ course }) => {
+    withPresence(async ({ course }) => {
       try {
         return json(concepts.snapshot(course));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -903,13 +1002,13 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         limit: z.number().int().min(1).max(50).optional(),
       },
     },
-    async ({ course, limit }) => {
+    withPresence(async ({ course, limit }) => {
       try {
         return json(concepts.weak(course, limit));
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -925,7 +1024,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         excerpt: z.string().optional(),
       },
     },
-    async ({ concept_id, correct, kind, confidence, excerpt }) => {
+    withPresence(async ({ concept_id, correct, kind, confidence, excerpt }) => {
       try {
         return json(
           concepts.recordRealResult({
@@ -939,7 +1038,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
       } catch (err) {
         return fail(err);
       }
-    },
+    }),
   );
 
   server.registerPrompt(
@@ -957,7 +1056,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
             type: "text" as const,
             text: `Teach one adaptive session for ${course} using the harness MCP server.
 
-1. Call session_start("${course}"). Read the mastery snapshot, due items and frontier. Clear the decay review queue first, then teach the top frontier concept.
+1. Call get_active_session(). If a session is already open, continue with it. Otherwise call session_start("${course}"). Read the mastery snapshot, due items and frontier. Clear the decay review queue first, then teach the top frontier concept.
 2. Read courses/${course}/INDEX.md, then only the notes you need.
 3. Probe first: push_activity with 2-3 short questions, a confidence_rating and a think_aloud box. Every spec needs cites (note, anchor, verbatim quote).
 4. Call await_response, diagnose the response, teach the gap, then push the next activity. Pick formats that fit the signals: worked_example_stepper, compare_table, mermaid_diagram, predict_reveal, theory.
@@ -1020,7 +1119,16 @@ export async function handleMcpRequest(
 
   try {
     await server.connect(transport);
-    return await transport.handleRequest(request);
+    const response = await transport.handleRequest(request);
+    // Touch the focused session on every authenticated MCP request so "connected"
+    // reflects any server activity, not just session tools.
+    try {
+      const focused = sessions.focused();
+      if (focused) sessions.touch(focused.id);
+    } catch {
+      // ignore focus-touch failures
+    }
+    return response;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return Response.json(

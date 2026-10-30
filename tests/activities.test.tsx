@@ -203,10 +203,10 @@ describe("SessionService", () => {
   });
 
   test("queues requests, reports render errors and keeps agent presence separate", async () => {
-    const session = await sessions.start("ana-211", "learn", "app");
+    const session = await sessions.start("ana-211", "learn", null, "app");
     expect(session.agentConnected).toBe(false);
     const request = sessions.request(session.id, "I am confused");
-    expect(request.status).toBe("open");
+    expect(request.status).toBe("sent");
 
     const activity = await sessions.pushActivity(session.id, {
       title: "Broken diagram",
@@ -220,7 +220,8 @@ describe("SessionService", () => {
 
     const waited = await sessions.awaitResponse(session.id, 0);
     expect(waited.status).toBe("timeout");
-    expect(waited.requests[0]?.text).toBe("I am confused");
+    // The goal is inserted as the first request; the student request follows.
+    expect(waited.requests.map((item) => item.text)).toEqual(["learn", "I am confused"]);
     expect(waited.renderErrors[0]?.message).toBe("Parse error");
     expect(waited.waitingFor).toBeUndefined();
   });

@@ -1,0 +1,734 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  forceCollide,
+  forceCenter,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  type SimulationNodeDatum,
+} from "d3-force";
+import type { ConceptSummary } from "../api.ts";
+
+type GraphEdge = { from: string; to: string; type: string };
+
+const EDGE_TYPE_SHORT = (type: string): string => {
+  if (type === "parent") return "▸";
+  if (type === "prerequisite") return "pre";
+  if (type === "related") return "rel";
+  if (type === "contrasts_with") return "↔";
+  return type;
+};
+
+type GraphCanvasProps = {
+  nodes: ConceptSummary[];
+  edges: GraphEdge[];
+  width: number;
+  height: number;
+  course?: string;
+  onStudy?: (course: string, conceptId: string) => void;
+  onNodeSelect?: (id: string | null) => void;
+  selectedId?: string | null;
+  focusNodeId?: string | null;
+  sessionId?: string | null;
+  sessionConceptIds?: Set<string>;
+  ambient?: boolean;
+};
+
+// ---------------------------------------------------------------------------
+// CSS variable reader
+// ---------------------------------------------------------------------------
+
+function cssVar(name: string): string {
+  return (
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim() ||
+    (name === "--bg" ? "#ffffff" : "#000000")
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const LINK_DISTANCE = 55;
+const CHARGE_STRENGTH = -120;
+const NODE_MIN_RADIUS = 4;
+const NODE_MAX_RADIUS = 14;
+const LABEL_TRUNCATE = 28;
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3.0;
+
+const MASTERY_FILL: Record<string, number> = {
+  unseen: 0,
+  familiar: 0.4,
+  understood: 0.75,
+  mastered: 1,
+  decayed: 1,
+};
+
+const MASTERY_STROKE_VAR: Record<string, string> = {
+  unseen: "--text-muted",
+  familiar: "--primary",
+  understood: "--primary",
+  mastered: "--primary",
+  decayed: "--warning",
+};
+
+const EDGE_DASH: Record<string, string | undefined> = {
+  prerequisite: "6 4",
+  related: "2 5",
+  contrasts_with: undefined,
+};
+
+const EDGE_LINK_DISTANCE: Record<string, number> = {
+  parent: 40,
+  prerequisite: 55,
+  related: 55,
+  contrasts_with: 55,
+};
+
+// ---------------------------------------------------------------------------
+// Pure helpers
+// ---------------------------------------------------------------------------
+
+function computeDegree(
+  nodes: ConceptSummary[],
+  edges: GraphEdge[],
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const node of nodes) map.set(node.id, 0);
+  for (const edge of edges) {
+    map.set(edge.from, (map.get(edge.from) ?? 0) + 1);
+    map.set(edge.to, (map.get(edge.to) ?? 0) + 1);
+  }
+  return map;
+}
+
+function computeRadius(degreeById: Map<string, number>): Map<string, number> {
+  const map = new Map<string, number>();
+  let minDeg = Infinity;
+  let maxDeg = -Infinity;
+  for (const d of degreeById.values()) {
+    minDeg = Math.min(minDeg, d);
+    maxDeg = Math.max(maxDeg, d);
+  }
+  const span = maxDeg - minDeg || 1;
+  for (const [id, deg] of degreeById) {
+    const t = (deg - minDeg) / span;
+    map.set(id, NODE_MIN_RADIUS + t * (NODE_MAX_RADIUS - NODE_MIN_RADIUS));
+  }
+  return map;
+}
+
+function truncate(title: string, max: number): string {
+  if (title.length <= max) return title;
+  return title.slice(0, max - 1) + "…";
+}
+
+// ---------------------------------------------------------------------------
+// GraphCanvas
+// ---------------------------------------------------------------------------
+
+export function GraphCanvas({
+  nodes: nodesProp,
+  edges: edgesProp,
+  width,
+  height,
+  course,
+  onStudy,
+  onNodeSelect,
+  selectedId: selectedIdProp,
+  focusNodeId: focusNodeIdProp,
+  sessionId: sessionIdProp,
+  sessionConceptIds: sessionConceptIdsProp,
+  ambient = false,
+}: GraphCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const simRef = useRef<ReturnType<typeof forceSimulation> | null>(null);
+  const rafRef = useRef<number>(0);
+  const transformRef = useRef({ k: 1, x: 0, y: 0 });
+  const hoveredRef = useRef<string | null>(null);
+  const selectedRef = useRef<string | null>(null);
+  const pinnedRef = useRef<Set<string>>(new Set());
+  const dragStartRef = useRef<{ sx: number; sy: number; x: number; y: number } | null>(null);
+  const degreeByIdRef = useRef(computeDegree(nodesProp, edgesProp));
+  const radiusByIdRef = useRef(computeRadius(degreeByIdRef.current));
+
+  degreeByIdRef.current = computeDegree(nodesProp, edgesProp);
+  radiusByIdRef.current = computeRadius(degreeByIdRef.current);
+
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [hoverNode, setHoverNode] = useState<string | null>(null);
+  const lastFocusedRef = useRef<string | null>(null);
+
+  // ---------------------------------------------------------------
+  // Simulation
+  // ---------------------------------------------------------------
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || nodesProp.length === 0) return;
+
+    const dpr = Math.min(window.devicePixelRatio ?? 1, 2);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const nodeData: Array<SimulationNodeDatum & { id: string; radius: number }> = nodesProp.map(
+      (node) => ({
+        id: node.id,
+        radius: radiusByIdRef.current.get(node.id) ?? NODE_MIN_RADIUS,
+        fx: undefined,
+        fy: undefined,
+      }),
+    );
+
+    const linkData = edgesProp.filter(
+      (e) => degreeByIdRef.current.has(e.from) && degreeByIdRef.current.has(e.to),
+    );
+
+    const sim = forceSimulation(nodeData as unknown as SimulationNodeDatum[])
+      .force(
+        "link",
+        ((forceLink(linkData as any) as any)
+          .id((d: { id: string }) => d.id)
+          .distance((d: { id: string }) => EDGE_LINK_DISTANCE[d.id] ?? LINK_DISTANCE)
+          .strength(0.8)) as any,
+      )
+      .force("charge", ((forceManyBody() as any).strength(CHARGE_STRENGTH).distanceMax(300)) as any)
+      .force("center", (forceCenter(width / 2, height / 2) as any) as any)
+      .force(
+        "collision",
+        ((forceCollide() as any)
+          .radius((d: { radius: number }) => d.radius + 6)
+          .iterations(2)) as any,
+      )
+      .alpha(1)
+      .restart();
+
+    simRef.current = sim;
+
+    if (typeof window !== "undefined") {
+      (window as any).__hilumGraphTest = {
+        getHoveredNodeId: () => hoveredRef.current,
+        getSelectedNodeId: () => selectedRef.current,
+        getZoom: () => transformRef.current.k,
+        getPan: () => ({ x: transformRef.current.x, y: transformRef.current.y }),
+      };
+    }
+
+    function tick() {
+      if (!simRef.current) return;
+      simRef.current.tick();
+      draw();
+      if (simRef.current.alpha() > 0.01) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    }
+
+    draw();
+    if (simRef.current.alpha() > 0.01) {
+      rafRef.current = requestAnimationFrame(tick);
+    }
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      simRef.current?.stop();
+      simRef.current = null;
+      if (typeof window !== "undefined" && (window as any).__hilumGraphTest) {
+        delete (window as any).__hilumGraphTest;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodesProp.length, edgesProp.length, width, height]);
+
+  // ---------------------------------------------------------------
+  // Focus camera on a node
+  // ---------------------------------------------------------------
+  useEffect(() => {
+    if (!focusNodeIdProp || focusNodeIdProp === lastFocusedRef.current) return;
+    const p = nodePos(focusNodeIdProp);
+    if (!p) return;
+    lastFocusedRef.current = focusNodeIdProp;
+    transformRef.current.k = 1.6;
+    setZoom(1.6);
+    const rect = canvasRef.current!.getBoundingClientRect();
+    transformRef.current.x = rect.width / 2 - p.x * 1.6;
+    transformRef.current.y = rect.height / 2 - p.y * 1.6;
+    setPan({ x: transformRef.current.x, y: transformRef.current.y });
+    simRef.current?.alpha(0.4).restart();
+    draw();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusNodeIdProp, width, height]);
+
+  // ---------------------------------------------------------------
+  // Draw
+  // ---------------------------------------------------------------
+  function draw() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = Math.min(window.devicePixelRatio ?? 1, 2);
+    const { k, x, y } = transformRef.current;
+
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.translate(x, y);
+    ctx.scale(k, k);
+
+    const bg = cssVar("--bg");
+    const textColor = cssVar("--text");
+    const sessionConceptIds = sessionConceptIdsProp ?? new Set<string>();
+    const sessionId = sessionIdProp;
+    const selectedId = selectedIdProp ?? selectedRef.current;
+
+    // --- Edges ---
+    const visibleEdges = edgesProp.filter(
+      (e) =>
+        (selectedId === null || e.from === selectedId || e.to === selectedId) &&
+        degreeByIdRef.current.has(e.from) &&
+        degreeByIdRef.current.has(e.to),
+    );
+
+    ctx.lineWidth = 1 / k;
+    for (const edge of visibleEdges) {
+      const a = nodePos(edge.from);
+      const b = nodePos(edge.to);
+      if (!a || !b) continue;
+
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const ux = dx / dist;
+      const uy = dy / dist;
+      const ra = radiusByIdRef.current.get(edge.from) ?? NODE_MIN_RADIUS;
+      const rb = radiusByIdRef.current.get(edge.to) ?? NODE_MIN_RADIUS;
+      const x1 = a.x + ux * (ra + 2);
+      const y1 = a.y + uy * (ra + 2);
+      const x2 = b.x - ux * (rb + 2);
+      const y2 = b.y - uy * (rb + 2);
+
+      const isSelectedEdge =
+        selectedId !== null && (edge.from === selectedId || edge.to === selectedId);
+      const dash = isSelectedEdge ? EDGE_DASH[edge.type] : undefined;
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = isSelectedEdge ? cssVar("--primary") : cssVar("--border-strong");
+      ctx.globalAlpha = isSelectedEdge ? 0.9 : 0.4;
+      if (dash) ctx.setLineDash(dash.split(" ").map(Number));
+      else ctx.setLineDash([]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Arrowhead for prerequisite edges, only on selected node's edges
+      if (isSelectedEdge && edge.type === "prerequisite") {
+        const arrowSize = 6 / k;
+        const angle = Math.atan2(dy, dx);
+        ctx.save();
+        ctx.translate(x2, y2);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-arrowSize, arrowSize / 2);
+        ctx.lineTo(-arrowSize, -arrowSize / 2);
+        ctx.closePath();
+        ctx.fillStyle = cssVar("--primary");
+        ctx.globalAlpha = 0.9;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Type label only for selected node's edges
+      if (isSelectedEdge && EDGE_TYPE_SHORT(edge.type)) {
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2;
+        ctx.font = `${Math.max(9, 10 / k)}px ${cssVar("--font-ui")}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const label = EDGE_TYPE_SHORT(edge.type);
+        const metrics = ctx.measureText(label);
+        ctx.fillStyle = cssVar("--text-muted");
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(
+          mx - metrics.width / 2 - 2 / k,
+          my - 6 / k,
+          metrics.width + 4 / k,
+          12 / k,
+        );
+        ctx.fillStyle = cssVar("--text");
+        ctx.globalAlpha = 1;
+        ctx.fillText(label, mx, my);
+      }
+
+      ctx.globalAlpha = 1;
+    }
+
+    // --- Nodes ---
+    const hoveredId = hoverNode;
+    for (const node of nodesProp) {
+      const p = nodePos(node.id);
+      if (!p) continue;
+
+      const r = radiusByIdRef.current.get(node.id) ?? NODE_MIN_RADIUS;
+      const selected = selectedId === node.id;
+      const isHovered = hoveredId === node.id;
+      const dimmed =
+        selectedId !== null &&
+        selectedId !== node.id &&
+        !isNeighbour(selectedId, node.id) &&
+        hoveredId !== node.id;
+
+      // Session overlay highlight
+      const inSession =
+        sessionId !== null && sessionConceptIds.has(node.id);
+      const sessionDimmed =
+        sessionId !== null && !inSession;
+
+      const proposed =
+        node.status === "proposed";
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.scale(k, k);
+
+      if (dimmed) ctx.globalAlpha = 0.12;
+      if (sessionDimmed && !selected) ctx.globalAlpha = 0.4;
+      if (proposed && !selected) ctx.globalAlpha = 0.5;
+
+      const fill = MASTERY_FILL[node.mastery.state] ?? 0;
+      const strokeVar = MASTERY_STROKE_VAR[node.mastery.state] ?? "--text-muted";
+      const strokeColor = cssVar(strokeVar);
+
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, 2 * Math.PI);
+
+      if (node.mastery.state === "unseen") {
+        // Hollow ring
+        ctx.fillStyle = bg;
+        ctx.fill();
+        ctx.lineWidth = 2 / k;
+        ctx.strokeStyle = strokeColor;
+        ctx.stroke();
+      } else if (fill >= 1) {
+        // Solid fill
+        ctx.fillStyle =
+          node.mastery.state === "decayed" ? cssVar("--warning") : strokeColor;
+        ctx.fill();
+        // Decayed: dashed outer ring
+        if (node.mastery.state === "decayed") {
+          ctx.lineWidth = 2 / k;
+          ctx.strokeStyle = cssVar("--primary");
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      } else {
+        // Partial fill
+        ctx.fillStyle = bg;
+        ctx.fill();
+        ctx.lineWidth = 2 / k;
+        ctx.strokeStyle = strokeColor;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 0, r, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * fill);
+        ctx.lineTo(0, 0);
+        ctx.closePath();
+        ctx.fillStyle = strokeColor;
+        ctx.globalAlpha = 0.9;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, 2 * Math.PI);
+        ctx.lineWidth = 1 / k;
+        ctx.strokeStyle = strokeColor;
+        ctx.stroke();
+      }
+
+      // Session highlight ring
+      if (inSession && !selected) {
+        ctx.beginPath();
+        ctx.arc(0, 0, r + 3 / k, 0, 2 * Math.PI);
+        ctx.lineWidth = 2 / k;
+        ctx.strokeStyle = cssVar("--primary");
+        ctx.globalAlpha = 0.9;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.restore();
+
+      // Selection ring
+      if (selected) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r + 4 / k, 0, 2 * Math.PI);
+        ctx.lineWidth = 2 / k;
+        ctx.strokeStyle = cssVar("--primary");
+        ctx.stroke();
+      }
+
+      // Hover highlight
+      if (isHovered && !selected) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r + 2 / k, 0, 2 * Math.PI);
+        ctx.lineWidth = 2 / k;
+        ctx.strokeStyle = cssVar("--text");
+        ctx.globalAlpha = 0.5;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // --- Labels ---
+    const showLabels =
+      hoverNode !== null || selectedRef.current !== null || k >= 1.6;
+    if (showLabels) {
+      ctx.font = `${Math.max(11, 13 / k)}px ${cssVar("--font-prose")}`;
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+
+      const labelNodes = nodesProp.filter(
+        (n) =>
+          hoverNode === n.id ||
+          selectedRef.current === n.id ||
+          isNeighbour(n.id, selectedRef.current ?? "") ||
+          k >= 1.6,
+      );
+
+      for (const node of labelNodes) {
+        const p = nodePos(node.id);
+        if (!p) continue;
+        const title = truncate(node.title, LABEL_TRUNCATE);
+        const metrics = ctx.measureText(title);
+        const tw = metrics.width;
+        const th = 13 / k;
+        const px = p.x;
+        const py = p.y - (radiusByIdRef.current.get(node.id) ?? NODE_MIN_RADIUS) - 6 / k;
+
+        ctx.fillStyle = bg;
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(px - tw / 2 - 3 / k, py - th / 2 - 2 / k, tw + 6 / k, th + 4 / k);
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = textColor;
+        ctx.fillText(title, px, py);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  function nodePos(id: string): { x: number; y: number } | null {
+    if (!simRef.current) return null;
+    const nodesList = simRef.current.nodes() as unknown as {
+      id: string;
+      x: number;
+      y: number;
+    }[];
+    const d = nodesList.find((n) => n.id === id);
+    if (!d) return null;
+    return { x: d.x, y: d.y };
+  }
+
+  function isNeighbour(a: string, b: string): boolean {
+    if (!a || !b) return false;
+    return edgesProp.some(
+      (e) => (e.from === a && e.to === b) || (e.from === b && e.to === a),
+    );
+  }
+
+  function screenToCanvas(sx: number, sy: number): { x: number; y: number } {
+    const { k, x, y } = transformRef.current;
+    return { x: (sx - x) / k, y: (sy - y) / k };
+  }
+
+  function findNodeAt(sx: number, sy: number): string | null {
+    const c = screenToCanvas(sx, sy);
+    const rMax = NODE_MAX_RADIUS / transformRef.current.k;
+    for (const node of nodesProp) {
+      const p = nodePos(node.id);
+      if (!p) continue;
+      if (Math.hypot(p.x - c.x, p.y - c.y) < rMax) return node.id;
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------
+  // Pointer handlers
+  // ---------------------------------------------------------------
+  const onPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (event.button !== 0) return;
+      const id = findNodeAt(event.clientX, event.clientY);
+      if (id) {
+        pinnedRef.current.add(id);
+        simRef.current?.alpha(0.4).restart();
+      } else {
+        dragStartRef.current = {
+          sx: event.clientX,
+          sy: event.clientY,
+          x: pan.x,
+          y: pan.y,
+        };
+      }
+    },
+    [pan],
+  );
+
+  const onPointerMove = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      const id = findNodeAt(event.clientX, event.clientY);
+      setHoverNode(id);
+      hoveredRef.current = id;
+
+      const drag = dragStartRef.current;
+      if (drag) {
+        const dx = (event.clientX - drag.sx) / transformRef.current.k;
+        const dy = (event.clientY - drag.sy) / transformRef.current.k;
+        setPan((prev) => ({
+          x: drag.x + dx,
+          y: drag.y + dy,
+        }));
+        transformRef.current.x = pan.x + dx;
+        transformRef.current.y = pan.y + dy;
+      }
+    },
+    [pan],
+  );
+
+  const onPointerUp = useCallback(() => {
+    dragStartRef.current = null;
+    pinnedRef.current = new Set();
+  }, []);
+
+  const onWheel = useCallback(
+    (event: React.WheelEvent<HTMLCanvasElement>) => {
+      event.preventDefault();
+      const rect = canvasRef.current!.getBoundingClientRect();
+      const sx = event.clientX - rect.left;
+      const sy = event.clientY - rect.top;
+      const before = screenToCanvas(sx, sy);
+
+      const previous = transformRef.current.k;
+      const next = Math.min(
+        MAX_ZOOM,
+        Math.max(MIN_ZOOM, previous * (event.deltaY < 0 ? 1.15 : 0.87)),
+      );
+      transformRef.current.k = next;
+      setZoom(next);
+
+      const after = screenToCanvas(sx, sy);
+      transformRef.current.x += (before.x - after.x) * next;
+      transformRef.current.y += (before.y - after.y) * next;
+      setPan({ x: transformRef.current.x, y: transformRef.current.y });
+    },
+    [],
+  );
+
+  const onDoubleClick = useCallback(
+    (event: React.MouseEvent<HTMLCanvasElement>) => {
+      const id = findNodeAt(event.clientX, event.clientY);
+      if (!id) return;
+      const p = nodePos(id);
+      if (!p) return;
+      transformRef.current.k = 1.6;
+      setZoom(1.6);
+      const rect = canvasRef.current!.getBoundingClientRect();
+      transformRef.current.x = rect.width / 2 - p.x * 1.6;
+      transformRef.current.y = rect.height / 2 - p.y * 1.6;
+      setPan({ x: transformRef.current.x, y: transformRef.current.y });
+      simRef.current?.alpha(0.4).restart();
+    },
+    [],
+  );
+
+  const onClick = useCallback(
+    (event: React.MouseEvent<HTMLCanvasElement>) => {
+      const id = findNodeAt(event.clientX, event.clientY);
+      if (!id) {
+        if (selectedRef.current !== null) {
+          selectedRef.current = null;
+          onNodeSelect?.(null);
+          draw();
+        }
+        return;
+      }
+      if (selectedRef.current === id) return;
+      selectedRef.current = id;
+      pinnedRef.current.add(id);
+      onNodeSelect?.(id);
+      simRef.current?.alpha(0.4).restart();
+      draw();
+    },
+    [onNodeSelect],
+  );
+
+  useEffect(() => {
+    draw();
+  }, [zoom, pan.x, pan.y, nodesProp.length, edgesProp.length, hoverNode]);
+
+  // ---------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------
+  const canvasEvents = {
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onWheel,
+    onDoubleClick,
+    onClick,
+  };
+
+  if (ambient) {
+    return (
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full block bg-transparent"
+        {...canvasEvents}
+        style={{ touchAction: "none" }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="relative w-full h-full overflow-hidden bg-bg"
+      style={{ width, height }}
+    >
+      <canvas
+        ref={canvasRef}
+        className="block w-full h-full"
+        {...canvasEvents}
+        style={{ touchAction: "none" }}
+      />
+
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex gap-1">
+        {[ "neighborhood", "overview" ].map((m) => (
+          <button
+            key={m}
+            type="button"
+            className="px-3 py-1.5 rounded-control border border-border-subtle bg-surface type-body-sm text-text hover:bg-surface-2"
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+
+      <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
+        <input
+          type="search"
+          placeholder="Find a topic…"
+          className="min-h-10 w-[220px] rounded-control border border-border-strong bg-surface pl-8 pr-3 type-body-sm text-text placeholder:text-text-muted focus:border-primary"
+        />
+        <div className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 pointer-events-none text-text-muted">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+      </div>
+    </div>
+  );
+}

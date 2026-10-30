@@ -3,7 +3,7 @@ import { ArrowLeft, BookOpen, Plus, Search, Trash2 } from "lucide-react";
 import type { Course, NoteMeta } from "../api.ts";
 import { plural } from "../lib/format.ts";
 import { Button } from "../components/Button.tsx";
-import { EmptyState, Skeleton } from "../components/ui.tsx";
+import { Chip, EmptyState, Skeleton } from "../components/ui.tsx";
 
 export function Notes({
   courses,
@@ -53,39 +53,39 @@ export function Notes({
         <div className="flex min-w-0 items-center gap-2">
           {course && (
             <Button variant="ghost" className="px-2" onClick={onClearCourse}>
-              <ArrowLeft aria-hidden="true" className="size-4" />
-              All courses
+              <ArrowLeft aria-hidden="true" className="size-5" />
+              <span className="hidden sm:inline">All courses</span>
             </Button>
           )}
-          <h1 className="truncate text-xl font-semibold tracking-tight">
+          <h1 className="truncate type-title">
             {course ? course.title : "Notes"}
           </h1>
         </div>
         {course && (
           <Button variant="secondary" onClick={() => onNewNote(course)}>
-            <Plus aria-hidden="true" className="size-4" />
-            New note
+            <Plus aria-hidden="true" className="size-5" />
+            <span className="hidden sm:inline">New note</span>
           </Button>
         )}
-        <label className="relative w-full sm:w-64">
-          <span className="sr-only">Search notes</span>
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-muted"
-          />
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(event) => onQuery(event.target.value)}
-            placeholder="Search notes"
-            type="search"
-            className="min-h-11 w-full rounded-control border border-border-strong bg-surface pr-3 pl-9 text-sm text-text placeholder:text-text-muted focus:border-primary focus:outline-none"
-          />
-        </label>
+      </div>
+
+      <div className="mt-3 relative w-full sm:w-64">
+        <Search
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-text-muted"
+        />
+        <input
+          ref={searchRef}
+          value={query}
+          onChange={(event) => onQuery(event.target.value)}
+          placeholder="Search notes"
+          type="search"
+          className="min-h-11 w-full rounded-control border border-border-strong bg-surface pr-3 pl-10 type-body-sm text-text placeholder:text-text-muted focus:border-primary"
+        />
       </div>
 
       {course && !results && (
-        <p className="mt-1 text-sm text-text-muted">
+        <p className="mt-2 type-meta text-text-muted">
           {course.code} · {plural(course.notes, "note")} · {course.tokens.toLocaleString()} tokens
           {course.examDate ? ` · exam ${course.examDate}` : ""}
         </p>
@@ -95,18 +95,16 @@ export function Notes({
 
       {!loading && results && (
         <section className="mt-6" aria-label="Search results">
-          <h2 className="text-xs font-semibold text-text-muted">
-            {plural(results.length, "result")} for “{query.trim()}”
+          <h2 className="type-label">
+            {plural(results.length, "result")} for <span className="type-body-sm font-medium text-text">“{query.trim()}”</span>
           </h2>
-          <NoteList notes={results} onOpenNote={onOpenNote} onDeleteNote={onDeleteNote} showCourse />
+          <NoteList notes={results} onOpenNote={onOpenNote} onDeleteNote={onDeleteNote} />
         </section>
       )}
 
       {!loading && !results && !course && (
         <section className="mt-6" aria-labelledby="all-courses">
-          <h2 id="all-courses" className="text-xs font-semibold text-text-muted">
-            Courses
-          </h2>
+          <h2 id="all-courses" className="type-label">Courses</h2>
           {courses.length === 0 ? (
             <div className="mt-3">
               <EmptyState title="No notes yet">
@@ -120,13 +118,15 @@ export function Notes({
                   <button
                     type="button"
                     onClick={() => onSelectCourse(item)}
-                    className="flex min-h-11 w-full items-center justify-between gap-4 py-3 text-left hover:bg-surface-2"
+                    className="flex min-h-14 w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-surface-2"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold">{item.title}</span>
-                      <span className="mt-0.5 block font-mono text-xs text-text-muted">{item.code}</span>
+                      <span className="block truncate type-body-sm font-medium">{item.title}</span>
+                      <span className="mt-0.5 block font-mono type-meta">{item.code}</span>
                     </span>
-                    <span className="shrink-0 text-xs text-text-muted">{plural(item.notes, "note")}</span>
+                    <span className="shrink-0 type-meta text-text-muted">
+                      {plural(item.notes, "note")}
+                    </span>
                   </button>
                 </li>
               ))}
@@ -137,14 +137,11 @@ export function Notes({
 
       {!loading && !results && course && (
         <section className="mt-6" aria-labelledby="course-notes">
-          <h2 id="course-notes" className="text-xs font-semibold text-text-muted">
-            Notes
-          </h2>
+          <h2 id="course-notes" className="type-label">Notes</h2>
           {list.length === 0 ? (
             <div className="mt-3">
               <EmptyState title="No notes indexed for this course">
-                Run the converter on this course's folder, or check that the files sit under the course
-                directory.
+                Run the converter on this course's folder, or check that the files sit under the course directory.
               </EmptyState>
             </div>
           ) : (
@@ -160,44 +157,40 @@ function NoteList({
   notes,
   onOpenNote,
   onDeleteNote,
-  showCourse = false,
 }: {
   notes: NoteMeta[];
   onOpenNote: (path: string) => void;
   onDeleteNote: (path: string) => void;
-  showCourse?: boolean;
 }) {
   return (
     <ul className="mt-2 divide-y divide-border-subtle border-y border-border-subtle">
       {notes.map((note) => (
         <li key={note.path}>
-          <div className="flex min-h-11 w-full items-start gap-3 py-3 text-left hover:bg-surface-2">
+          <div className="flex min-h-12 w-full items-start gap-3 py-3 text-left hover:bg-surface-2">
             <button
               type="button"
               onClick={() => onOpenNote(note.path)}
               className="flex min-w-0 items-start gap-3 py-3 text-left hover:bg-surface-2"
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <BookOpen aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-text-muted" />
+              <BookOpen aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-text-muted" />
               <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold">{note.title}</span>
-                <span className="mt-0.5 block truncate text-sm text-text-muted">
+                <span className="block truncate type-body-sm font-medium">{note.title}</span>
+                <span className="mt-0.5 block truncate type-body-sm text-text-muted">
                   {note.summary || note.path}
                 </span>
-                {showCourse && note.course && (
-                  <span className="mt-0.5 block font-mono text-xs text-text-muted">{note.course}</span>
-                )}
               </span>
             </button>
             <Button
               variant="destructive"
+              size="icon-sm"
               onClick={(e) => {
                 e.stopPropagation();
                 if (window.confirm(`Delete “${note.title}”?`)) onDeleteNote(note.path);
               }}
               aria-label={`Delete ${note.title}`}
             >
-              <Trash2 aria-hidden="true" className="size-4" />
+              <Trash2 aria-hidden="true" className="size-5" />
             </Button>
           </div>
         </li>

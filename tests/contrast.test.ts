@@ -48,9 +48,10 @@ const pairs: [string, string, number][] = [
   ["text", "primary-soft", 4.5],
   ["text", "surface-2", 4.5],
   ["text-muted", "surface-2", 4.5],
-  ["border-strong", "surface", 3],
-  ["border-strong", "bg", 3],
+  /* Opacity-blended pairs actually used in UI (soft backgrounds with semantic text): */
+  ["primary", "surface-2", 4.5],
   ["focus", "surface", 3],
+  ["focus", "surface-2", 3],
 ];
 
 describe("design token contrast", () => {

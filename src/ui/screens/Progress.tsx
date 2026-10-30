@@ -170,13 +170,13 @@ export function ProgressScreen({
     <div className="max-w-3xl">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Progress</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <h1 className="type-title">Progress</h1>
+          <p className="mt-1 type-body-sm text-text-muted">
             Topics, mastery and the review queue. Mastery comes from evidence, never from a hand edit.
           </p>
         </div>
         {courses.length > 0 && (
-          <label className="block text-sm font-medium">
+          <label className="block type-body-sm font-medium">
             Course
             <select
               value={courseCode}
@@ -184,7 +184,7 @@ export function ProgressScreen({
                 setCourseCode(event.target.value);
                 setSelectedId(null);
               }}
-              className="mt-1.5 min-h-11 w-full min-w-44 rounded-control border border-border bg-surface px-3 text-sm"
+              className="mt-1.5 min-h-11 w-full min-w-44 rounded-control border border-border bg-surface px-3 type-body-sm"
             >
               {courses.map((item) => (
                 <option key={item.code} value={item.code}>
@@ -233,12 +233,12 @@ export function ProgressScreen({
           <section aria-labelledby="overview-heading" className="mt-6 border-y border-border-subtle py-4">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 id="overview-heading" className="text-sm font-medium text-text-muted">
+                <h2 id="overview-heading" className="type-label">
                   {course?.title ?? courseCode}
                 </h2>
-                <p className="mt-0.5 font-mono text-2xl font-semibold tabular-nums">
+                <p className="mt-0.5 font-mono type-body font-semibold tabular-nums text-text">
                   {snapshot.counts.mastered} of {snapshot.counts.total}
-                  <span className="ml-2 text-sm font-normal text-text-muted">mastered</span>
+                  <span className="ml-2 type-body-sm font-normal text-text-muted">mastered</span>
                 </p>
               </div>
               {dueCount > 0 && (
@@ -266,8 +266,8 @@ export function ProgressScreen({
                 <li key={state}>
                   <Chip>
                     <MasteryRing state={state} size={16} />
-                    {STATE_LABELS[state]}{" "}
-                    <span className="font-mono tabular-nums">{snapshot.counts[state]}</span>
+                    <span className="type-body-sm">{STATE_LABELS[state]}</span>
+                    <span className="font-mono type-meta tabular-nums">{snapshot.counts[state]}</span>
                   </Chip>
                 </li>
               ))}
@@ -277,12 +277,10 @@ export function ProgressScreen({
           {proposed.length > 0 && (
             <section aria-labelledby="proposed-heading" className="mt-7">
               <div className="flex items-baseline justify-between gap-3">
-                <h2 id="proposed-heading" className="text-base font-semibold">
-                  Proposed topics
-                </h2>
-                <span className="font-mono text-xs tabular-nums text-text-muted">{proposed.length}</span>
+                <h2 id="proposed-heading" className="type-heading">Proposed topics</h2>
+                <span className="font-mono type-meta tabular-nums text-text-muted">{proposed.length}</span>
               </div>
-              <p className="reading mt-1 text-sm text-text-muted">
+              <p className="reading mt-1 type-body-sm text-text-muted">
                 Your agent proposed these. Accept them after checking the citation.
               </p>
               <ul className="mt-2 divide-y divide-border-subtle border-y border-border-subtle">
@@ -290,8 +288,8 @@ export function ProgressScreen({
                   <li key={concept.id} className="flex items-center gap-3 py-2">
                     <MasteryRing state={concept.mastery.state} size={24} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{concept.title}</p>
-                      <p className="mt-0.5 truncate text-xs text-text-muted">
+                      <p className="truncate type-body-sm font-medium">{concept.title}</p>
+                      <p className="mt-0.5 truncate type-meta text-text-muted">
                         {concept.cites[0]?.note ?? "No citation"}
                       </p>
                     </div>
@@ -304,10 +302,8 @@ export function ProgressScreen({
 
           <section aria-labelledby="topics-heading" className="mt-7">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 id="topics-heading" className="text-base font-semibold">
-                Topics
-              </h2>
-              <ul className="flex flex-wrap gap-2 text-xs text-text-muted" aria-label="Mastery legend">
+              <h2 id="topics-heading" className="type-heading">Topics</h2>
+              <ul className="flex flex-wrap gap-2 type-meta text-text-muted" aria-label="Mastery legend">
                 {STATE_ORDER.map((state) => (
                   <li key={state} className="flex items-center gap-1">
                     <MasteryRing state={state} size={16} />
@@ -335,9 +331,9 @@ export function ProgressScreen({
                           className="flex size-11 shrink-0 items-center justify-center rounded-control text-text-muted hover:bg-surface-2 hover:text-text"
                         >
                           {open ? (
-                            <ChevronDown aria-hidden="true" className="size-4" />
+                            <ChevronDown aria-hidden="true" className="size-5" />
                           ) : (
-                            <ChevronRight aria-hidden="true" className="size-4" />
+                            <ChevronRight aria-hidden="true" className="size-5" />
                           )}
                         </button>
                       ) : (
@@ -351,11 +347,11 @@ export function ProgressScreen({
                         <MasteryRing state={node.mastery.state} size={24} />
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-baseline gap-x-2">
-                            <span className="truncate text-sm font-semibold">{node.title}</span>
-                            {node.status === "proposed" && <span className="text-xs text-warning">Proposed</span>}
-                            {node.lecturerFlag && <span className="text-xs text-accent">Lecturer flagged</span>}
+                            <span className="truncate type-body-sm font-medium">{node.title}</span>
+                            {node.status === "proposed" && <span className="type-meta text-warning">Proposed</span>}
+                            {node.lecturerFlag && <span className="type-meta text-accent">Lecturer flagged</span>}
                           </span>
-                          <span className="block truncate text-xs text-text-muted">
+                          <span className="block truncate type-meta text-text-muted">
                             {node.childCount > 0
                               ? `${node.rollup.mastered} of ${node.rollup.total} mastered in this branch`
                               : node.mastery.evidenceCount > 0
@@ -363,7 +359,7 @@ export function ProgressScreen({
                                 : "No evidence yet"}
                           </span>
                         </span>
-                        <span className="hidden shrink-0 text-right text-xs text-text-muted sm:block">
+                        <span className="hidden shrink-0 type-meta text-text-muted sm:block">
                           {STATE_LABELS[node.mastery.state]}
                           {node.mastery.overdue && node.mastery.decayDueAt
                             ? ` · ${daysOverdue(node.mastery.decayDueAt)}d`

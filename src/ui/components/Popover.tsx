@@ -9,6 +9,7 @@ export function Popover({
   initialFocusRef,
   className,
   children,
+  placement = "bottom",
 }: {
   open: boolean;
   onClose: (reason: "escape" | "outside") => void;
@@ -17,6 +18,7 @@ export function Popover({
   initialFocusRef?: RefObject<HTMLElement | null>;
   className?: string;
   children: ReactNode;
+  placement?: "top" | "bottom";
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -50,7 +52,8 @@ export function Popover({
       role={role}
       aria-labelledby={labelledBy}
       className={cn(
-        "absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-panel border border-border-subtle bg-surface p-3 shadow-popover",
+        "absolute right-0 z-50 w-72 max-w-[calc(100vw-2rem)] rounded-panel border border-border-subtle bg-surface p-3 shadow-popover",
+        placement === "top" ? "bottom-full mb-2" : "top-full mt-2",
         className,
       )}
     >

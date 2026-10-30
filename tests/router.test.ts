@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { parseRoute } from "../src/ui/lib/router.ts";
-import { isPractice, sessionTitle, shortStatus, statusFor } from "../src/ui/components/Sidebar.tsx";
-import type { SessionDetail, SessionSummary } from "../src/ui/api.ts";
+import { isPractice, sessionTitle } from "../src/ui/components/Sidebar.tsx";
+import type { SessionSummary } from "../src/ui/api.ts";
 
 describe("router", () => {
   test("maps the public routes", () => {
@@ -32,19 +32,9 @@ const base: SessionSummary = {
   endedAt: null,
   summary: "",
   notePath: null,
-};
-
-const detail: SessionDetail = {
-  ...base,
-  agentSeenAt: Date.now(),
-  agentConnected: true,
-  agentPreparing: false,
-  activity: null,
-  activities: [],
-  requests: [],
-  messages: [],
-  transcript: [],
-  evidenceCount: 0,
+  status: "Agent not connected",
+  pendingCount: 0,
+  agentConnected: false,
 };
 
 describe("session rows", () => {
@@ -56,24 +46,8 @@ describe("session rows", () => {
     expect(isPractice("Teach me the nephron")).toBe(false);
   });
 
-  test("status is derived from SessionDetail fields", () => {
-    expect(statusFor({ ...base, endedAt: Date.now() }, detail)).toBe("Ended");
-    expect(statusFor(base, { ...detail, activities: [{ status: "pending" } as SessionDetail["activities"][number]] })).toBe(
-      "Waiting for your answer",
-    );
-    expect(statusFor(base, { ...detail, activities: [], agentPreparing: true })).toBe("Agent working");
-    expect(statusFor(base, { ...detail, activities: [], agentPreparing: false })).toBe("Agent connected");
-    expect(statusFor(base, { ...detail, agentConnected: false, agentPreparing: false })).toBe(
-      "Agent not connected",
-    );
-    expect(statusFor(base, undefined)).toBe("Active");
-  });
-
-  test("row meta uses a compact status that fits two lines", () => {
-    expect(shortStatus("Waiting for your answer")).toBe("Waiting");
-    expect(shortStatus("Agent working")).toBe("Working");
-    expect(shortStatus("Agent connected")).toBe("Connected");
-    expect(shortStatus("Agent not connected")).toBe("No agent");
-    expect(shortStatus("Ended")).toBe("Ended");
+  test("row meta shows the full text status", () => {
+    expect(base.status).toBe("Agent not connected");
+    expect({ ...base, endedAt: Date.now() }.status).toBe("Agent not connected");
   });
 });

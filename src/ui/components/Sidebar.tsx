@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { BookOpen, Library, Plus, Search, Settings2 } from "lucide-react";
-import type { Course, SessionDetail, SessionSummary } from "../api.ts";
+import { Check, Circle, Clock, Library, Plus, Radio, Search, Settings2 } from "lucide-react";
+import type { Course, SessionSummary } from "../api.ts";
 import { Link } from "../lib/router.ts";
 import { cn } from "../lib/cn.ts";
 import { Input } from "./Input.tsx";
@@ -11,14 +11,12 @@ type Filter = "teaching" | "practice" | "all";
 export function Sidebar({
   courses,
   sessions,
-  details,
   loading,
   activeSessionId,
   onNavigate,
 }: {
   courses: Course[];
   sessions: SessionSummary[];
-  details: Record<string, SessionDetail>;
   loading: boolean;
   activeSessionId: string | null;
   onNavigate?: () => void;
@@ -86,7 +84,7 @@ export function Sidebar({
         />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-2 pb-2">
         <p className="type-label px-2 py-2 text-text-muted">Sessions</p>
         {loading ? (
           <p className="type-body-sm px-2 py-3 text-text-muted">Loading sessions…</p>
@@ -102,16 +100,14 @@ export function Sidebar({
           <ul className="space-y-1">
             {filtered.map((session) => {
               const course = courses.find((item) => item.code === session.course);
-              const detail = details[session.id];
               const title = sessionTitle(session.goal);
-              const status = statusFor(session, detail);
               return (
                 <li key={session.id}>
                   <Link
                     to={`/sessions/${session.id}`}
                     onClick={onNavigate}
                     aria-current={activeSessionId === session.id ? "page" : undefined}
-                    title={`${title} — ${status}`}
+                    title={`${title} — ${session.status}`}
                     className={cn(
                       "flex min-h-11 flex-col justify-center gap-1 rounded-control border px-3 py-2",
                       activeSessionId === session.id
@@ -119,11 +115,13 @@ export function Sidebar({
                         : "border-transparent hover:border-border-subtle hover:bg-surface-2",
                     )}
                   >
-                    <span className="type-body-sm truncate font-medium text-text">{title}</span>
-                    <span className="type-meta truncate text-text-muted">
-                      {course?.code ?? session.course} · {relativeTime(session.startedAt)} ·{" "}
-                      {shortStatus(status)}
-                    </span>
+                    <span className="type-body-sm truncate font-medium text-text block">{title}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="type-meta text-text-muted">
+                        {course?.code ?? session.course} · {relativeTime(session.startedAt)}
+                      </span>
+                      <StatusLabel label={statusShort(session.status)} />
+                    </div>
                   </Link>
                 </li>
               );
@@ -149,10 +147,6 @@ export function Sidebar({
           <Settings2 aria-hidden="true" className="size-5" />
           Settings
         </Link>
-        <p className="type-meta mt-1 flex items-start gap-2 px-2 py-1 text-text-muted">
-          <BookOpen aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          Sessions are the product. Library is quiet.
-        </p>
       </nav>
     </div>
   );
@@ -165,30 +159,6 @@ export function sessionTitle(goal: string): string {
 
 export function isPractice(goal: string): boolean {
   return /^practice\b/i.test(goal.trim());
-}
-
-export function shortStatus(status: string): string {
-  switch (status) {
-    case "Waiting for your answer":
-      return "Waiting";
-    case "Agent working":
-      return "Working";
-    case "Agent connected":
-      return "Connected";
-    case "Agent not connected":
-      return "No agent";
-    default:
-      return status;
-  }
-}
-
-export function statusFor(summary: SessionSummary, detail?: SessionDetail): string {
-  if (summary.endedAt) return "Ended";
-  if (!detail) return "Active";
-  if (detail.activities.some((activity) => activity.status === "pending")) return "Waiting for your answer";
-  if (detail.agentConnected && detail.agentPreparing) return "Agent working";
-  if (detail.agentConnected) return "Agent connected";
-  return "Agent not connected";
 }
 
 export function relativeTime(timestamp: number): string {
@@ -204,4 +174,49 @@ export function relativeTime(timestamp: number): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${mm}-${dd}`;
+}
+
+function statusShort(status: string): string {
+  switch (status) {
+    case "Waiting for your answer":
+      return "Waiting";
+    case "Agent working":
+    case "Agent connected":
+      return "Connected";
+    case "Ended":
+      return "Ended";
+    case "Agent not connected":
+      return "No agent";
+    default:
+      return status;
+  }
+}
+
+export function sessionStatusText({
+  status,
+  endedAt,
+  agentConnected,
+}: {
+  status: string;
+  endedAt: number | null;
+  agentConnected: boolean;
+}): "Waiting" | "Working" | "Connected" | "No agent" | "Ended" {
+  if (endedAt) return "Ended";
+  if (!agentConnected) return "No agent";
+  const s = status.toLowerCase();
+  if (s.includes("waiting")) return "Waiting";
+  if (s.includes("working")) return "Working";
+  if (s.includes("connected")) return "Connected";
+  return "No agent";
+}
+
+function StatusLabel({ label }: { label: string }) {
+  const Icon = label === "Waiting" ? Clock : label === "Connected" || label === "Working" ? Radio : label === "Ended" ? Check : Circle;
+  const tone = label === "Waiting" ? "text-warning" : label === "Connected" || label === "Working" ? "text-primary" : "text-text-muted";
+  return (
+    <span className={cn("type-meta inline-flex shrink-0 items-center gap-1", tone)}>
+      <Icon aria-hidden="true" className="size-3.5" />
+      {label}
+    </span>
+  );
 }

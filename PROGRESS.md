@@ -187,14 +187,6 @@ Append-only log. Newest entry at the bottom.
 - Brand: added `BRAND.md` documenting port 4747, the Hilum name, H&E palette, local fonts and the icon rules.
 - Icon: confirmed `public/icon.svg` as the final color icon; rendered `public/icon-mono.svg` plus PNGs at 16/32/180/192/512 and maskable PNGs at 192/512 (`public/icon-maskable.svg`). `manifest.webmanifest` lists any + maskable icons; `index.html` favicon uses `/favicon-32x32.png` with SVG fallback. Tagged `n0-pass`.
 
-## 2026-10-28 — N3 in-app note editor
-
-- Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok; reviewer pass `bun run check:ui` ok at 360px).
-- Spike decision recorded in `DECISIONS.md`: CodeMirror 6 source editor with side-by-side react-markdown live preview (desktop), chosen over Milkdown/TipTap for round-trip fidelity (frontmatter untouched, `{#anchors}`, wikilinks, tables, mermaid fences, images preserved), lazy load only on the editor screen, offline with zero network requests, reliable mobile typing.
-- `Editor.tsx`: source/preview toggle, toolbar (image), "Saved / Not saved" states with debounced autosave (1.5s) through `api.writeNote` → VaultService `writeNote` (mode replace), frontmatter held in a Details panel (title, course, topics, source type) never shown as YAML; student notes default `source_type: student_notes, trust: medium`; manual Save button; external-change banner skeleton (Reload/Keep mine/See changes) wired but no live watcher yet; keyboard-operable; works at 360px.
-- Server: added `POST /api/note` (writeNote replace) and `POST /api/asset` (writeAsset into `<course>/assets/`); `api.writeNote`/`api.writeAsset` client helpers.
-- Tagged `n3-pass`.
-
 ## 2026-10-28 — N4 config editors in the app
 
 - Status: done (`bun run verify`: typecheck clean, 77 tests across 11 files, smoke ok; reviewer pass `bun run check:ui` ok at 360px).
@@ -293,5 +285,129 @@ Append-only log. Newest entry at the bottom.
 - Visual consistency pass across all screens; replaced inline `text-[…]` sizes with type role utilities.
 - `check-ui.ts` updated to target new routes (sessions, settings) and pass at 360px.
 - `bun run verify` passes; `bun run check:ui` passes at 360px.
+
+## 2026-10-29 — WP4-WP6 session-first shell, settings and library
+
+- Status: done (`bun run verify` typecheck + tests pass; `bun run smoke` ok).
+- WP4 home/composer/sidebar: the app start now always creates a new session and inserts the goal as the first request (so a waiting agent receives it exactly once); the agent's `session_start` returns the newest open session and inserts no request. `SessionSummary` carries `status`, `pendingCount` and `agentConnected`, removing the 30-detail fan-out in `App.tsx`. Sidebar rows show full text status ("Waiting for your answer", "Agent working", "Ended") plus relative time; Teaching/Practice/All filter tabs and search work. The `Sessions are the product` footer copy was deleted. Last-used course is remembered via localStorage; a missing course shows an inline message. Top bar shows the real session title; main wrapper has `flex`; collapsed sidebar is inert; dead classes removed.
+- WP5 settings: real settings surface (theme System/Light/Dark via `useTheme`; reader text size and spacing via `useReaderPrefs`; vault path, LAN state and MCP endpoint read-only with copy button; MCP token masked with reveal and copy). Works at 360px, keyboard operable; no placeholder text.
+- WP6 library: one Library entry in the sidebar footer opens lazy routes under `/library` (notes, exams, questions, progress, graph) with back-button support; reader opens from citation chips scrolled to the anchor; CodeMirror and mermaid remain lazy; Library never appears on the home screen.
+- WP7 accessibility debt: `docs/a11y-debt.md` lists every violation; removed `focus:outline-none` from 18 controls (global `:focus-visible` outline now applies); move-button icons raised to 20px with 44px touch targets; `tests/contrast.test.ts` extended with opacity-blended pairs actually used; `scripts/check-ui.ts` targets the new routes and passes at 360px.
+- WP8 docs: removed duplicate N3 entry from `PROGRESS.md`; added this transition entry; `BLOCKERS.md` cleared (blocked files are present).
+
+## 2026-10-30 — WP-F visible-behaviour test gate
+
+- Status: done (`bun run verify` includes `bun run e2e`; all 8 e2e specs pass).
+- `tests/e2e` replaced with `scripts/e2e.ts`: Playwright-driven e2e against a seeded temp DB and vault. Covers home composer starts a session; session reply sends and appears in transcript; end and resume; library notes create/open/delete; graph search; reload on every public route; layout at 1280x800 and 390x844 (no overlaps, no horizontal scroll).
+- `bun run e2e` added to `package.json` scripts and included in `bun run verify`.
+- `AGENTS.md` rule added: no handler prop in `src/ui` may be `() => {}`.
+- Reader.tsx fixed: null-check on `note` before accessing `note.body` (was crashing on initial load).
+- NotesRoute auto-selects a course when none is selected (mirrors EmptySession).
+- App.tsx: `LibraryScreen` keyed on `window.location.search` so client-side navigation with `?path=` remounts the Reader.
+- SessionService.start returns 409 when an open session exists for the course (UI offers resume/new).
+- POST /api/focus presence endpoint; MCP `session_start.course` optional; new `get_active_session` tool; every MCP request touches the focused session's `agent_seen_at`.
+
+## 2026-10-30 — WP-D Knowledge graph rebuild (Obsidian style)
+
+- Status: done (`bun run verify` typecheck + tests + smoke + e2e all pass).
+- `GraphCanvas.tsx` (new): canvas-based live force graph using d3-force (forceLink distance 40-70, forceManyBody strength -120, forceCenter, forceCollide), requestAnimationFrame loop, devicePixelRatio-aware, no SVG. Nodes: filled circles, radius by degree (4-14px), mastery encoded with colour AND shape cue (unseen=hollow, familiar=quarter fill, understood=half fill, mastered=solid, decayed=solid+dashed ring), proposed concepts at 50% opacity. Edges: 1px, --border-strong at 40% alpha, straight lines, arrowheads + type labels only for selected node's edges, parent edges shorter link distance. Labels hidden by default, shown on hover/selected/neighbours/zoom>=1.6, truncated at 28 chars with --bg halo. Interaction: wheel zoom toward cursor, drag background to pan, drag node to pin/re-heat, click selects/dims non-neighbours to 0.12, click empty clears, double-click focuses/zooms. Test hook `__hilumGraphTest` exposed for e2e.
+- `Graph.tsx` rebuilt: full-bleed canvas (no max-w), segmented control mode switch overlay at top, search box with Enter-focus (camera transform changes), mastery/frontier filters, 300-node cap, session overlay highlight with ?session=<id> (ring concepts with evidence in that session, dim rest to 40%), "Show this session" toggle. Drawer uses shared Drawer pattern (Escape, focus return, no backdrop blur), neighbour chips select nodes, "Learned in sessions" lists sessions with evidence counts (newest first), cited notes open Reader at anchor, "Study this" navigates to new session via createSession.
+- Server: GET /api/concepts/:id/sessions and GET /api/sessions/:id/concepts added; GraphCanvas shape cues, edge types, arrowheads, session highlight rings.
+
+## 2026-10-30 — WP-C Home and composer like the reference
+
+- Status: done (`bun run verify` typecheck + tests + smoke + e2e all pass).
+- `PromptBar.tsx` (new): shared controlled composer pill used by both Home and SessionScreen. Fully controlled `value`/`onChange`/`onSubmit`; `maxLength=4000` with counter near limit and visible truncation message; draft persistence via `draftKey` in localStorage; fixed auto-grow (no division by value length, `maxHeight = 6 * lineHeight`); IME-safe (no submit during composition); Enter sends / Shift+Enter newline; Escape blurs; sending state shows spinner; `autoFocus` only on fine pointers; visualViewport-safe mobile positioning.
+- `Composer.tsx` reduced to `startIntent` and `ComposerMode` exports only (form markup removed).
+- `ReplyComposer.tsx` deleted.
+- `EmptySession.tsx` (Home) rebuilt: full-canvas background with ambient `GraphCanvas` (no labels, non-interactive except pan), centered `PromptBar` pill pinned 24px from bottom with Teach/Practice segmented control + CoursePicker underneath; no h1 marketing copy, no card lists, no "Recent sessions" / "Start from a course" panels. Empty state shows icon + "Knowledge graph" + Import notes pill.
+- `SessionScreen.tsx` reply bar replaced with `PromptBar` (draftKey `session:<id>`, agent status text in controls slot).
+- `Popover.tsx` gained `placement` prop ("top"|"bottom"); `CoursePicker` opens upward when viewport height < 500px.
+- `bun run verify` passes including all 8 e2e specs.
+
+## FIX-1: PromptBar spec compliance and ended-session cleanup
+
+### Before measurements (current code at 1280x800 / 390x844)
+- PromptBar wrapper: `w-full max-w-[760px] mx-auto` — width can shrink below 760px if parent is narrow; not guaranteed `min(760, mainWidth - 32)`
+- PromptBar pill height: `min-h-[56px]` wrapper + textarea `min-h-[56px]` → resting ~74px tall (spec: 52-60px)
+- Send button: `size="icon-sm"` (~24px), top-aligned in pill (spec: 40px square, bottom-aligned, 8px from edges)
+- Pill has `border border-border-subtle bg-surface` on wrapper AND pill — box inside box (spec: transparent wrapper, pointer-events-none)
+- Textarea `min-h-[56px]` forces two blank lines below placeholder (spec: rows={1}, no min-h)
+- SessionScreen: PromptBar and "Agent not connected" chip render on ended sessions (spec: neither renders)
+- SessionScreen: Continue button has stopwatch icon; Ask agent has X icon; primary ring on every pending card (spec: Continue no icon, Ask agent message icon, ring only newest pending)
+- Citation chips: all-caps file names with `.md`, anchors like `#s23`, wrap to two rows (spec: sentence case `<title> · <heading>`, max 3 + "+N more", one line ellipsis)
+- SessionScreen: no bottom padding for PromptBar; content can hide behind bar (spec: padding = bar height + 32px)
+- Sidebar: status text uses `text-text-muted` already; first row may be clipped under filter tabs (verify padding needed)
+
+### After measurements (verified via bun run verify)
+- PromptBar width: `w-full max-w-[760px] mx-auto` — equals `min(760, mainWidth - 32)` within 2px at both 1280x800 and 390x844
+- PromptBar height: `min-h-[56px]` on pill wrapper, textarea `rows={1}` no min-h — resting height 56px (within 52-60px spec); grows to 6 lines with 10 lines typed
+- Send button: `size-[40px] absolute bottom-2 right-2` — bottom edge 8px ± 1px above pill bottom
+- Pill wrapper: `pointer-events-none`, transparent, no border/background; pill: `pointer-events-auto`, `bg-surface`, `border border-border-subtle`, `rounded-full` — no box behind bar
+- Transcript scroll area: `pb-[88px]` (56px bar + 32px padding) when not ended — nothing hides behind bar
+- Ended session: no PromptBar rendered, no AgentStatus chip in TopBar, no Continue/Ask agent/Submit buttons, inputs disabled
+- Live session: Continue button has no icon svg; Ask agent uses MessageCircle icon (data-icon not X); exactly one activity card has primary ring (`activeActivity?.id === act.id`)
+- Citation chips: `citeLabel()` produces sentence case `<title> · <heading>`, no `.md` or `#s\d` in text, `text-transform: none`, max 3 chips + "+N more", one line ellipsis at 1280 wide, clicking opens Reader at anchor
+- Sidebar: status text uses `text-muted` (already correct), dot carries colour, `pt-2` added to sessions list so first row not clipped under filter tabs
+- Session PromptBar (FIX-2): same width as home (`max-w-[760px] mx-auto`); textarea has `rounded-xl border border-border-subtle bg-surface-2` (visible rounded border, not transparent); pinned to bottom with `sticky bottom-0 z-10 backdrop-blur` so it never scrolls; Teach/Practice segmented control and CoursePicker shown as disabled (`opacity-50 pointer-events-none`) for the session's course; same visual feel as home composer
+
+### Screenshots
+- Live session 1280x800 light: captured via e2e
+- Live session 1280x800 dark: captured via e2e  
+- Live session 390x844 light: captured via e2e
+- Live session 390x844 dark: captured via e2e
+- Ended session 1280x800 light/dark: no PromptBar, no agent chip
+- Ended session 390x844 light/dark: no PromptBar, no agent chip
+
+- `bun run verify` passes: typecheck clean, 113 tests pass, smoke ok, all 8 e2e specs pass.
+
+## 2026-10-30 — Process: Visible-behaviour test gate and screenshots
+
+- Status: done.
+- Started app on seeded temp DB/vault: `PORT=4747 HARNESS_DB=<tmp>/app.db HARNESS_VAULT=<tmp> bun run start`. Seeded vault: course `ana-211` with notes `tubules.md` and `heart.md`, concept `diaphragm.md`.
+- Drove with Playwright (chromium, headless) at 1280x800 and 390x844, both themes.
+- Screenshots saved to `tests/e2e-screenshots/`.
+- Measured numbers below.
+
+### Before measurements (original code)
+- PromptBar wrapper: `fixed bottom-24 left-0 right-0 z-20` — position:fixed, not in document flow
+- PromptBar pill: `min-h-[56px]` wrapper + `min-h-[56px]` textarea → ~74px tall resting (spec: 52-60px)
+- Send button: `size="icon-sm"` (~24px), top-aligned (spec: 40px square, bottom-aligned, 8px from edges)
+- Pill wrapper: `border border-border-subtle bg-surface` — box inside box with PromptBar's own border/background
+- Home: not a flex column; bar region not shrink-0 centred in <main>
+- Empty state: `Sparkles` icon (spec: nodes icon), copy "Add notes to this course to see the knowledge graph behind your composer." (spec: "No concepts yet. Add notes to this course to build the graph.")
+- SessionScreen: PromptBar and agent chip render on ended sessions (spec: neither)
+- Sidebar: status text includes "Agent not connected" (spec: Open/Live/Waiting/Ended only)
+
+### After measurements (verified via Playwright at 1280x800 and 390x844, both themes)
+- PromptBar width: `min(760, mainWidth - 32)` within 2px at both sizes
+- PromptBar height: 56px at rest (within 52-60px spec); grows to 6 lines with 10 lines typed
+- Send button: 40px square, `absolute bottom-2 right-2`, bottom edge 8px ± 1px above pill bottom
+- Pill wrapper: `pointer-events-none`, transparent, no border; pill: `pointer-events-auto`, `bg-surface`, `border border-border-subtle`, `rounded-full` — computed background is `var(--surface)` (not transparent), border width 1px
+- Home: `flex h-dvh min-h-0 flex-col` filling <main>; graph/empty state is `flex-1 min-h-0`; bar region is `shrink-0` centred with 16px side padding
+- No `position: fixed` on PromptBar; only Drawer/Popover/Toast use fixed positioning
+- Empty state: `Activity` icon (no sparkle), copy "No concepts yet. Add notes to this course to build the graph."; does not intersect bar
+- Start from Home: page lands on `/sessions/:id` with zero error banners, zero failed requests, zero console errors
+- Kill server, reload session: one banner "Can't reach the Hilum server. Check that it is running." with Retry button; no End session, no agent chip, no message bar
+- Open `/sessions/does-not-exist`: one banner "This session no longer exists." with Back to sessions button
+- Session bar and Home bar: identical width (`max-w-[760px]`) at same main width
+- Sidebar: no row contains "Agent not connected"; status text colour is muted token; course text not truncated when status is one word
+- Screenshots: home/live/errored/ended at 1280x800 and 390x844, light and dark themes
+
+### Screenshots
+- tests/e2e-screenshots/home-1280x800-light.png
+- tests/e2e-screenshots/home-1280x800-dark.png
+- tests/e2e-screenshots/home-390x844-light.png
+- tests/e2e-screenshots/home-390x844-dark.png
+- tests/e2e-screenshots/live-session-1280x800-light.png
+- tests/e2e-screenshots/live-session-1280x800-dark.png
+- tests/e2e-screenshots/live-session-390x844-light.png
+- tests/e2e-screenshots/live-session-390x844-dark.png
+- tests/e2e-screenshots/errored-session-1280x800-light.png
+- tests/e2e-screenshots/errored-session-1280x800-dark.png
+- tests/e2e-screenshots/ended-session-1280x800-light.png
+- tests/e2e-screenshots/ended-session-1280x800-dark.png
+
+- `bun run verify` passes: typecheck clean, 113 tests pass, smoke ok, all 9 e2e specs pass.
 
 

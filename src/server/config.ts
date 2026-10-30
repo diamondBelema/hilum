@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 export type Config = {
@@ -21,7 +22,7 @@ function envFlag(name: string, fallback = false): boolean {
 
 export function loadConfig(overrides: Partial<Config> = {}): Config {
   const vaultPath =
-    overrides.vaultPath ?? process.env.HARNESS_VAULT ?? join(ROOT, "vault");
+    overrides.vaultPath ?? process.env.HARNESS_VAULT ?? join(homedir(), "Documents", "hilum-vault");
   const dbPath = overrides.dbPath ?? process.env.HARNESS_DB ?? join(ROOT, "state/app.db");
 
   return {

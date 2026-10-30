@@ -12,7 +12,7 @@ import { GradingError, GradingService } from "./exams/grading.ts";
 import { SessionError, SessionService } from "./sessions/service.ts";
 import { ConceptError, ConceptService } from "./concepts/service.ts";
 import { EventBus } from "./events.ts";
-import { mkdir, readFile, statfs, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, statfs, unlink, writeFile } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 import { NoteIndexer } from "./vault/indexer.ts";
 import { VaultService } from "./vault/service.ts";
@@ -183,6 +183,46 @@ export function createApp(deps: AppDeps = {}) {
   app.get("/api/courses/:code/notes", (c) =>
     c.json(vault.notesForCourse(c.req.param("code"))),
   );
+
+  app.get("/api/notes/tree", (c) => {
+    const course = c.req.query("course");
+    if (!course) return c.json({ error: "course is required" }, 400);
+    return c.json(vault.notesForCourse(course));
+  });
+
+  app.post("/api/notes", async (c) => {
+    const body = await c.req.json<{ course?: string; title?: string; folder?: string }>();
+    if (!body.course || !body.title) return c.json({ error: "course and title are required" }, 400);
+    const folder = (body.folder ?? "notes").replace(/[^A-Za-z0-9._-]/g, "");
+    const safeTitle = body.title.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 80) || "note";
+    const path = `courses/${body.course}/${folder}/${safeTitle}.md`;
+    const content = `---\ntitle: ${JSON.stringify(body.title)}\ncourse: ${body.course}\n---\n\n# ${body.title}\n\n`;
+    const result = await vault.writeNote({ path, content, mode: "create" });
+    return c.json(result, 201);
+  });
+
+  app.put("/api/notes", async (c) => {
+    const body = await c.req.json<{ path?: string; content?: string }>();
+    const path = body.path;
+    const content = body.content;
+    if (!path || !path.endsWith(".md") || content === undefined) {
+      return c.json({ error: "path and content are required" }, 400);
+    }
+    const abs = resolveInside(config.vaultPath, path);
+    let info;
+    try {
+      info = await stat(abs);
+    } catch {
+      return c.json({ error: "not found" }, 404);
+    }
+    const currentEtag = String(info.mtimeMs);
+    const ifMatch = c.req.header("if-match");
+    if (ifMatch !== undefined && ifMatch !== currentEtag) {
+      return c.json({ error: "etag mismatch" }, 409);
+    }
+    const result = await vault.writeNote({ path, content, mode: "replace" });
+    return c.json(result);
+  });
 
   app.get("/api/index", (c) => c.json(vault.getIndex(c.req.query("course"))));
 
@@ -499,16 +539,36 @@ export function createApp(deps: AppDeps = {}) {
 
   app.get("/api/graph", (c) => c.json(concepts.graph(c.req.query("course"), c.req.query("filter"))));
 
-  app.get("/api/sessions/active", (c) => c.json(sessions.active(c.req.query("course"))));
+  app.get("/api/concepts/:id/sessions", (c) =>
+    c.json(sessions.conceptSessions(c.req.param("id"))),
+  );
+
+  app.get("/api/sessions/:id/concepts", (c) => c.json(sessions.sessionConcepts(c.req.param("id"))));
+
+  app.get("/api/sessions/active", (c) => c.json(sessions.focused()));
 
   app.get("/api/sessions/history", (c) => c.json(sessions.history(c.req.query("course"))));
 
   app.post("/api/sessions", async (c) => {
     const body = await c.req.json<{ course?: string; goal?: string }>();
-    return c.json(await sessions.start(String(body.course ?? ""), body.goal, "app"), 201);
+    try {
+      return c.json(await sessions.start(String(body.course ?? ""), body.goal, null, "app"), 201);
+    } catch (err) {
+      const e = err as { status?: number; sessionId?: string };
+      if (e.status === 409) {
+        return c.json({ error: "session_already_open", sessionId: e.sessionId }, 409);
+      }
+      throw err;
+    }
   });
 
   app.get("/api/sessions/:id", (c) => c.json(sessions.detail(c.req.param("id"))));
+
+  app.patch("/api/sessions/:id", async (c) => {
+    const body = await c.req.json<{ title?: string | null }>();
+    sessions.setSessionTitle(c.req.param("id"), typeof body.title === "string" ? body.title : null);
+    return c.json(sessions.detail(c.req.param("id")));
+  });
 
   app.post("/api/activities/:id/bank", async (c) => {
     const body = await c.req.json<{ tags?: string[] }>().catch(() => ({ tags: [] }));
@@ -520,9 +580,18 @@ export function createApp(deps: AppDeps = {}) {
     return c.json(await sessions.end(c.req.param("id"), body.summary ?? ""));
   });
 
+  app.post("/api/sessions/:id/reopen", async (c) => {
+    return c.json(await sessions.reopen(c.req.param("id")));
+  });
+
+  app.post("/api/focus", async (c) => {
+    const body = await c.req.json<{ sessionId?: string; tabId?: string | null }>();
+    return c.json(await sessions.focus(String(body.sessionId ?? ""), body.tabId ?? null));
+  });
+
   app.post("/api/sessions/:id/requests", async (c) => {
-    const body = await c.req.json<{ text?: string }>();
-    return c.json(sessions.request(c.req.param("id"), String(body.text ?? "")), 201);
+    const body = await c.req.json<{ text?: string; clientId?: string | null }>();
+    return c.json(sessions.request(c.req.param("id"), String(body.text ?? ""), body.clientId ?? null), 201);
   });
 
   app.post("/api/sessions/:id/activities/:activityId/respond", async (c) => {

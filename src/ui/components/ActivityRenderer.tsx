@@ -8,10 +8,10 @@ type Props = {
   activityId: string;
   spec: ActivitySpec;
   values: unknown[];
-  onChange: (index: number, value: unknown) => void;
+  onChange?: (index: number, value: unknown) => void;
   disabled?: boolean;
-  onOpenNote: (path: string, anchor?: string) => void;
-  onRenderError: (activityId: string, message: string) => void;
+  onOpenNote?: (path: string, anchor?: string) => void;
+  onRenderError?: (activityId: string, message: string) => void;
 };
 
 export function ActivityRenderer({ activityId, spec, values, onChange, disabled, onOpenNote, onRenderError }: Props) {
@@ -25,7 +25,9 @@ export function ActivityRenderer({ activityId, spec, values, onChange, disabled,
             activityId={activityId}
             component={component}
             value={values[index]}
-            onChange={(value) => onChange(index, value)}
+            onChange={(value) => {
+              if (onChange) onChange(index, value);
+            }}
             disabled={disabled}
             onOpenNote={onOpenNote}
             onRenderError={onRenderError}
@@ -38,7 +40,7 @@ export function ActivityRenderer({ activityId, spec, values, onChange, disabled,
             <button
               key={`${cite.note}-${index}`}
               type="button"
-              onClick={() => onOpenNote(cite.note, cite.anchor)}
+              onClick={() => onOpenNote?.(cite.note, cite.anchor)}
               className="inline-flex min-h-11 items-center rounded-chip border border-border-subtle bg-surface px-3 py-2 type-meta text-text-muted hover:border-primary/40 hover:text-text"
               title={cite.quote}
             >
@@ -66,8 +68,8 @@ function ComponentView({
   value: unknown;
   onChange: (value: unknown) => void;
   disabled?: boolean;
-  onOpenNote: (path: string, anchor?: string) => void;
-  onRenderError: (activityId: string, message: string) => void;
+  onOpenNote?: (path: string, anchor?: string) => void;
+  onRenderError?: (activityId: string, message: string) => void;
 }) {
   switch (component.type) {
     case "flashcard":
@@ -745,19 +747,19 @@ function Ordering({
                   type="button"
                   onClick={() => move(id, -1)}
                   disabled={index === 0}
-                  className="p-1 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
+                  className="min-h-11 min-w-11 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
                   aria-label="Move up"
                 >
-                  <ArrowLeft className="size-3" />
+                  <ArrowLeft className="size-5" />
                 </button>
                 <button
                   type="button"
                   onClick={() => move(id, 1)}
                   disabled={index === ordered.length - 1}
-                  className="p-1 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
+                  className="min-h-11 min-w-11 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
                   aria-label="Move down"
                 >
-                  <ArrowRight className="size-3" />
+                  <ArrowRight className="size-5" />
                 </button>
               </>
             )}
@@ -1073,10 +1075,10 @@ function Timeline({
                   onChange(next);
                 }}
                 disabled={index === 0}
-                className="p-1 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
+                className="min-h-11 min-w-11 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
                 aria-label="Move up"
               >
-                <ArrowLeft className="size-3" />
+                <ArrowLeft className="size-5" />
               </button>
               <button
                 type="button"
@@ -1086,10 +1088,10 @@ function Timeline({
                   onChange(next);
                 }}
                 disabled={index === value.length - 1}
-                className="p-1 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
+                className="min-h-11 min-w-11 rounded-control border border-border-subtle hover:bg-surface-2 disabled:opacity-40"
                 aria-label="Move down"
               >
-                <ArrowRight className="size-3" />
+                <ArrowRight className="size-5" />
               </button>
             </>
           )}
@@ -1264,7 +1266,7 @@ function Mermaid({
   activityId: string;
   code: string;
   caption?: string;
-  onRenderError: (activityId: string, message: string) => void;
+  onRenderError?: (activityId: string, message: string) => void;
 }) {
   const rawId = useId().replace(/[^a-zA-Z0-9]/g, "");
   const id = `mermaid-${rawId}`;
@@ -1295,7 +1297,7 @@ function Mermaid({
         setError(message.split("\n")[0] ?? "Invalid diagram");
         if (!reported.current) {
           reported.current = true;
-          onRenderError(activityId, message);
+          onRenderError?.(activityId, message);
         }
       });
     return () => {

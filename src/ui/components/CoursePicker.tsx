@@ -102,12 +102,14 @@ export function CoursePicker({
   onSelect,
   open,
   onOpenChange,
+  placement = "bottom",
 }: {
   courses: Course[];
   value: Course | null;
   onSelect: (course: Course) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  placement?: "top" | "bottom";
 }) {
   const [state, dispatch] = useReducer(pickerReducer, initialPickerState);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -207,6 +209,7 @@ export function CoursePicker({
         onClose={close}
         labelledBy={labelId}
         className="left-0 right-auto w-80"
+        placement={placement}
       >
         <p id={labelId} className="type-label text-text-muted">
           Choose a course

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowUp, BookOpen, GraduationCap, ListChecks, Loader2, RotateCcw } from "lucide-react";
 import type { Course } from "../api.ts";
+import { api } from "../api.ts";
 import { Button } from "./Button.tsx";
 import { CoursePicker } from "./CoursePicker.tsx";
 import { SegmentedControl } from "./SegmentedControl.tsx";
+import { cn } from "../lib/cn.ts";
 
 export type ComposerMode = "teach" | "practice";
 
@@ -32,115 +34,267 @@ export function startIntent(
   return { kind: "start", goal: mode === "practice" ? `Practice: ${text}` : text };
 }
 
-export function Composer({
-  courses,
-  selectedCourse,
-  onSelectCourse,
-  onStart,
-}: {
-  courses: Course[];
-  selectedCourse: Course | null;
-  onSelectCourse: (course: Course) => void;
-  onStart: (course: Course, goal: string, mode: ComposerMode) => void;
-}) {
-  const [goal, setGoal] = useState("");
-  const [mode, setMode] = useState<ComposerMode>("teach");
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+/** One pill, used for home, live session and ended session so the dock never changes shape. */
+const PILL =
+  "w-full rounded-[28px] border border-border-strong bg-surface-2 px-4 pt-3 pb-2 focus-within:border-primary";
 
+const CHIP =
+  "type-meta inline-flex min-h-8 items-center gap-1.5 rounded-chip border border-border-subtle px-2.5 text-text-muted";
+
+type ComposerView = "home" | "session";
+
+export function Composer({
+  view,
+  courses,
+  onStart,
+  currentCourse,
+  sessionMode,
+  onSend,
+  sending = false,
+  ended = false,
+  onResume,
+  resuming = false,
+  draftKey,
+}: {
+  view: ComposerView;
+  courses: Course[];
+  onStart?: (course: Course, goal: string) => void;
+  currentCourse?: Course | null;
+  /** Course code, used when the full Course object has not loaded yet. */
+  sessionCourseCode?: string;
+  sessionMode?: ComposerMode;
+  onSend?: (text: string, clientId: string) => void | Promise<void>;
+  sending?: boolean;
+  ended?: boolean;
+  onResume?: () => void | Promise<void>;
+  resuming?: boolean;
+  draftKey?: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [homeMode, setHomeMode] = useState<ComposerMode>("teach");
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false);
+  const storageKey = draftKey ? `hilum:draft:${draftKey}` : null;
+
+  // Course memory for the home screen.
+  useEffect(() => {
+    if (view !== "home" || selectedCourse || courses.length === 0) return;
+    const remembered = chooseInitialCourse(courses, readLastCourse());
+    if (remembered) setSelectedCourse(remembered);
+  }, [view, courses, selectedCourse]);
+
+  useEffect(() => {
+    if (view === "home" && selectedCourse) writeLastCourse(selectedCourse.code);
+  }, [view, selectedCourse]);
+
+  // Restore a saved draft once per key; persist on change; empty removes it.
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      setDraft(stored ?? "");
+    } catch {
+      /* storage blocked */
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    const id = window.setTimeout(() => {
+      try {
+        if (draft) localStorage.setItem(storageKey, draft);
+        else localStorage.removeItem(storageKey);
+      } catch {
+        /* storage blocked */
+      }
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [storageKey, draft]);
+
+  // Auto-grow 1 to 6 lines.
   useEffect(() => {
     const node = textareaRef.current;
     if (!node) return;
     node.style.height = "auto";
-    node.style.height = `${Math.min(node.scrollHeight, 9 * 24)}px`;
-  }, [goal]);
+    const lineHeight = parseFloat(getComputedStyle(node).lineHeight) || 24;
+    const max = lineHeight * 6;
+    node.style.height = `${Math.min(node.scrollHeight, max)}px`;
+    node.style.overflowY = node.scrollHeight > max ? "auto" : "hidden";
+  }, [draft, ended]);
 
-  const start = useCallback(() => {
-    const intent = startIntent(goal, courses, selectedCourse, mode);
-    if (intent.kind === "need-course") {
-      setPickerOpen(true);
-      setMessage(intent.message);
-      window.setTimeout(() => textareaRef.current?.focus(), 0);
+  useEffect(() => {
+    if (!ended) textareaRef.current?.focus();
+  }, [ended, view]);
+
+  const submit = useCallback(async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSendError(null);
+
+    if (view === "home") {
+      const intent = startIntent(text, courses, selectedCourse, homeMode);
+      if (intent.kind === "need-course") {
+        setSendError(intent.message);
+        setPickerOpen(true);
+        return;
+      }
+      if (intent.kind === "empty") return;
+      setDraft("");
+      try {
+        await onStart?.(selectedCourse!, intent.goal);
+      } catch (err) {
+        setDraft(text);
+        setSendError(err instanceof Error ? err.message : "Could not start the session. Try again.");
+      }
       return;
     }
-    if (intent.kind === "empty") return;
-    setMessage(null);
-    onStart(selectedCourse!, intent.goal, mode);
-  }, [courses, goal, mode, onStart, selectedCourse]);
+
+    setDraft("");
+    try {
+      await onSend?.(text, crypto.randomUUID());
+    } catch (err) {
+      setDraft(text);
+      setSendError(err instanceof Error ? err.message : "Message not sent. Your text is back in the box.");
+    }
+  }, [draft, sending, view, courses, selectedCourse, homeMode, onStart, onSend]);
+
+  if (view === "session" && ended) {
+    return (
+      <div className="mx-auto w-full max-w-[760px]">
+        <div className={`${PILL} flex items-center justify-between gap-3`}>
+          <p className="type-body min-w-0 flex-1 py-1 text-text-muted">
+            This session has ended. Resume it to keep going.
+          </p>
+          <Button
+            variant="primary"
+            className="rounded-full"
+            onClick={() => void onResume?.()}
+            loading={resuming}
+            loadingLabel="Resuming…"
+          >
+            <RotateCcw aria-hidden="true" className="size-4" />
+            Resume
+          </Button>
+        </div>
+        {sendError && <p role="alert" className="type-body-sm mt-2 px-2 text-incorrect">{sendError}</p>}
+      </div>
+    );
+  }
+
+  const practice = view === "home" ? homeMode === "practice" : sessionMode === "practice";
+  const courseLabel = currentCourse?.code ?? "";
+  const canSend = draft.trim().length > 0 && !sending;
 
   return (
-    <form
-      className="mt-6"
-      onSubmit={(event) => {
-        event.preventDefault();
-        start();
-      }}
-    >
-      <label htmlFor="composer-goal" className="type-label block text-text-muted">
-        Your goal
-      </label>
-      <textarea
-        ref={textareaRef}
-        id="composer-goal"
-        value={goal}
-        onChange={(event) => {
-          setGoal(event.target.value);
-          if (message) setMessage(null);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
+    <div className="mx-auto w-full max-w-[760px]">
+      <div className={PILL}>
+        <textarea
+          ref={textareaRef}
+          value={draft}
+          rows={1}
+          maxLength={4000}
+          placeholder={view === "home" ? "What do you want to learn?" : "Message your agent"}
+          aria-label={view === "home" ? "What do you want to learn?" : "Message your agent"}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setSendError(null);
+          }}
+          onCompositionStart={() => (composingRef.current = true)}
+          onCompositionEnd={() => (composingRef.current = false)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey || composingRef.current) return;
             event.preventDefault();
-            start();
-          }
-        }}
-        rows={2}
-        placeholder="For example: explain how the loop of Henle concentrates urine"
-        className="type-body mt-2 min-h-24 w-full resize-none rounded-control border border-border-strong bg-surface px-3 py-2.5 text-text placeholder:text-text-muted"
-      />
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <CoursePicker
-          courses={courses}
-          value={selectedCourse}
-          onSelect={(course) => {
-            onSelectCourse(course);
-            setMessage(null);
+            void submit();
           }}
-          open={pickerOpen}
-          onOpenChange={(open) => {
-            setPickerOpen(open);
-            if (open) setMessage(null);
-          }}
+          className="type-body block w-full resize-none bg-transparent text-text outline-none placeholder:text-text-muted"
         />
-        <SegmentedControl<ComposerMode>
-          label="Session type"
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: "teach", label: "Teach" },
-            { value: "practice", label: "Practice" },
-          ]}
-          className="shrink-0"
-        />
-        <Button type="submit" variant="primary" className="ml-auto" disabled={!goal.trim()}>
-          <ArrowRight aria-hidden="true" className="size-4" />
-          Start
-        </Button>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            {view === "home" ? (
+              <>
+                <CoursePicker
+                  courses={courses}
+                  value={selectedCourse}
+                  onSelect={setSelectedCourse}
+                  open={pickerOpen}
+                  onOpenChange={setPickerOpen}
+                  placement="top"
+                />
+                <SegmentedControl<ComposerMode>
+                  label="Session type"
+                  value={homeMode}
+                  onChange={setHomeMode}
+                  options={[
+                    { value: "teach", label: "Teach" },
+                    { value: "practice", label: "Practice" },
+                  ]}
+                  className="shrink-0"
+                />
+              </>
+            ) : (
+              <>
+                <span className={CHIP}>
+                  <BookOpen aria-hidden="true" className="size-4" />
+                  {courseLabel || "Course"}
+                </span>
+                <span className={CHIP}>
+                  {practice ? (
+                    <ListChecks aria-hidden="true" className="size-4" />
+                  ) : (
+                    <GraduationCap aria-hidden="true" className="size-4" />
+                  )}
+                  {practice ? "Practice" : "Teach"}
+                </span>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={!canSend}
+            aria-label={view === "home" ? "Start" : "Send"}
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition-opacity disabled:opacity-40"
+          >
+            {sending ? (
+              <Loader2 aria-hidden="true" className="size-5 animate-spin" />
+            ) : (
+              <ArrowUp aria-hidden="true" className="size-5" />
+            )}
+          </button>
+        </div>
       </div>
-
-      {message && (
-        <p role="alert" className="type-body-sm mt-2 text-incorrect">
-          {message}
+      {sendError && (
+        <p role="alert" className="type-body-sm mt-2 px-2 text-incorrect">
+          {sendError}
         </p>
       )}
-
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <p className="type-meta text-text-muted">Enter starts. Shift+Enter adds a line.</p>
-        {mode === "practice" && (
-          <p className="type-meta text-text-muted">Practice uses banked questions in this course.</p>
-        )}
-      </div>
-    </form>
+    </div>
   );
+}
+
+function chooseInitialCourse(courses: Course[], storedCode: string | null): Course | null {
+  if (storedCode) {
+    const stored = courses.find((course) => course.code === storedCode);
+    if (stored) return stored;
+  }
+  return courses.length === 1 ? courses[0]! : null;
+}
+
+function readLastCourse(): string | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage.getItem("hilum:last-course");
+  } catch {
+    return null;
+  }
+}
+
+function writeLastCourse(code: string): void {
+  try {
+    localStorage.setItem("hilum:last-course", code);
+  } catch {
+    // Blocked storage is fine; the picker still works for this visit.
+  }
 }

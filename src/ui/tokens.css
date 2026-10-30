@@ -51,6 +51,10 @@
   --text-2xl: 1.875rem;
   --text-2xl--line-height: 1.25;
 
+  /* Session agent prose density (L-4) */
+  --text-dense: 0.9375rem;
+  --text-dense--line-height: 1.55;
+
   /* Spacing (4px base) */
   --space-1: 0.25rem;
   --space-2: 0.5rem;

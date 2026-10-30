@@ -149,7 +149,7 @@ export function DesignGallery() {
           <input
             type="search"
             placeholder="Search notes"
-            className="min-h-11 w-full rounded-control border border-border-strong bg-surface pr-3 pl-9 text-sm placeholder:text-text-muted focus:border-primary focus:outline-none"
+            className="min-h-11 w-full rounded-control border border-border-strong bg-surface pr-3 pl-9 text-sm placeholder:text-text-muted focus:border-primary"
           />
         </label>
         <div className="mt-3">
