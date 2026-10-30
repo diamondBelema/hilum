@@ -382,7 +382,7 @@ function LibraryScreen({
         </div>
       ) : section === "progress" ? (
         <div className="mx-auto max-w-5xl">
-          <ProgressRoute courses={courses} />
+          <ProgressRoute courses={courses} onNewSession={onNewSession} />
         </div>
       ) : section === "graph" ? (
         <div className="w-full">
@@ -465,6 +465,7 @@ function NotesRoute({
   const [notesLoading, setNotesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<NoteMeta[] | null>(null);
 
   useEffect(() => {
     if (selectedCourse || courses.length === 0) return;
@@ -495,6 +496,29 @@ function NotesRoute({
     };
   }, [selectedCourse]);
 
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setResults(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api
+        .search(trimmed, selectedCourse?.code)
+        .then((list) => {
+          if (!cancelled) setResults(list);
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setError(messageOf(err));
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query, selectedCourse]);
+
   async function deleteNote(path: string) {
     if (!window.confirm("Delete this note?")) return;
     try {
@@ -517,7 +541,7 @@ function NotesRoute({
       courses={courses}
       course={selectedCourse}
       notes={notes ?? []}
-      results={null}
+      results={results}
       query={query}
       onQuery={setQuery}
       onSelectCourse={setSelectedCourse}
@@ -580,7 +604,7 @@ function ReaderRoute({
 }
 
 function PapersRoute({ courses }: { courses: Course[] }) {
-  const course = courses[0];
+  const course = courses.find((item) => item.questions > 0) ?? courses[0];
   if (!course) return null;
   return <PapersLazy course={course} onBack={() => navigate("/library")} />;
 }
@@ -589,14 +613,23 @@ function QuestionsRoute({ courses }: { courses: Course[] }) {
   return <QuestionsLazy courses={courses} />;
 }
 
-function ProgressRoute({ courses }: { courses: Course[] }) {
-  const course = courses[0];
+function ProgressRoute({
+  courses,
+  onNewSession,
+}: {
+  courses: Course[];
+  onNewSession?: (course: Course | null, goal?: string) => void;
+}) {
+  const course = courses.find((item) => item.concepts > 0) ?? courses[0];
   if (!course) return null;
   return (
     <ProgressLazy
       courses={courses}
       onStudy={(courseCode, conceptId) => {
-        navigate(`/library/progress?concept=${encodeURIComponent(conceptId ?? "")}`);
+        const selected = courses.find((item) => item.code === courseCode) ?? course;
+        if (selected && onNewSession) {
+          void onNewSession(selected, conceptId ?? "review concepts");
+        }
       }}
       onOpenNote={(path, anchor) => {
         navigate(`/library/notes?path=${encodeURIComponent(path)}${anchor ? `&anchor=${encodeURIComponent(anchor)}` : ""}`);
@@ -612,7 +645,7 @@ function GraphRoute({
   courses: Course[];
   onStudy: (course: string, goal: string) => void;
 }) {
-  const course = courses[0];
+  const course = courses.find((item) => item.concepts > 0) ?? courses[0];
   if (!course) return null;
   return <GraphLazy courses={courses} onStudy={onStudy} />;
 }

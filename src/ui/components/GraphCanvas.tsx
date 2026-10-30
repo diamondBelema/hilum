@@ -192,7 +192,7 @@ export function GraphCanvas({
         "link",
         ((forceLink(linkData as any) as any)
           .id((d: { id: string }) => d.id)
-          .distance((d: { id: string }) => EDGE_LINK_DISTANCE[d.id] ?? LINK_DISTANCE)
+          .distance((d: { type: string }) => EDGE_LINK_DISTANCE[d.type] ?? LINK_DISTANCE)
           .strength(0.8)) as any,
       )
       .force("charge", ((forceManyBody() as any).strength(CHARGE_STRENGTH).distanceMax(300)) as any)
@@ -548,7 +548,9 @@ export function GraphCanvas({
   }
 
   function findNodeAt(sx: number, sy: number): string | null {
-    const c = screenToCanvas(sx, sy);
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const c = screenToCanvas(sx - rect.left, sy - rect.top);
     const rMax = NODE_MAX_RADIUS / transformRef.current.k;
     for (const node of nodesProp) {
       const p = nodePos(node.id);
@@ -590,12 +592,14 @@ export function GraphCanvas({
       if (drag) {
         const dx = (event.clientX - drag.sx) / transformRef.current.k;
         const dy = (event.clientY - drag.sy) / transformRef.current.k;
+        const nextX = drag.x + dx;
+        const nextY = drag.y + dy;
         setPan((prev) => ({
-          x: drag.x + dx,
-          y: drag.y + dy,
+          x: nextX,
+          y: nextY,
         }));
-        transformRef.current.x = pan.x + dx;
-        transformRef.current.y = pan.y + dy;
+        transformRef.current.x = nextX;
+        transformRef.current.y = nextY;
       }
     },
     [pan],
@@ -604,6 +608,13 @@ export function GraphCanvas({
   const onPointerUp = useCallback(() => {
     dragStartRef.current = null;
     pinnedRef.current = new Set();
+  }, []);
+
+  const onPointerLeave = useCallback(() => {
+    if (!dragStartRef.current) {
+      setHoverNode(null);
+      hoveredRef.current = null;
+    }
   }, []);
 
   const onWheel = useCallback(
@@ -672,6 +683,11 @@ export function GraphCanvas({
     draw();
   }, [zoom, pan.x, pan.y, nodesProp.length, edgesProp.length, hoverNode]);
 
+  useEffect(() => {
+    selectedRef.current = selectedIdProp ?? null;
+    draw();
+  }, [selectedIdProp]);
+
   // ---------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------
@@ -679,21 +695,11 @@ export function GraphCanvas({
     onPointerDown,
     onPointerMove,
     onPointerUp,
+    onPointerLeave,
     onWheel,
     onDoubleClick,
     onClick,
   };
-
-  if (ambient) {
-    return (
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full block bg-transparent"
-        {...canvasEvents}
-        style={{ touchAction: "none" }}
-      />
-    );
-  }
 
   return (
     <div
@@ -702,33 +708,12 @@ export function GraphCanvas({
     >
       <canvas
         ref={canvasRef}
+        role={ambient ? undefined : "img"}
+        aria-label={ambient ? undefined : "Interactive concept graph. Drag to pan, scroll to zoom, and select a topic."}
         className="block w-full h-full"
         {...canvasEvents}
-        style={{ touchAction: "none" }}
+        style={{ touchAction: "none", background: ambient ? "transparent" : undefined }}
       />
-
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex gap-1">
-        {[ "neighborhood", "overview" ].map((m) => (
-          <button
-            key={m}
-            type="button"
-            className="px-3 py-1.5 rounded-control border border-border-subtle bg-surface type-body-sm text-text hover:bg-surface-2"
-          >
-            {m}
-          </button>
-        ))}
-      </div>
-
-      <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
-        <input
-          type="search"
-          placeholder="Find a topic…"
-          className="min-h-10 w-[220px] rounded-control border border-border-strong bg-surface pl-8 pr-3 type-body-sm text-text placeholder:text-text-muted focus:border-primary"
-        />
-        <div className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 pointer-events-none text-text-muted">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        </div>
-      </div>
     </div>
   );
 }

@@ -98,7 +98,13 @@ export function Notes({
           <h2 className="type-label">
             {plural(results.length, "result")} for <span className="type-body-sm font-medium text-text">“{query.trim()}”</span>
           </h2>
-          <NoteList notes={results} onOpenNote={onOpenNote} onDeleteNote={onDeleteNote} />
+          {results.length === 0 ? (
+            <div className="mt-3">
+              <EmptyState title="No matching notes">Try a different title or phrase.</EmptyState>
+            </div>
+          ) : (
+            <NoteList notes={results} onOpenNote={onOpenNote} onDeleteNote={onDeleteNote} />
+          )}
         </section>
       )}
 
