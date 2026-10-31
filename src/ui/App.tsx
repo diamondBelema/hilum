@@ -743,6 +743,7 @@ function SettingsScreen() {
   const [health, setHealth] = useState<Health | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsNotice, setSettingsNotice] = useState<string | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [rescanBusy, setRescanBusy] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
@@ -771,6 +772,9 @@ function SettingsScreen() {
       })
       .catch((err: unknown) => {
         if (!cancelled) setSettingsError(messageOf(err));
+      })
+      .finally(() => {
+        if (!cancelled) setSettingsLoading(false);
       });
     api.vaultBackups().then((result) => {
       if (!cancelled) setBackups(result.backups);
@@ -943,6 +947,11 @@ function SettingsScreen() {
           {settingsError ?? settingsNotice}
         </div>
       )}
+      {settingsLoading && (
+        <p className="mt-4 type-body-sm text-text-muted" role="status">
+          Loading connection details…
+        </p>
+      )}
 
       <section className="mt-6 rounded-panel border border-border-subtle bg-surface p-4">
         <div className="flex items-start gap-3">
@@ -990,7 +999,7 @@ function SettingsScreen() {
               },
               {
                 label: "Add course material",
-                done: Boolean(health?.stats.courses),
+                done: Boolean(health?.stats?.courses),
                 action: (
                   <span className="flex flex-wrap gap-1">
                     <Link
