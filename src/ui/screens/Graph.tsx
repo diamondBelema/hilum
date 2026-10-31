@@ -422,7 +422,7 @@ export function GraphScreen({
         )}
         {mode !== "tree" && mode !== "frontier" && cappedNodes.length > 0 && (
           <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-control border border-border-subtle bg-surface/90 px-3 py-2 type-meta text-text-muted shadow-popover sm:block">
-            Drag to pan · Scroll to zoom · Click a topic for details
+            Drag to pan · Use +/− to zoom · Click a topic for details
           </div>
         )}
         {mode !== "tree" && mode !== "frontier" && cappedNodes.length > 0 && (
