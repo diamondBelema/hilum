@@ -282,10 +282,6 @@ export function GraphScreen({
       const frontierIds = new Set(frontier?.map((f) => f.concept.id));
       list = list.filter((n) => frontierIds.has(n.id));
     }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((n) => n.title.toLowerCase().includes(q));
-    }
     if (list.length > 300) {
       const hidden = list.length - 300;
       list = list.slice(0, 300);
@@ -316,7 +312,7 @@ export function GraphScreen({
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg">
       {/* Top overlay */}
       <div className="absolute inset-x-0 top-0 z-20 p-3 sm:p-4">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-end gap-3 rounded-panel border border-border-subtle bg-surface/95 p-3 shadow-popover backdrop-blur-sm">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-end gap-3 rounded-panel border border-border-subtle bg-surface/95 p-3 shadow-popover">
           {courses.length > 0 && (
             <label className="block type-body-sm font-medium">
               Course
@@ -382,6 +378,14 @@ export function GraphScreen({
             >
               <RotateCcw aria-hidden="true" className="size-4" />
             </Button>
+          </div>
+          <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 border-t border-border-subtle pt-2 type-meta text-text-muted">
+            <span className="font-medium text-text">Graph key</span>
+            <span><i className="mr-1 inline-block size-2 rounded-full border border-text-muted" />Unseen</span>
+            <span><i className="mr-1 inline-block size-2 rounded-full bg-primary" />Mastery</span>
+            <span><i className="mr-1 inline-block w-4 border-t border-dashed border-text-muted align-middle" />Prerequisite</span>
+            <span><i className="mr-1 inline-block w-4 border-t border-dotted border-text-muted align-middle" />Related</span>
+            <span><i className="mr-1 inline-block w-3 border-t-2 border-warning align-middle" />Contrast</span>
           </div>
         </div>
       </div>
