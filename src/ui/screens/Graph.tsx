@@ -183,7 +183,7 @@ export function GraphScreen({
     ro.observe(el);
     setContainerSize({ width: el.clientWidth, height: el.clientHeight });
     return () => ro.disconnect();
-  }, []);
+  }, [loading]);
 
   const nodes = view?.nodes ?? [];
   const edges = view?.edges ?? [];
@@ -315,72 +315,74 @@ export function GraphScreen({
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg">
       {/* Top overlay */}
-      <div className="absolute top-0 left-0 right-0 z-20 p-3 flex flex-wrap items-center gap-3 bg-bg">
-        {courses.length > 0 && (
-          <label className="block type-body-sm font-medium">
-            Course
-            <select
-              value={courseCode}
-              onChange={(event) => setCourseCode(event.target.value)}
-              className="mt-1.5 min-h-10 w-full min-w-44 rounded-control border border-border bg-surface px-3 type-body-sm text-text"
-            >
-              {courses.map((item) => (
-                <option key={item.code} value={item.code}>{item.title}</option>
-              ))}
-            </select>
-          </label>
-        )}
-        <SegmentedControl
-          label="Graph view"
-          value={mode}
-          onChange={(value) => {
-            setMode(value as Mode);
-            setRootId(null);
-            setSelectedId(null);
-            setDetail(null);
-            setFocusNodeId(null);
-            setResetViewToken((token) => token + 1);
-          }}
-          options={MODES}
-          className="flex-1 max-w-[340px]"
-        />
-        <div className="relative flex min-w-0 flex-1 items-center gap-2 sm:ml-auto sm:flex-none">
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            placeholder="Find a topic…"
-            className="min-h-10 w-full min-w-0 rounded-control border border-border-strong bg-surface pl-8 pr-3 type-body-sm text-text placeholder:text-text-muted focus:border-primary sm:w-[220px]"
-          />
-          <div className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 pointer-events-none text-text-muted">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </div>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Reset graph view"
-            title="Reset graph view"
-            onClick={() => {
+      <div className="absolute inset-x-0 top-0 z-20 p-3 sm:p-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-end gap-3 rounded-panel border border-border-subtle bg-surface/95 p-3 shadow-popover backdrop-blur-sm">
+          {courses.length > 0 && (
+            <label className="block type-body-sm font-medium">
+              Course
+              <select
+                value={courseCode}
+                onChange={(event) => setCourseCode(event.target.value)}
+                className="mt-1.5 min-h-10 w-full min-w-44 rounded-control border border-border bg-surface px-3 type-body-sm text-text"
+              >
+                {courses.map((item) => (
+                  <option key={item.code} value={item.code}>{item.title}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <SegmentedControl
+            label="Graph view"
+            value={mode}
+            onChange={(value) => {
+              setMode(value as Mode);
+              setRootId(null);
+              setSelectedId(null);
+              setDetail(null);
               setFocusNodeId(null);
               setResetViewToken((token) => token + 1);
             }}
-          >
-            <RotateCcw aria-hidden="true" className="size-4" />
-          </Button>
+            options={MODES}
+            className="flex-1 max-w-[340px]"
+          />
+          <div className="relative flex min-w-0 flex-1 items-center gap-2 sm:ml-auto sm:flex-none">
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Find a topic…"
+              className="min-h-10 w-full min-w-0 rounded-control border border-border-strong bg-surface pl-8 pr-3 type-body-sm text-text placeholder:text-text-muted focus:border-primary sm:w-[220px]"
+            />
+            <div className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 pointer-events-none text-text-muted">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Reset graph view"
+              title="Reset graph view"
+              onClick={() => {
+                setFocusNodeId(null);
+                setResetViewToken((token) => token + 1);
+              }}
+            >
+              <RotateCcw aria-hidden="true" className="size-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -410,12 +412,17 @@ export function GraphScreen({
             sessionConceptIds={sessionConceptIds}
           />
         ) : (
-          <div className="flex h-full items-center justify-center p-6">
+          <div className="flex h-full items-center justify-center p-6 pt-32">
             <EmptyState title={search ? "No matching concepts" : "No concepts in this view"}>
               {search
                 ? "Try a different search term."
                 : "Add cited concepts to this course and they will appear here."}
             </EmptyState>
+          </div>
+        )}
+        {mode !== "tree" && mode !== "frontier" && cappedNodes.length > 0 && (
+          <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-control border border-border-subtle bg-surface/90 px-3 py-2 type-meta text-text-muted shadow-popover sm:block">
+            Drag to pan · Scroll to zoom · Click a topic for details
           </div>
         )}
         {mode !== "tree" && mode !== "frontier" && cappedNodes.length > 0 && (

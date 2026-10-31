@@ -382,7 +382,7 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
     <div className="relative h-full w-full flex flex-col overflow-hidden bg-bg">
       <div
         className={cn(
-          "flex-1 min-h-0 overflow-y-auto px-4 pt-4 pb-2",
+          "flex-1 min-h-0 overflow-y-auto px-3 pt-3 pb-1 sm:px-4 sm:pt-4",
         )}
         ref={scrollRef}
         onScroll={() => {
@@ -394,7 +394,7 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
           if (atBottom) setSeenCount(totalItems);
         }}
       >
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="mx-auto max-w-4xl space-y-3">
           {session && (
             <>
               {error && (
@@ -502,17 +502,19 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
                 }
                 const act = item.data as SessionActivity;
                 const isPending = act.status === "pending";
-                const values = getValues(act.id);
+                const answered = act.status === "answered";
+                const values = answered && act.response
+                  ? act.response.components
+                  : getValues(act.id);
                 const missing = missingAnswers(act.spec, values);
                 const displayOnly = isDisplayOnly(act.spec);
                 const submitting = Boolean(submittingByActivity[act.id]);
-                const answered = act.status === "answered";
 
                 return (
                   <div
                     key={String(act.id)}
                     className={cn(
-                      "rounded-panel border bg-surface p-3 sm:p-4 flex flex-col gap-3",
+                      "rounded-panel border bg-surface p-3 flex flex-col gap-3",
                       activeActivity?.id === act.id ? "border-l-4 border-border-subtle border-l-primary" : "border-border-subtle",
                     )}
                   >
@@ -557,6 +559,7 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
                         activityId={act.id}
                         spec={act.spec}
                         values={values}
+                        showTitle={specRepeatsTitle(act)}
                         onChange={(index, value) => {
                           const next = [...values];
                           next[index] = value;
@@ -573,11 +576,12 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
                       />
                     )}
 
-                    {!act.renderError && !isPending && ended && (
+                    {!act.renderError && answered && (
                       <ActivityRenderer
                         activityId={act.id}
                         spec={act.spec}
                         values={values}
+                        showTitle={specRepeatsTitle(act)}
                         disabled
                       />
                     )}
@@ -587,9 +591,12 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
                     )}
 
                     {answered && (
-                      <div className="mt-2 rounded-control border border-correct/30 bg-correct-soft p-3 type-dense text-correct">
+                      <div className="flex items-start gap-2 rounded-control border border-correct/30 bg-correct-soft px-3 py-2 type-dense text-correct">
                         <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                        <p className="inline ml-1">Answer sent — saved as evidence.</p>
+                        <p>
+                          <span className="font-medium">Activity completed.</span>{" "}
+                          Saved as evidence; waiting for the next activity.
+                        </p>
                       </div>
                     )}
 
@@ -655,7 +662,7 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
       </div>
 
       {sessionReady && (
-        <div className="shrink-0 bg-bg px-4 pb-4 pt-2">
+        <div className="shrink-0 bg-bg px-3 pb-2 pt-1 sm:px-4 sm:pb-3 sm:pt-2">
           <Composer
             view="session"
             courses={courses}

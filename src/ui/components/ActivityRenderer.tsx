@@ -8,16 +8,26 @@ type Props = {
   activityId: string;
   spec: ActivitySpec;
   values: unknown[];
+  showTitle?: boolean;
   onChange?: (index: number, value: unknown) => void;
   disabled?: boolean;
   onOpenNote?: (path: string, anchor?: string) => void;
   onRenderError?: (activityId: string, message: string) => void;
 };
 
-export function ActivityRenderer({ activityId, spec, values, onChange, disabled, onOpenNote, onRenderError }: Props) {
+export function ActivityRenderer({
+  activityId,
+  spec,
+  values,
+  showTitle = true,
+  onChange,
+  disabled,
+  onOpenNote,
+  onRenderError,
+}: Props) {
   return (
     <div className="space-y-4">
-      {spec.title && <h2 className="text-xl font-semibold tracking-tight">{spec.title}</h2>}
+      {showTitle && spec.title && <h2 className="text-xl font-semibold tracking-tight">{spec.title}</h2>}
       {spec.instructions && <p className="reading text-sm text-text-muted">{spec.instructions}</p>}
       {spec.components.map((component, index) => (
         <div key={`${component.type}-${index}`} className="rounded-panel border border-border-subtle bg-surface p-4">
