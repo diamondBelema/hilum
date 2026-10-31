@@ -460,6 +460,8 @@ function LibraryScreen({
 ) : null}
     </Suspense>
   );
+  const activeSection = LIBRARY_SECTIONS.find((item) => item.slug === section);
+  const ActiveIcon = activeSection?.icon;
   return (
     <div className={cn("w-full p-4 sm:p-6 lg:p-8", !section && "mx-auto max-w-6xl")}>
       {!section && (
@@ -470,6 +472,24 @@ function LibraryScreen({
             <p className="type-body-sm mt-0.5 text-text-muted">
               Source material, practice, feedback and your concept map.
             </p>
+          </div>
+        </div>
+      )}
+      {section && activeSection && (
+        <div className="mx-auto mb-5 flex max-w-6xl items-center gap-3 border-b border-border-subtle pb-4">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0"
+            onClick={() => navigate("/library")}
+            aria-label="Back to Library"
+          >
+            <ArrowLeft aria-hidden="true" className="size-4" />
+          </Button>
+          {ActiveIcon && <ActiveIcon aria-hidden="true" className="size-5 shrink-0 text-primary" />}
+          <div className="min-w-0">
+            <h1 className="type-heading truncate text-text">{activeSection.title}</h1>
+            <p className="type-meta truncate text-text-muted">{activeSection.description}</p>
           </div>
         </div>
       )}

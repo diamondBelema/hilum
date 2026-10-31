@@ -175,8 +175,8 @@ export function Papers({ course, onBack }: { course: Course; onBack: () => void 
 
       <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="type-title">Exam papers</h1>
-          <p className="reading mt-1 type-body-sm text-text-muted">
+          <h2 className="type-heading">Exam papers</h2>
+          <p className="mt-1 type-body-sm text-text-muted">
             {course.title} · built only from verified, cited questions.
           </p>
         </div>

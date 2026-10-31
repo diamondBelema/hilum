@@ -145,10 +145,6 @@ export function Questions({ courses }: { courses: Course[] }) {
   if (courses.length === 0) {
     return (
       <div className="max-w-3xl">
-        <h1 className="type-title">Question bank</h1>
-        <p className="reading mt-1 type-body-sm text-text-muted">
-          Browse, verify and review the cited questions used by exam papers.
-        </p>
         <div className="mt-6">
           <EmptyState title="No courses yet">
             Add a course and import past papers first. The question bank is built from cited items.
@@ -168,12 +164,7 @@ export function Questions({ courses }: { courses: Course[] }) {
     <div className={mode === "review" ? "max-w-6xl" : "max-w-4xl"}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="type-title">{mode === "review" ? "Review question" : "Question bank"}</h1>
-          <p className="reading mt-1 type-body-sm text-text-muted">
-            {mode === "review"
-              ? "Check the parsed question against its source, then mark it verified."
-              : "The question bank and past-paper verification."}
-          </p>
+          <h2 className="type-heading">{mode === "review" ? "Review question" : "Question bank"}</h2>
         </div>
         <div className="flex flex-wrap items-stretch gap-2">
           <label className="block min-w-48 flex-1">

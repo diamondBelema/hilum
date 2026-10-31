@@ -171,13 +171,7 @@ export function ProgressScreen({
 
   return (
     <div className="max-w-3xl">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="type-title">Progress</h1>
-          <p className="mt-1 type-body-sm text-text-muted">
-            Topics, mastery and the review queue. Mastery comes from evidence, never from a hand edit.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-end justify-end gap-3">
         {courses.length > 0 && (
           <label className="block type-body-sm font-medium">
             Course

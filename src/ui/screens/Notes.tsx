@@ -57,9 +57,7 @@ export function Notes({
               <span className="hidden sm:inline">All courses</span>
             </Button>
           )}
-          <h1 className="truncate type-heading">
-            {course ? course.title : "Notes"}
-          </h1>
+          {course && <h2 className="truncate type-heading">{course.title}</h2>}
         </div>
         {course && (
           <Button variant="secondary" onClick={() => onNewNote(course)}>
@@ -110,7 +108,7 @@ export function Notes({
 
       {!loading && !results && !course && (
         <section className="mt-6" aria-labelledby="all-courses">
-          <h2 id="all-courses" className="type-label">Courses</h2>
+          <h2 id="all-courses" className="sr-only">Courses</h2>
           {courses.length === 0 ? (
             <div className="mt-3">
               <EmptyState title="No notes yet">

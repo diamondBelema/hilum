@@ -313,9 +313,9 @@ export function GraphScreen({
   }
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg">
+    <div className="relative flex h-full min-h-[32rem] min-w-0 flex-col overflow-hidden rounded-panel border border-border-subtle bg-bg">
       {/* Top overlay */}
-      <div className="absolute top-0 left-0 right-0 z-20 p-3 flex flex-wrap items-center gap-3 bg-bg">
+      <div className="absolute top-0 left-0 right-0 z-20 flex flex-wrap items-center gap-3 border-b border-border-subtle bg-bg/95 p-3 backdrop-blur">
         {courses.length > 0 && (
           <label className="block type-body-sm font-medium">
             Course
