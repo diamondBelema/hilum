@@ -137,9 +137,9 @@ export function GraphScreen({
         if (!rootId && graph.nodes.length > 0) {
           const flagged =
             (requestedConcept ? graph.nodes.find((node) => node.id === requestedConcept) : undefined) ??
-            graph.nodes.find((node) => node.lecturerFlag) ??
+            graph.nodes.find((node) => (node as any).lecturerFlag) ??
             graph.nodes[0];
-          if (!flagged) return;
+          if (!flagged || !flagged.id) return;
           setRootId(flagged.id);
           setFocusNodeId(flagged.id);
           if (requestedConcept && flagged.id === requestedConcept) void loadDetail(flagged.id);

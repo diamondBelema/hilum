@@ -151,47 +151,47 @@ export function createApp(deps: AppDeps = {}) {
       disk,
       stats: vault.stats(),
     });
+  });
 
-    app.get("/api/diagnostics", async (c) => {
-      let disk: { freeBytes: number; totalBytes: number; freePercent: number } | null = null;
-      try {
-        const stats = await statfs(dirname(config.dbPath));
-        const totalBytes = stats.blocks * stats.bsize;
-        const freeBytes = stats.bavail * stats.bsize;
-        disk = {
-          freeBytes,
-          totalBytes,
-          freePercent: totalBytes > 0 ? Math.round((freeBytes / totalBytes) * 1000) / 10 : 0,
-        };
-      } catch {
-        disk = null;
-      }
-      const vaultReadable = await access(config.vaultPath, fsConstants.R_OK).then(() => true).catch(() => false);
-      const vaultWritable = await access(config.vaultPath, fsConstants.W_OK).then(() => true).catch(() => false);
-      const databaseAccessible =
-        config.dbPath === ":memory:" ||
-        (await access(config.dbPath, fsConstants.R_OK | fsConstants.W_OK).then(() => true).catch(() => false));
-      return c.json({
-        generatedAt: Date.now(),
-        version: config.version,
-        runtime: "bun",
-        host: config.hostname,
-        port: config.port,
-        lan: config.lan,
-        vault: {
-          path: config.vaultPath,
-          readable: vaultReadable,
-          writable: vaultWritable,
-          stats: vault.stats(),
-        },
-        database: {
-          path: config.dbPath,
-          accessible: databaseAccessible,
-        },
-        disk,
-        agent: sessions.agentState(),
-        note: "This report excludes MCP tokens and study content.",
-      });
+  app.get("/api/diagnostics", async (c) => {
+    let disk: { freeBytes: number; totalBytes: number; freePercent: number } | null = null;
+    try {
+      const stats = await statfs(dirname(config.dbPath));
+      const totalBytes = stats.blocks * stats.bsize;
+      const freeBytes = stats.bavail * stats.bsize;
+      disk = {
+        freeBytes,
+        totalBytes,
+        freePercent: totalBytes > 0 ? Math.round((freeBytes / totalBytes) * 1000) / 10 : 0,
+      };
+    } catch {
+      disk = null;
+    }
+    const vaultReadable = await access(config.vaultPath, fsConstants.R_OK).then(() => true).catch(() => false);
+    const vaultWritable = await access(config.vaultPath, fsConstants.W_OK).then(() => true).catch(() => false);
+    const databaseAccessible =
+      config.dbPath === ":memory:" ||
+      (await access(config.dbPath, fsConstants.R_OK | fsConstants.W_OK).then(() => true).catch(() => false));
+    return c.json({
+      generatedAt: Date.now(),
+      version: config.version,
+      runtime: "bun",
+      host: config.hostname,
+      port: config.port,
+      lan: config.lan,
+      vault: {
+        path: config.vaultPath,
+        readable: vaultReadable,
+        writable: vaultWritable,
+        stats: vault.stats(),
+      },
+      database: {
+        path: config.dbPath,
+        accessible: databaseAccessible,
+      },
+      disk,
+      agent: sessions.agentState(),
+      note: "This report excludes MCP tokens and study content.",
     });
   });
 
@@ -219,101 +219,101 @@ export function createApp(deps: AppDeps = {}) {
       vault: config.vaultPath,
       stats,
     });
+  });
 
-    app.post("/api/onboarding/demo", async (c) => {
-      const course = "demo-101";
-      const courseDir = join(config.vaultPath, "courses", course);
-      if (await access(courseDir).then(() => true).catch(() => false)) {
-        return c.json({ ok: false, created: false, course, message: "Demo course already exists." }, 409);
-      }
-      await mkdir(join(courseDir, "notes"), { recursive: true });
-      await writeFile(
-        join(courseDir, "course.md"),
-        "---\ncode: demo-101\ntitle: Hilum demo course\ndepartment: Study skills\n---\n\n# Hilum demo course\n\nUse this course to explore notes, sessions, the graph and progress.\n",
-        "utf8",
-      );
-      await writeFile(
-        join(courseDir, "INDEX.md"),
-        "# Hilum demo course\n\nThis small course is safe sample content for first-run setup.\n",
-        "utf8",
-      );
-      await writeFile(
-        join(courseDir, "notes", "getting-started.md"),
-        "---\ntitle: Getting started with Hilum\ntopics: [orientation]\n---\n\n# Getting started\n\nHilum connects source notes, teaching sessions, evidence, questions and the knowledge graph.\n",
-        "utf8",
-      );
-      await indexer.reindexAll();
-      return c.json({ ok: true, created: true, course, stats: vault.stats() }, 201);
+  app.post("/api/onboarding/demo", async (c) => {
+    const course = "demo-101";
+    const courseDir = join(config.vaultPath, "courses", course);
+    if (await access(courseDir).then(() => true).catch(() => false)) {
+      return c.json({ ok: false, created: false, course, message: "Demo course already exists." }, 409);
+    }
+    await mkdir(join(courseDir, "notes"), { recursive: true });
+    await writeFile(
+      join(courseDir, "course.md"),
+      "---\ncode: demo-101\ntitle: Hilum demo course\ndepartment: Study skills\n---\n\n# Hilum demo course\n\nUse this course to explore notes, sessions, the graph and progress.\n",
+      "utf8",
+    );
+    await writeFile(
+      join(courseDir, "INDEX.md"),
+      "# Hilum demo course\n\nThis small course is safe sample content for first-run setup.\n",
+      "utf8",
+    );
+    await writeFile(
+      join(courseDir, "notes", "getting-started.md"),
+      "---\ntitle: Getting started with Hilum\ntopics: [orientation]\n---\n\n# Getting started\n\nHilum connects source notes, teaching sessions, evidence, questions and the knowledge graph.\n",
+      "utf8",
+    );
+    await indexer.reindexAll();
+    return c.json({ ok: true, created: true, course, stats: vault.stats() }, 201);
+  });
+
+  app.post("/api/vault/backup", async (c) => {
+    const timestamp = new Date().toISOString().replaceAll(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    const backupRoot = backupRootFor(config);
+    const destination = join(backupRoot, `vault-${timestamp}`);
+    await mkdir(backupRoot, { recursive: true });
+    await cp(config.vaultPath, destination, { recursive: true, errorOnExist: true });
+    const databasePath = join(destination, "hilum.sqlite");
+    await writeFile(databasePath, db.serialize());
+    await writeFile(
+      join(destination, "manifest.json"),
+      JSON.stringify(
+        {
+          format: 1,
+          createdAt: Date.now(),
+          vault: config.vaultPath,
+          database: config.dbPath,
+          stats: vault.stats(),
+        },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    );
+    return c.json({
+      ok: true,
+      source: config.vaultPath,
+      destination,
+      createdAt: Date.now(),
+      database: databasePath,
+      stats: vault.stats(),
     });
+  });
 
-    app.post("/api/vault/backup", async (c) => {
-      const timestamp = new Date().toISOString().replaceAll(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-      const backupRoot = backupRootFor(config);
-      const destination = join(backupRoot, `vault-${timestamp}`);
-      await mkdir(backupRoot, { recursive: true });
-      await cp(config.vaultPath, destination, { recursive: true, errorOnExist: true });
-      const databasePath = join(destination, "hilum.sqlite");
-      await writeFile(databasePath, db.serialize());
-      await writeFile(
-        join(destination, "manifest.json"),
-        JSON.stringify(
-          {
-            format: 1,
-            createdAt: Date.now(),
-            vault: config.vaultPath,
-            database: config.dbPath,
-            stats: vault.stats(),
-          },
-          null,
-          2,
-        ) + "\n",
-        "utf8",
-      );
-      return c.json({
-        ok: true,
-        source: config.vaultPath,
-        destination,
-        createdAt: Date.now(),
-        database: databasePath,
-        stats: vault.stats(),
-      });
-    });
-
-    app.get("/api/vault/backups", async (c) => {
-      const root = backupRootFor(config);
-      let entries;
+  app.get("/api/vault/backups", async (c) => {
+    const root = backupRootFor(config);
+    let entries;
+    try {
+      entries = await readdir(root, { withFileTypes: true });
+    } catch {
+      return c.json({ root, backups: [] });
+    }
+    const backups = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !entry.name.startsWith("vault-")) continue;
+      const path = join(root, entry.name);
+      const manifestPath = join(path, "manifest.json");
       try {
-        entries = await readdir(root, { withFileTypes: true });
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+          format?: number;
+          createdAt?: number;
+          stats?: { notes?: number; courses?: number; tokens?: number };
+        };
+        const info = await stat(path);
+        backups.push({
+          name: entry.name,
+          path,
+          createdAt: manifest.createdAt ?? info.mtimeMs,
+          format: manifest.format ?? null,
+          stats: manifest.stats ?? null,
+          hasDatabase: await access(join(path, "hilum.sqlite")).then(() => true).catch(() => false),
+        });
       } catch {
-        return c.json({ root, backups: [] });
+        continue;
       }
-      const backups = [];
-      for (const entry of entries) {
-        if (!entry.isDirectory() || !entry.name.startsWith("vault-")) continue;
-        const path = join(root, entry.name);
-        const manifestPath = join(path, "manifest.json");
-        try {
-          const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
-            format?: number;
-            createdAt?: number;
-            stats?: { notes?: number; courses?: number; tokens?: number };
-          };
-          const info = await stat(path);
-          backups.push({
-            name: entry.name,
-            path,
-            createdAt: manifest.createdAt ?? info.mtimeMs,
-            format: manifest.format ?? null,
-            stats: manifest.stats ?? null,
-            hasDatabase: await access(join(path, "hilum.sqlite")).then(() => true).catch(() => false),
-          });
-        } catch {
-          continue;
-        }
-      }
-      backups.sort((a, b) => b.createdAt - a.createdAt);
-      return c.json({ root, backups });
-    });
+    }
+    backups.sort((a, b) => b.createdAt - a.createdAt);
+    return c.json({ root, backups });
   });
 
   app.post("/api/settings", async (c) => {

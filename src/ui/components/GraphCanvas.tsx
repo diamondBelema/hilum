@@ -29,7 +29,6 @@ type GraphCanvasProps = {
   onNodeSelect?: (id: string | null) => void;
   selectedId?: string | null;
   focusNodeId?: string | null;
-  resetViewToken?: number;
   sessionId?: string | null;
   sessionConceptIds?: Set<string>;
   ambient?: boolean;
@@ -139,7 +138,6 @@ export function GraphCanvas({
   onNodeSelect,
   selectedId: selectedIdProp,
   focusNodeId: focusNodeIdProp,
-  resetViewToken = 0,
   sessionId: sessionIdProp,
   sessionConceptIds: sessionConceptIdsProp,
   ambient = false,
@@ -152,7 +150,6 @@ export function GraphCanvas({
   const selectedRef = useRef<string | null>(null);
   const pinnedRef = useRef<Set<string>>(new Set());
   const dragStartRef = useRef<{ sx: number; sy: number; x: number; y: number } | null>(null);
-  const didDragRef = useRef(false);
   const degreeByIdRef = useRef(computeDegree(nodesProp, edgesProp));
   const radiusByIdRef = useRef(computeRadius(degreeByIdRef.current));
 
@@ -186,18 +183,23 @@ export function GraphCanvas({
       }),
     );
 
-    const linkData = edgesProp.filter(
-      (e) => degreeByIdRef.current.has(e.from) && degreeByIdRef.current.has(e.to),
-    );
+    const nodeIds = new Set(nodeData.map((n) => n.id));
+    const linkData = edgesProp
+      .filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to))
+      .map((e) => ({ source: e.from, target: e.to, type: e.type }));
+
+    const linkForce = forceLink(linkData as any)
+      .id((d: any) => d.id)
+      .distance((d: any) => {
+        const edge = d as any;
+        const t = edge?.type;
+        if (t && EDGE_LINK_DISTANCE[t] !== undefined) return EDGE_LINK_DISTANCE[t];
+        return LINK_DISTANCE;
+      })
+      .strength(0.8);
 
     const sim = forceSimulation(nodeData as unknown as SimulationNodeDatum[])
-      .force(
-        "link",
-        ((forceLink(linkData as any) as any)
-          .id((d: { id: string }) => d.id)
-          .distance((d: { type: string }) => EDGE_LINK_DISTANCE[d.type] ?? LINK_DISTANCE)
-          .strength(0.8)) as any,
-      )
+      .force("link", linkForce)
       .force("charge", ((forceManyBody() as any).strength(CHARGE_STRENGTH).distanceMax(300)) as any)
       .force("center", (forceCenter(width / 2, height / 2) as any) as any)
       .force(
@@ -243,12 +245,7 @@ export function GraphCanvas({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    nodesProp.map((node) => node.id).join("|"),
-    edgesProp.map((edge) => `${edge.from}:${edge.to}:${edge.type}`).join("|"),
-    width,
-    height,
-  ]);
+  }, [nodesProp.length, edgesProp.length, width, height]);
 
   // ---------------------------------------------------------------
   // Focus camera on a node
@@ -268,14 +265,6 @@ export function GraphCanvas({
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusNodeIdProp, width, height]);
-
-  useEffect(() => {
-    lastFocusedRef.current = null;
-    transformRef.current = { k: 1, x: 0, y: 0 };
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-    draw();
-  }, [resetViewToken]);
 
   // ---------------------------------------------------------------
   // Draw
@@ -564,9 +553,7 @@ export function GraphCanvas({
   }
 
   function findNodeAt(sx: number, sy: number): string | null {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return null;
-    const c = screenToCanvas(sx - rect.left, sy - rect.top);
+    const c = screenToCanvas(sx, sy);
     const rMax = NODE_MAX_RADIUS / transformRef.current.k;
     for (const node of nodesProp) {
       const p = nodePos(node.id);
@@ -585,7 +572,6 @@ export function GraphCanvas({
       const id = findNodeAt(event.clientX, event.clientY);
       if (id) {
         pinnedRef.current.add(id);
-        didDragRef.current = false;
         simRef.current?.alpha(0.4).restart();
       } else {
         dragStartRef.current = {
@@ -594,7 +580,6 @@ export function GraphCanvas({
           x: pan.x,
           y: pan.y,
         };
-        didDragRef.current = false;
       }
     },
     [pan],
@@ -610,17 +595,12 @@ export function GraphCanvas({
       if (drag) {
         const dx = (event.clientX - drag.sx) / transformRef.current.k;
         const dy = (event.clientY - drag.sy) / transformRef.current.k;
-        if (Math.hypot(event.clientX - drag.sx, event.clientY - drag.sy) > 4) {
-          didDragRef.current = true;
-        }
-        const nextX = drag.x + dx;
-        const nextY = drag.y + dy;
         setPan((prev) => ({
-          x: nextX,
-          y: nextY,
+          x: drag.x + dx,
+          y: drag.y + dy,
         }));
-        transformRef.current.x = nextX;
-        transformRef.current.y = nextY;
+        transformRef.current.x = pan.x + dx;
+        transformRef.current.y = pan.y + dy;
       }
     },
     [pan],
@@ -629,13 +609,6 @@ export function GraphCanvas({
   const onPointerUp = useCallback(() => {
     dragStartRef.current = null;
     pinnedRef.current = new Set();
-  }, []);
-
-  const onPointerLeave = useCallback(() => {
-    if (!dragStartRef.current) {
-      setHoverNode(null);
-      hoveredRef.current = null;
-    }
   }, []);
 
   const onWheel = useCallback(
@@ -681,10 +654,6 @@ export function GraphCanvas({
 
   const onClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
-      if (didDragRef.current) {
-        didDragRef.current = false;
-        return;
-      }
       const id = findNodeAt(event.clientX, event.clientY);
       if (!id) {
         if (selectedRef.current !== null) {
@@ -708,11 +677,6 @@ export function GraphCanvas({
     draw();
   }, [zoom, pan.x, pan.y, nodesProp.length, edgesProp.length, hoverNode]);
 
-  useEffect(() => {
-    selectedRef.current = selectedIdProp ?? null;
-    draw();
-  }, [selectedIdProp]);
-
   // ---------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------
@@ -720,11 +684,21 @@ export function GraphCanvas({
     onPointerDown,
     onPointerMove,
     onPointerUp,
-    onPointerLeave,
     onWheel,
     onDoubleClick,
     onClick,
   };
+
+  if (ambient) {
+    return (
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full block bg-transparent"
+        {...canvasEvents}
+        style={{ touchAction: "none" }}
+      />
+    );
+  }
 
   return (
     <div
@@ -733,12 +707,33 @@ export function GraphCanvas({
     >
       <canvas
         ref={canvasRef}
-        role={ambient ? undefined : "img"}
-        aria-label={ambient ? undefined : "Interactive concept graph. Drag to pan, scroll to zoom, and select a topic."}
         className="block w-full h-full"
         {...canvasEvents}
-        style={{ touchAction: "none", background: ambient ? "transparent" : undefined }}
+        style={{ touchAction: "none" }}
       />
+
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex gap-1">
+        {[ "neighborhood", "overview" ].map((m) => (
+          <button
+            key={m}
+            type="button"
+            className="px-3 py-1.5 rounded-control border border-border-subtle bg-surface type-body-sm text-text hover:bg-surface-2"
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+
+      <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
+        <input
+          type="search"
+          placeholder="Find a topic…"
+          className="min-h-10 w-[220px] rounded-control border border-border-strong bg-surface pl-8 pr-3 type-body-sm text-text placeholder:text-text-muted focus:border-primary"
+        />
+        <div className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 pointer-events-none text-text-muted">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+      </div>
     </div>
   );
 }
