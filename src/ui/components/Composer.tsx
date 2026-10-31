@@ -50,6 +50,8 @@ export function Composer({
   currentCourse,
   sessionMode,
   onSend,
+  contextLabel,
+  onClearContext,
   sending = false,
   ended = false,
   onResume,
@@ -64,6 +66,8 @@ export function Composer({
   sessionCourseCode?: string;
   sessionMode?: ComposerMode;
   onSend?: (text: string, clientId: string) => void | Promise<void>;
+  contextLabel?: string | null;
+  onClearContext?: () => void;
   sending?: boolean;
   ended?: boolean;
   onResume?: () => void | Promise<void>;
@@ -211,6 +215,19 @@ export function Composer({
           }}
           className="type-body block w-full resize-none bg-transparent text-text outline-none placeholder:text-text-muted"
         />
+        {view === "session" && contextLabel && (
+          <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-chip border border-primary/30 bg-primary-soft px-2.5 py-1 type-meta text-primary">
+            <span className="truncate">{contextLabel}</span>
+            <button
+              type="button"
+              onClick={onClearContext}
+              className="shrink-0 rounded-full px-1 text-primary hover:bg-primary/10"
+              aria-label="Remove message context"
+            >
+              ×
+            </button>
+          </div>
+        )}
         <div className="mt-1 flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             {view === "home" ? (

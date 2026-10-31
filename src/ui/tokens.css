@@ -78,7 +78,7 @@
   --rail: 64px;
 
   /* Font stacks — self-hosted variable faces, Latin only (UX-1 / D1) */
-  --font-ui: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-ui: "Source Sans 3 Variable", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-prose: "Source Sans 3 Variable", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }

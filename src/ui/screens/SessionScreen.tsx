@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Copy, MessageCircle } from "lucide-react";
+import { ArrowRight, Check, Copy, MessageCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "../lib/router.ts";
 import { api, type Course, type SessionDetail, type SessionActivity, type Cite, type ActivitySpec } from "../api.ts";
@@ -51,8 +51,6 @@ function specRepeatsTitle(act: SessionActivity): boolean {
 
 type SessionScreenProps = {
   sessionId: string;
-  onClose: () => void;
-  onNewSession: (course: Course | null) => void;
   onEndSession?: () => void;
   onResume?: () => Promise<void> | void;
 };
@@ -64,12 +62,11 @@ function classifyError(err: unknown): { message: string; isNotFound: boolean; is
   return { message, isNotFound, isNetwork };
 }
 
-export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, onResume }: SessionScreenProps) {
+export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScreenProps) {
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ message: string; isNotFound: boolean; isNetwork: boolean } | null>(null);
-  const [focused, setFocused] = useState(false);
   const [contextTag, setContextTag] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [resuming, setResuming] = useState(false);
@@ -86,7 +83,9 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
   const valuesRef = useRef<Record<string, unknown[]>>({});
   const [submittingByActivity, setSubmittingByActivity] = useState<Record<string, boolean>>({});
 
-  const [optimisticMessages, setOptimisticMessages] = useState<{ id: string; text: string; createdAt: number }[]>([]);
+  const [optimisticMessages, setOptimisticMessages] = useState<
+    { id: string; text: string; createdAt: number; failed?: boolean }[]
+  >([]);
 
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -97,7 +96,6 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
   const [tabId] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
-    setFocused(true);
     let cancelled = false;
 
     void api.focusSession(sessionId, tabId);
@@ -123,7 +121,6 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
         }
       });
     return () => {
-      setFocused(false);
       cancelled = true;
     };
   }, [sessionId, tabId]);
@@ -188,8 +185,8 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
   const activeActivity = pendingActivities[0] ?? null;
   const transcriptEmpty = session?.transcript.length === 0 && optimisticMessages.length === 0;
 
-  const sessionFailed = Boolean(error) && !loading;
-  const sessionReady = Boolean(session) && !sessionFailed && !loading;
+  const sessionFailed = !session && Boolean(error) && !loading;
+  const sessionReady = Boolean(session) && !loading;
 
   const getValues = (activityId: string) => {
     const act = session?.activities.find((a) => a.id === activityId);
@@ -242,21 +239,39 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
 
   const sendMessage = useCallback(
     async (text: string) => {
-      if (!session || !text.trim()) return;
+      if (!session || !text.trim() || sending) return;
       const optimisticId = `opt-${Date.now()}`;
       const body = contextTag ? `${contextTag} ${text.trim()}` : text.trim();
       setOptimisticMessages((prev) => [...prev, { id: optimisticId, text: body, createdAt: Date.now() }]);
       setContextTag(null);
+      setSending(true);
+      setError(null);
       try {
         await api.askAgent(sessionId, body);
         // Pull the stored request first, then drop the temporary row, so a message never shows twice.
         const next = await api.session(sessionId).catch(() => null);
         if (next) setSession((current) => (current?.id === sessionId ? next : current));
-      } finally {
         setOptimisticMessages((prev) => prev.filter((item) => item.id !== optimisticId));
+      } catch (err) {
+        setError(classifyError(err));
+        setOptimisticMessages((prev) =>
+          prev.map((item) =>
+            item.id === optimisticId ? { ...item, failed: true } : item,
+          ),
+        );
+      } finally {
+        setSending(false);
       }
     },
-    [sessionId, session, contextTag],
+    [contextTag, sending, session, sessionId],
+  );
+
+  const retryMessage = useCallback(
+    (message: { id: string; text: string }) => {
+      setOptimisticMessages((prev) => prev.filter((item) => item.id !== message.id));
+      void sendMessage(message.text);
+    },
+    [sendMessage],
   );
 
   const resume = useCallback(async () => {
@@ -382,6 +397,11 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
         <div className="mx-auto max-w-3xl space-y-4">
           {session && (
             <>
+              {error && (
+                <Banner tone="error">
+                  {error.message}
+                </Banner>
+              )}
               {sessionConcepts.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {sessionConcepts.map((concept) => (
@@ -492,7 +512,7 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
                   <div
                     key={String(act.id)}
                     className={cn(
-                      "rounded-panel border bg-surface p-4 flex flex-col gap-3",
+                      "rounded-panel border bg-surface p-3 sm:p-4 flex flex-col gap-3",
                       activeActivity?.id === act.id ? "border-l-4 border-border-subtle border-l-primary" : "border-border-subtle",
                     )}
                   >
@@ -608,10 +628,23 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
 
               {optimisticMessages.map((msg) => (
                 <div key={msg.id} className="flex flex-col items-end gap-1">
-                  <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary-soft px-4 py-2.5">
+                  <div className={cn(
+                    "max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5",
+                    msg.failed ? "border border-incorrect/40 bg-incorrect-soft" : "bg-primary-soft",
+                  )}>
                     <p className="type-body whitespace-pre-wrap text-text">{msg.text}</p>
                   </div>
-                  <span className="type-meta text-text-muted">Sending…</span>
+                  {msg.failed ? (
+                    <button
+                      type="button"
+                      onClick={() => retryMessage(msg)}
+                      className="type-meta text-incorrect underline underline-offset-2 hover:text-text"
+                    >
+                      Not sent — retry
+                    </button>
+                  ) : (
+                    <span className="type-meta text-text-muted">Sending…</span>
+                  )}
                 </div>
               ))}
 
@@ -629,6 +662,8 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
             currentCourse={currentCourse ?? (session ? ({ code: session.course } as Course) : null)}
             sessionMode={session?.goal.toLowerCase().startsWith("practice") ? "practice" : "teach"}
             onSend={(text) => sendMessage(text)}
+            contextLabel={contextTag}
+            onClearContext={() => setContextTag(null)}
             sending={sending}
             ended={ended}
             onResume={resume}

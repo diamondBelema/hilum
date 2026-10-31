@@ -279,8 +279,6 @@ function AppShell() {
               key={`${route.id}:${sessionVersion}`}
               sessionId={route.id}
               onResume={resumeSession}
-              onClose={() => navigate("/")}
-              onNewSession={(course) => (course ? void createSession(course) : navigate("/"))}
               onEndSession={() => setEndOpen(true)}
             />
           )}
@@ -460,22 +458,25 @@ function LibraryScreen({
 ) : null}
     </Suspense>
   );
-  const activeSection = LIBRARY_SECTIONS.find((item) => item.slug === section);
-
   return (
     <div className={cn("w-full p-4 sm:p-6 lg:p-8", !section && "mx-auto max-w-6xl")}>
-      <div className="flex items-center gap-2">
-        {section && section !== null && (
-          <Button variant="ghost" size="icon-sm" className="px-2" onClick={() => navigate("/library")}>
+      {section ? (
+        <div className="mx-auto max-w-5xl">
+          <Button
+            variant="ghost"
+            className="-ml-2 mb-4 px-2 text-text-muted"
+            onClick={() => navigate("/library")}
+          >
             <ArrowLeft aria-hidden="true" className="size-4" />
+            <span>Library</span>
           </Button>
-        )}
-        <Library aria-hidden="true" className="size-5 text-primary" />
-        <div>
-          <h1 className="type-title text-text">{activeSection?.title ?? (section ? "Library" : "Library")}</h1>
-          {activeSection && <p className="type-body-sm mt-0.5 text-text-muted">{activeSection.description}</p>}
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Library aria-hidden="true" className="size-5 text-primary" />
+          <h1 className="type-title text-text">Library</h1>
+        </div>
+      )}
 
       {section && !LIBRARY_SECTIONS.some((item) => item.slug === section) && section !== "notes" ? (
         <div className="mt-6 rounded-panel border border-border-subtle bg-surface p-4">
@@ -484,11 +485,7 @@ function LibraryScreen({
         </div>
       ) : null}
 
-      {section ? (
-        <>
-          {view}
-        </>
-      ) : (
+      {section ? view : (
         <>
           <div className="mt-6 max-w-2xl">
             <p className="type-label text-primary">Study workspace</p>
@@ -926,6 +923,8 @@ function SettingsScreen() {
 
   const displayToken = settings?.mcpToken ?? null;
   const tokenBody = tokenShown || !displayToken ? (displayToken ?? "") : "••••••••";
+  const readiness = health?.readiness;
+  const mcpUrls = settings?.mcpUrls ?? [];
 
   return (
     <div className="mx-auto w-full max-w-2xl p-4 sm:p-6">
@@ -939,7 +938,7 @@ function SettingsScreen() {
           "mt-4 rounded-control border p-3 type-body-sm",
           settingsError
             ? "border-incorrect/40 bg-incorrect-soft text-incorrect"
-            : "border-success/40 bg-success-soft text-success",
+            : "border-correct/40 bg-correct-soft text-correct",
         )}>
           {settingsError ?? settingsNotice}
         </div>
@@ -947,17 +946,17 @@ function SettingsScreen() {
 
       <section className="mt-6 rounded-panel border border-border-subtle bg-surface p-4">
         <div className="flex items-start gap-3">
-          {health?.readiness.setupComplete ? (
-            <Check aria-hidden="true" className="mt-0.5 size-5 text-success" />
+          {readiness?.setupComplete ? (
+            <Check aria-hidden="true" className="mt-0.5 size-5 text-correct" />
           ) : (
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-5 text-warning" />
           )}
           <div className="min-w-0 flex-1">
             <h2 className="type-heading text-text">
-              {health?.readiness.setupComplete ? "Hilum is ready" : "Finish setup"}
+              {readiness?.setupComplete ? "Hilum is ready" : "Finish setup"}
             </h2>
             <p className="type-body-sm mt-1 text-text-muted">
-              {health?.readiness.setupComplete
+              {readiness?.setupComplete
                 ? "Vault, database and course content are available."
                 : "Choose a writable vault, add a course, and connect an agent to get the full experience."}
             </p>
@@ -965,24 +964,24 @@ function SettingsScreen() {
         </div>
         <dl className="mt-4 grid gap-2 sm:grid-cols-3">
           {([
-            ["Vault", health?.readiness.vault],
-            ["Database", health?.readiness.database],
-            ["Agent", health?.readiness.agent !== "none"],
+            ["Vault", readiness?.vault],
+            ["Database", readiness?.database],
+            ["Agent", readiness ? readiness.agent !== "none" : false],
           ] as [string, boolean | undefined][]).map(([label, ready]) => (
             <div key={label} className="rounded-control border border-border-subtle bg-surface-2 px-3 py-2">
               <dt className="type-meta text-text-muted">{label}</dt>
-              <dd className={cn("type-body-sm mt-1 font-medium", ready ? "text-success" : "text-warning")}>
+              <dd className={cn("type-body-sm mt-1 font-medium", ready ? "text-correct" : "text-warning")}>
                 {ready ? "Ready" : label === "Agent" ? "Not connected" : "Needs attention"}
               </dd>
             </div>
           ))}
         </dl>
-        {!health?.readiness.setupComplete && (
+        {!readiness?.setupComplete && (
           <ol className="mt-4 space-y-2 border-t border-border-subtle pt-4">
             {[
               {
                 label: "Check the vault",
-                done: Boolean(health?.readiness.vault),
+                done: Boolean(readiness?.vault),
                 action: (
                   <Button variant="ghost" size="sm" onClick={() => void rescanVault()} disabled={rescanBusy}>
                     {rescanBusy ? "Checking…" : "Rescan"}
@@ -1008,7 +1007,7 @@ function SettingsScreen() {
               },
               {
                 label: "Connect an MCP agent",
-                done: health?.readiness.agent !== "none",
+                done: readiness ? readiness.agent !== "none" : false,
                 action: (
                   <Button
                     variant="ghost"
@@ -1026,7 +1025,7 @@ function SettingsScreen() {
                   className={cn(
                     "flex size-7 shrink-0 items-center justify-center rounded-full border font-mono type-meta",
                     step.done
-                      ? "border-success/50 bg-success-soft text-success"
+                      ? "border-correct/50 bg-correct-soft text-correct"
                       : "border-border-strong text-text-muted",
                   )}
                 >
@@ -1128,19 +1127,21 @@ function SettingsScreen() {
               {settings.lan ? "LAN addresses" : "Local address"}
             </p>
             <ul className="mt-1 space-y-1">
-              {(settings.mcpUrls.length > 0 ? settings.mcpUrls : [`${endpoint}`]).map((url) => (
+              {mcpUrls.length > 0 ? mcpUrls.map((url) => (
                 <li key={url} className="break-all type-code text-text">
                   {url}
                 </li>
-              ))}
+              )) : (
+                <li className="break-all type-code text-text">{endpoint}</li>
+              )}
             </ul>
             <p className="mt-2 type-meta text-text-muted">
               Bound to <span className="font-mono">{settings.bindHost}</span>. MCP clients use the address above.
             </p>
             <p className="mt-2 type-body-sm text-text">
-              Agent: <span className="font-medium">{settings.agent.clientName ?? "No client identified"}</span>
+              Agent: <span className="font-medium">{settings.agent?.clientName ?? "No client identified"}</span>
               <span className="ml-2 text-text-muted">
-                ({settings.agent.state === "none" ? "not connected" : settings.agent.state})
+                ({settings.agent?.state === "none" || !settings.agent ? "not connected" : settings.agent.state})
               </span>
             </p>
           </div>
