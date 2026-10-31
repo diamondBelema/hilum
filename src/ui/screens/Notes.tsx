@@ -48,7 +48,7 @@ export function Notes({
   const list = results ?? notes;
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-5xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {course && (
@@ -57,7 +57,7 @@ export function Notes({
               <span className="hidden sm:inline">All courses</span>
             </Button>
           )}
-          <h1 className="truncate type-title">
+          <h1 className="truncate type-heading">
             {course ? course.title : "Notes"}
           </h1>
         </div>
@@ -142,8 +142,8 @@ export function Notes({
       )}
 
       {!loading && !results && course && (
-        <section className="mt-6" aria-labelledby="course-notes">
-          <h2 id="course-notes" className="type-label">Notes</h2>
+        <section className="mt-5" aria-labelledby="course-notes">
+          <h2 id="course-notes" className="sr-only">Notes</h2>
           {list.length === 0 ? (
             <div className="mt-3">
               <EmptyState title="No notes indexed for this course">
@@ -174,10 +174,10 @@ function NoteList({
   }, {});
 
   return (
-    <div className="mt-3 space-y-6">
+    <div className="mt-4 space-y-5">
       {Object.entries(grouped).map(([section, sectionNotes]) => (
         <section key={section} aria-labelledby={`notes-section-${section}`}>
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-1.5 flex items-center gap-2">
             <FolderOpen aria-hidden="true" className="size-4 text-primary" />
             <h3 id={`notes-section-${section}`} className="type-label text-text">
               {section.replaceAll("-", " ")}

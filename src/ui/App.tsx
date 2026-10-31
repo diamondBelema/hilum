@@ -460,22 +460,19 @@ function LibraryScreen({
 ) : null}
     </Suspense>
   );
-  const activeSection = LIBRARY_SECTIONS.find((item) => item.slug === section);
-
   return (
     <div className={cn("w-full p-4 sm:p-6 lg:p-8", !section && "mx-auto max-w-6xl")}>
-      <div className="flex items-center gap-2">
-        {section && section !== null && (
-          <Button variant="ghost" size="icon-sm" className="px-2" onClick={() => navigate("/library")}>
-            <ArrowLeft aria-hidden="true" className="size-4" />
-          </Button>
-        )}
-        <Library aria-hidden="true" className="size-5 text-primary" />
-        <div>
-          <h1 className="type-title text-text">{activeSection?.title ?? (section ? "Library" : "Library")}</h1>
-          {activeSection && <p className="type-body-sm mt-0.5 text-text-muted">{activeSection.description}</p>}
+      {!section && (
+        <div className="flex items-center gap-2">
+          <Library aria-hidden="true" className="size-5 text-primary" />
+          <div>
+            <h1 className="type-title text-text">Library</h1>
+            <p className="type-body-sm mt-0.5 text-text-muted">
+              Source material, practice, feedback and your concept map.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {section && !LIBRARY_SECTIONS.some((item) => item.slug === section) && section !== "notes" ? (
         <div className="mt-6 rounded-panel border border-border-subtle bg-surface p-4">
@@ -490,7 +487,7 @@ function LibraryScreen({
         </>
       ) : (
         <>
-          <div className="mt-6 max-w-2xl">
+          <div className="mt-5 max-w-2xl">
             <p className="type-label text-primary">Study workspace</p>
             <h2 className="type-heading mt-1 text-text">Choose where to continue</h2>
             <p className="reading mt-2 text-sm text-text-muted">
@@ -498,7 +495,7 @@ function LibraryScreen({
               practice, feedback and map that support the next session.
             </p>
           </div>
-          <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {LIBRARY_SECTIONS.map((item) => {
               const Icon = item.icon;
               return (
@@ -947,17 +944,17 @@ function SettingsScreen() {
 
       <section className="mt-6 rounded-panel border border-border-subtle bg-surface p-4">
         <div className="flex items-start gap-3">
-          {health?.readiness.setupComplete ? (
+          {health?.readiness?.setupComplete ? (
             <Check aria-hidden="true" className="mt-0.5 size-5 text-success" />
           ) : (
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-5 text-warning" />
           )}
           <div className="min-w-0 flex-1">
             <h2 className="type-heading text-text">
-              {health?.readiness.setupComplete ? "Hilum is ready" : "Finish setup"}
+              {health?.readiness?.setupComplete ? "Hilum is ready" : "Finish setup"}
             </h2>
             <p className="type-body-sm mt-1 text-text-muted">
-              {health?.readiness.setupComplete
+              {health?.readiness?.setupComplete
                 ? "Vault, database and course content are available."
                 : "Choose a writable vault, add a course, and connect an agent to get the full experience."}
             </p>
@@ -965,9 +962,9 @@ function SettingsScreen() {
         </div>
         <dl className="mt-4 grid gap-2 sm:grid-cols-3">
           {([
-            ["Vault", health?.readiness.vault],
-            ["Database", health?.readiness.database],
-            ["Agent", health?.readiness.agent !== "none"],
+            ["Vault", health?.readiness?.vault],
+            ["Database", health?.readiness?.database],
+            ["Agent", health?.readiness?.agent !== "none"],
           ] as [string, boolean | undefined][]).map(([label, ready]) => (
             <div key={label} className="rounded-control border border-border-subtle bg-surface-2 px-3 py-2">
               <dt className="type-meta text-text-muted">{label}</dt>
@@ -977,12 +974,12 @@ function SettingsScreen() {
             </div>
           ))}
         </dl>
-        {!health?.readiness.setupComplete && (
+        {!health?.readiness?.setupComplete && (
           <ol className="mt-4 space-y-2 border-t border-border-subtle pt-4">
             {[
               {
                 label: "Check the vault",
-                done: Boolean(health?.readiness.vault),
+                done: Boolean(health?.readiness?.vault),
                 action: (
                   <Button variant="ghost" size="sm" onClick={() => void rescanVault()} disabled={rescanBusy}>
                     {rescanBusy ? "Checking…" : "Rescan"}
@@ -1008,7 +1005,7 @@ function SettingsScreen() {
               },
               {
                 label: "Connect an MCP agent",
-                done: health?.readiness.agent !== "none",
+                done: health?.readiness?.agent !== "none",
                 action: (
                   <Button
                     variant="ghost"

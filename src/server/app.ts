@@ -151,8 +151,9 @@ export function createApp(deps: AppDeps = {}) {
       disk,
       stats: vault.stats(),
     });
+  });
 
-    app.get("/api/diagnostics", async (c) => {
+  app.get("/api/diagnostics", async (c) => {
       let disk: { freeBytes: number; totalBytes: number; freePercent: number } | null = null;
       try {
         const stats = await statfs(dirname(config.dbPath));
@@ -192,7 +193,6 @@ export function createApp(deps: AppDeps = {}) {
         agent: sessions.agentState(),
         note: "This report excludes MCP tokens and study content.",
       });
-    });
   });
 
   app.get("/api/settings", (c) =>
@@ -219,8 +219,9 @@ export function createApp(deps: AppDeps = {}) {
       vault: config.vaultPath,
       stats,
     });
+  });
 
-    app.post("/api/onboarding/demo", async (c) => {
+  app.post("/api/onboarding/demo", async (c) => {
       const course = "demo-101";
       const courseDir = join(config.vaultPath, "courses", course);
       if (await access(courseDir).then(() => true).catch(() => false)) {
@@ -244,9 +245,9 @@ export function createApp(deps: AppDeps = {}) {
       );
       await indexer.reindexAll();
       return c.json({ ok: true, created: true, course, stats: vault.stats() }, 201);
-    });
+  });
 
-    app.post("/api/vault/backup", async (c) => {
+  app.post("/api/vault/backup", async (c) => {
       const timestamp = new Date().toISOString().replaceAll(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
       const backupRoot = backupRootFor(config);
       const destination = join(backupRoot, `vault-${timestamp}`);
@@ -277,9 +278,9 @@ export function createApp(deps: AppDeps = {}) {
         database: databasePath,
         stats: vault.stats(),
       });
-    });
+  });
 
-    app.get("/api/vault/backups", async (c) => {
+  app.get("/api/vault/backups", async (c) => {
       const root = backupRootFor(config);
       let entries;
       try {
@@ -313,7 +314,6 @@ export function createApp(deps: AppDeps = {}) {
       }
       backups.sort((a, b) => b.createdAt - a.createdAt);
       return c.json({ root, backups });
-    });
   });
 
   app.post("/api/settings", async (c) => {
