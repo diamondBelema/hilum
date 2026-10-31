@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Minus, Plus, RotateCcw } from "lucide-react";
 import {
   forceCollide,
   forceCenter,
@@ -29,6 +30,7 @@ type GraphCanvasProps = {
   onNodeSelect?: (id: string | null) => void;
   selectedId?: string | null;
   focusNodeId?: string | null;
+  resetViewToken?: number;
   sessionId?: string | null;
   sessionConceptIds?: Set<string>;
   ambient?: boolean;
@@ -138,6 +140,7 @@ export function GraphCanvas({
   onNodeSelect,
   selectedId: selectedIdProp,
   focusNodeId: focusNodeIdProp,
+  resetViewToken = 0,
   sessionId: sessionIdProp,
   sessionConceptIds: sessionConceptIdsProp,
   ambient = false,
@@ -160,6 +163,7 @@ export function GraphCanvas({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [hoverNode, setHoverNode] = useState<string | null>(null);
   const lastFocusedRef = useRef<string | null>(null);
+  const lastResetTokenRef = useRef(resetViewToken);
 
   // ---------------------------------------------------------------
   // Simulation
@@ -265,6 +269,35 @@ export function GraphCanvas({
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusNodeIdProp, width, height]);
+
+  const setCameraZoom = useCallback(
+    (nextZoom: number, sx = width / 2, sy = height / 2) => {
+      const previous = transformRef.current.k;
+      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoom));
+      const before = screenToCanvas(sx, sy);
+      transformRef.current.k = next;
+      transformRef.current.x = sx - before.x * next;
+      transformRef.current.y = sy - before.y * next;
+      setZoom(next);
+      setPan({ x: transformRef.current.x, y: transformRef.current.y });
+      if (next !== previous) draw();
+    },
+    [height, width],
+  );
+
+  const resetCamera = useCallback(() => {
+    transformRef.current = { k: 1, x: 0, y: 0 };
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    lastFocusedRef.current = null;
+    draw();
+  }, []);
+
+  useEffect(() => {
+    if (resetViewToken === lastResetTokenRef.current) return;
+    lastResetTokenRef.current = resetViewToken;
+    resetCamera();
+  }, [resetCamera, resetViewToken]);
 
   // ---------------------------------------------------------------
   // Draw
@@ -563,13 +596,21 @@ export function GraphCanvas({
     return null;
   }
 
+  function localPoint(event: { clientX: number; clientY: number }): { x: number; y: number } {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    return rect
+      ? { x: event.clientX - rect.left, y: event.clientY - rect.top }
+      : { x: event.clientX, y: event.clientY };
+  }
+
   // ---------------------------------------------------------------
   // Pointer handlers
   // ---------------------------------------------------------------
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
       if (event.button !== 0) return;
-      const id = findNodeAt(event.clientX, event.clientY);
+      const point = localPoint(event);
+      const id = findNodeAt(point.x, point.y);
       if (id) {
         pinnedRef.current.add(id);
         simRef.current?.alpha(0.4).restart();
@@ -587,7 +628,8 @@ export function GraphCanvas({
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
-      const id = findNodeAt(event.clientX, event.clientY);
+      const point = localPoint(event);
+      const id = findNodeAt(point.x, point.y);
       setHoverNode(id);
       hoveredRef.current = id;
 
@@ -595,12 +637,13 @@ export function GraphCanvas({
       if (drag) {
         const dx = (event.clientX - drag.sx) / transformRef.current.k;
         const dy = (event.clientY - drag.sy) / transformRef.current.k;
-        setPan((prev) => ({
+        const nextPan = {
           x: drag.x + dx,
           y: drag.y + dy,
-        }));
-        transformRef.current.x = pan.x + dx;
-        transformRef.current.y = pan.y + dy;
+        };
+        setPan(nextPan);
+        transformRef.current.x = nextPan.x;
+        transformRef.current.y = nextPan.y;
       }
     },
     [pan],
@@ -611,33 +654,10 @@ export function GraphCanvas({
     pinnedRef.current = new Set();
   }, []);
 
-  const onWheel = useCallback(
-    (event: React.WheelEvent<HTMLCanvasElement>) => {
-      event.preventDefault();
-      const rect = canvasRef.current!.getBoundingClientRect();
-      const sx = event.clientX - rect.left;
-      const sy = event.clientY - rect.top;
-      const before = screenToCanvas(sx, sy);
-
-      const previous = transformRef.current.k;
-      const next = Math.min(
-        MAX_ZOOM,
-        Math.max(MIN_ZOOM, previous * (event.deltaY < 0 ? 1.15 : 0.87)),
-      );
-      transformRef.current.k = next;
-      setZoom(next);
-
-      const after = screenToCanvas(sx, sy);
-      transformRef.current.x += (before.x - after.x) * next;
-      transformRef.current.y += (before.y - after.y) * next;
-      setPan({ x: transformRef.current.x, y: transformRef.current.y });
-    },
-    [],
-  );
-
   const onDoubleClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
-      const id = findNodeAt(event.clientX, event.clientY);
+      const point = localPoint(event);
+      const id = findNodeAt(point.x, point.y);
       if (!id) return;
       const p = nodePos(id);
       if (!p) return;
@@ -654,7 +674,8 @@ export function GraphCanvas({
 
   const onClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
-      const id = findNodeAt(event.clientX, event.clientY);
+      const point = localPoint(event);
+      const id = findNodeAt(point.x, point.y);
       if (!id) {
         if (selectedRef.current !== null) {
           selectedRef.current = null;
@@ -684,7 +705,6 @@ export function GraphCanvas({
     onPointerDown,
     onPointerMove,
     onPointerUp,
-    onWheel,
     onDoubleClick,
     onClick,
   };
@@ -712,28 +732,39 @@ export function GraphCanvas({
         style={{ touchAction: "none" }}
       />
 
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex gap-1">
-        {[ "neighborhood", "overview" ].map((m) => (
-          <button
-            key={m}
-            type="button"
-            className="px-3 py-1.5 rounded-control border border-border-subtle bg-surface type-body-sm text-text hover:bg-surface-2"
-          >
-            {m}
-          </button>
-        ))}
+      <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1 rounded-control border border-border-subtle bg-surface/95 p-1 shadow-popover">
+        <button
+          type="button"
+          aria-label="Zoom out"
+          title="Zoom out"
+          onClick={() => setCameraZoom(transformRef.current.k / 1.2)}
+          className="inline-flex size-10 items-center justify-center rounded-control text-text hover:bg-surface-2"
+        >
+          <Minus aria-hidden="true" className="size-4" />
+        </button>
+        <span className="min-w-12 text-center type-meta tabular-nums text-text-muted">
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          type="button"
+          aria-label="Zoom in"
+          title="Zoom in"
+          onClick={() => setCameraZoom(transformRef.current.k * 1.2)}
+          className="inline-flex size-10 items-center justify-center rounded-control text-text hover:bg-surface-2"
+        >
+          <Plus aria-hidden="true" className="size-4" />
+        </button>
+        <button
+          type="button"
+          aria-label="Reset graph zoom and position"
+          title="Reset graph zoom and position"
+          onClick={resetCamera}
+          className="inline-flex size-10 items-center justify-center rounded-control text-text hover:bg-surface-2"
+        >
+          <RotateCcw aria-hidden="true" className="size-4" />
+        </button>
       </div>
 
-      <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
-        <input
-          type="search"
-          placeholder="Find a topic…"
-          className="min-h-10 w-[220px] rounded-control border border-border-strong bg-surface pl-8 pr-3 type-body-sm text-text placeholder:text-text-muted focus:border-primary"
-        />
-        <div className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 pointer-events-none text-text-muted">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        </div>
-      </div>
     </div>
   );
 }
