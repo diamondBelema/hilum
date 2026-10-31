@@ -53,8 +53,8 @@ function cssVar(name: string): string {
 
 const LINK_DISTANCE = 55;
 const CHARGE_STRENGTH = -120;
-const NODE_MIN_RADIUS = 4;
-const NODE_MAX_RADIUS = 14;
+const NODE_MIN_RADIUS = 6;
+const NODE_MAX_RADIUS = 18;
 const LABEL_TRUNCATE = 28;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3.0;
@@ -121,6 +121,13 @@ function computeRadius(degreeById: Map<string, number>): Map<string, number> {
   return map;
 }
 
+function radiusForNode(node: ConceptSummary, degreeById: Map<string, number>): number {
+  const degree = degreeById.get(node.id) ?? 0;
+  const degreeRadius = computeRadius(new Map([[node.id, degree]])).get(node.id) ?? NODE_MIN_RADIUS;
+  const examWeight = Math.max(0, Math.min(1, node.examWeight / 10));
+  return Math.max(degreeRadius, NODE_MIN_RADIUS + examWeight * (NODE_MAX_RADIUS - NODE_MIN_RADIUS));
+}
+
 function truncate(title: string, max: number): string {
   if (title.length <= max) return title;
   return title.slice(0, max - 1) + "…";
@@ -165,6 +172,11 @@ export function GraphCanvas({
   const lastFocusedRef = useRef<string | null>(null);
   const lastResetTokenRef = useRef(resetViewToken);
 
+  useEffect(() => {
+    selectedRef.current = selectedIdProp ?? null;
+    draw();
+  }, [selectedIdProp]);
+
   // ---------------------------------------------------------------
   // Simulation
   // ---------------------------------------------------------------
@@ -181,7 +193,7 @@ export function GraphCanvas({
     const nodeData: Array<SimulationNodeDatum & { id: string; radius: number }> = nodesProp.map(
       (node) => ({
         id: node.id,
-        radius: radiusByIdRef.current.get(node.id) ?? NODE_MIN_RADIUS,
+        radius: radiusForNode(node, degreeByIdRef.current),
         fx: undefined,
         fy: undefined,
       }),
@@ -324,6 +336,31 @@ export function GraphCanvas({
     const sessionId = sessionIdProp;
     const selectedId = selectedIdProp ?? selectedRef.current;
 
+    // A restrained graph-paper texture makes the canvas feel spatial without
+    // competing with labels or the selected concept.
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = cssVar("--border-subtle");
+    ctx.lineWidth = 1 / k;
+    const grid = 32;
+    const left = -x / k - grid;
+    const top = -y / k - grid;
+    const right = (width - x) / k + grid;
+    const bottom = (height - y) / k + grid;
+    for (let gx = Math.floor(left / grid) * grid; gx <= right; gx += grid) {
+      ctx.beginPath();
+      ctx.moveTo(gx, top);
+      ctx.lineTo(gx, bottom);
+      ctx.stroke();
+    }
+    for (let gy = Math.floor(top / grid) * grid; gy <= bottom; gy += grid) {
+      ctx.beginPath();
+      ctx.moveTo(left, gy);
+      ctx.lineTo(right, gy);
+      ctx.stroke();
+    }
+    ctx.restore();
+
     // --- Edges ---
     const visibleEdges = edgesProp.filter(
       (e) =>
@@ -352,20 +389,21 @@ export function GraphCanvas({
 
       const isSelectedEdge =
         selectedId !== null && (edge.from === selectedId || edge.to === selectedId);
-      const dash = isSelectedEdge ? EDGE_DASH[edge.type] : undefined;
+      const dash = EDGE_DASH[edge.type];
 
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
       ctx.strokeStyle = isSelectedEdge ? cssVar("--primary") : cssVar("--border-strong");
-      ctx.globalAlpha = isSelectedEdge ? 0.9 : 0.4;
+      ctx.globalAlpha = isSelectedEdge ? 0.95 : selectedId ? 0.18 : 0.42;
+      ctx.lineWidth = (isSelectedEdge ? 1.8 : 1) / k;
       if (dash) ctx.setLineDash(dash.split(" ").map(Number));
       else ctx.setLineDash([]);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Arrowhead for prerequisite edges, only on selected node's edges
-      if (isSelectedEdge && edge.type === "prerequisite") {
+      // Prerequisites point toward the concept that depends on them.
+      if (edge.type === "prerequisite") {
         const arrowSize = 6 / k;
         const angle = Math.atan2(dy, dx);
         ctx.save();
@@ -377,12 +415,31 @@ export function GraphCanvas({
         ctx.lineTo(-arrowSize, -arrowSize / 2);
         ctx.closePath();
         ctx.fillStyle = cssVar("--primary");
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = isSelectedEdge ? 0.95 : selectedId ? 0.22 : 0.55;
         ctx.fill();
         ctx.restore();
       }
 
-      // Type label only for selected node's edges
+      // A crossbar makes contrast edges distinct even without relying on color.
+      if (edge.type === "contrasts_with") {
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2;
+        const angle = Math.atan2(dy, dx) + Math.PI / 2;
+        const size = 5 / k;
+        ctx.save();
+        ctx.translate(mx, my);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(-size, 0);
+        ctx.lineTo(size, 0);
+        ctx.strokeStyle = cssVar("--warning");
+        ctx.lineWidth = 2 / k;
+        ctx.globalAlpha = isSelectedEdge ? 0.95 : selectedId ? 0.22 : 0.65;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Relationship labels stay quiet until a node is selected.
       if (isSelectedEdge && EDGE_TYPE_SHORT(edge.type)) {
         const mx = (x1 + x2) / 2;
         const my = (y1 + y2) / 2;
@@ -523,8 +580,7 @@ export function GraphCanvas({
     }
 
     // --- Labels ---
-    const showLabels =
-      hoverNode !== null || selectedRef.current !== null || k >= 1.6;
+    const showLabels = hoverNode !== null || selectedRef.current !== null || k >= 1.55;
     if (showLabels) {
       ctx.font = `${Math.max(11, 13 / k)}px ${cssVar("--font-prose")}`;
       ctx.textBaseline = "middle";
@@ -535,7 +591,7 @@ export function GraphCanvas({
           hoverNode === n.id ||
           selectedRef.current === n.id ||
           isNeighbour(n.id, selectedRef.current ?? "") ||
-          k >= 1.6,
+          k >= 1.55,
       );
 
       for (const node of labelNodes) {
@@ -546,7 +602,7 @@ export function GraphCanvas({
         const tw = metrics.width;
         const th = 13 / k;
         const px = p.x;
-        const py = p.y - (radiusByIdRef.current.get(node.id) ?? NODE_MIN_RADIUS) - 6 / k;
+        const py = p.y - (radiusByIdRef.current.get(node.id) ?? NODE_MIN_RADIUS) - 8 / k;
 
         ctx.fillStyle = bg;
         ctx.globalAlpha = 0.85;
@@ -612,8 +668,11 @@ export function GraphCanvas({
       const point = localPoint(event);
       const id = findNodeAt(point.x, point.y);
       if (id) {
-        pinnedRef.current.add(id);
-        simRef.current?.alpha(0.4).restart();
+        const node = simRef.current?.nodes().find((item) => (item as { id?: string }).id === id);
+        if (node) {
+          node.fx = node.x;
+          node.fy = node.y;
+        }
       } else {
         dragStartRef.current = {
           sx: event.clientX,

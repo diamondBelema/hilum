@@ -29,7 +29,7 @@ export function Sheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-dialog border border-border-subtle bg-surface text-text shadow-popover"
+        className="relative z-10 flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-dialog border border-border-subtle bg-surface text-text shadow-popover max-sm:mt-auto max-sm:max-h-[78dvh] max-sm:rounded-b-none"
       >
         <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-2">
           <h2 id={titleId} className="type-heading text-text">
