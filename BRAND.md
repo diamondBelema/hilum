@@ -28,13 +28,14 @@ WOFF2 subsets are declared in `src/ui/styles.css`. The build output contains
 exactly two font files. Weights are limited to 400, 500 and 600. Ligatures are
 off outside code and contextual inside code.
 
-## Palette (H&E histology)
+## Palette (quiet clinical blue)
 
 The palette is defined once in `src/ui/tokens.css` as `light-dark()` pairs and
-overridden by `data-theme`. Key values:
+overridden by `data-theme`. The icon and active UI use the same restrained blue
+family:
 
-- Hematoxylin primary: light `#4338a8`, dark `#8a82ff`
-- Eosin accent: light `#b3345f`, dark `#d48db0`
+- Primary blue: light `#315f87`, dark `#9bc2e3`
+- Soft blue: light `#e6f0f8`, dark `#1d2b38`
 - Page: light `#f7f6fb`, dark `#141414`
 - Surface: light `#ffffff`, dark `#1c1c1c`
 - Text: light `#1b1b2e`, dark `#e6e6e6`

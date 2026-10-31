@@ -9,10 +9,17 @@ describe("http api", () => {
     const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: "/tmp/vault" } });
     const res = await app.request("/api/health");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, string>;
+    const body = (await res.json()) as Record<string, unknown> & {
+      readiness?: { vault: boolean; database: boolean; agent: string; setupComplete: boolean };
+    };
     expect(body.status).toBe("ok");
     expect(body.mcp).toBe("/mcp");
     expect(body.vault).toBe("/tmp/vault");
+    expect(body.readiness).toMatchObject({
+      database: true,
+      agent: "none",
+      setupComplete: false,
+    });
   });
 
   test("meta exposes the schema version", async () => {
@@ -28,9 +35,15 @@ describe("http api", () => {
     const initial = (await (await app.request("/api/settings")).json()) as {
       lan: boolean;
       mcpToken: string | null;
+      bindHost: string;
+      mcpUrls: string[];
+      agent: { state: string; clientName: string | null };
     };
     expect(initial.lan).toBe(false);
     expect(initial.mcpToken).toBeNull();
+    expect(initial.bindHost).toBe("127.0.0.1");
+    expect(initial.mcpUrls).toEqual(["http://127.0.0.1:4747/mcp"]);
+    expect(initial.agent).toMatchObject({ state: "none", clientName: null });
 
     const updated = (await (
       await app.request("/api/settings", {
@@ -49,6 +62,107 @@ describe("http api", () => {
     };
     expect(persisted.lan).toBe(true);
     expect(persisted.mcpToken).toBe(updated.mcpToken);
+  });
+
+  test("rejects unsafe vault switches and persists valid restart-safe paths", async () => {
+    const root = await mkdtemp(join(tmpdir(), "harness-vault-switch-"));
+    const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: root } });
+    const relative = await app.request("/api/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ vaultPath: "." }),
+    });
+    expect(relative.status).toBe(400);
+    const invalid = await app.request("/api/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ vaultPath: join(root, "missing") }),
+    });
+    expect(invalid.status).toBe(400);
+    const valid = await app.request("/api/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ vaultPath: root }),
+    });
+    expect(valid.status).toBe(200);
+    expect(await valid.json()).toMatchObject({
+      configuredVault: root,
+      restartRequired: true,
+    });
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("rescans the vault and returns fresh index stats", async () => {
+    const root = await mkdtemp(join(tmpdir(), "harness-rescan-"));
+    await mkdir(join(root, "courses/ana-211/notes"), { recursive: true });
+    await writeFile(
+      join(root, "courses/ana-211/notes/intro.md"),
+      "# Intro\n\nA cited note.\n",
+      "utf8",
+    );
+    const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: root } });
+    const res = await app.request("/api/vault/rescan", { method: "POST" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      stats: { notes: number; courses: number };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.stats.notes).toBe(1);
+    expect(body.stats.courses).toBe(1);
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("creates a vault backup outside the vault", async () => {
+    const root = await mkdtemp(join(tmpdir(), "harness-backup-"));
+    await mkdir(join(root, "courses/ana-211/notes"), { recursive: true });
+    await writeFile(join(root, "courses/ana-211/notes/intro.md"), "# Intro\n\nBackup me.\n", "utf8");
+    const dbPath = join(root, "state", "app.db");
+    const { app } = createApp({ config: { dbPath, vaultPath: root } });
+    const res = await app.request("/api/vault/backup", { method: "POST" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      destination: string;
+      source: string;
+      database: string;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.source).toBe(root);
+    expect(body.destination).not.toContain(`${root}/backups/`);
+    expect(await readFile(join(body.destination, "courses/ana-211/notes/intro.md"), "utf8")).toContain("Backup me.");
+    expect((await readFile(body.database)).byteLength).toBeGreaterThan(0);
+    expect(JSON.parse(await readFile(join(body.destination, "manifest.json"), "utf8"))).toMatchObject({
+      format: 1,
+      database: dbPath,
+    });
+    const listed = await app.request("/api/vault/backups");
+    expect(listed.status).toBe(200);
+    expect((await listed.json()).backups).toHaveLength(1);
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("diagnostics exclude secrets and study content", async () => {
+    const { app } = createApp({
+      config: { dbPath: ":memory:", vaultPath: "/tmp/hilum-diagnostics-vault", mcpToken: "secret-token" },
+    });
+
+    test("creates a deterministic demo course without overwriting it", async () => {
+      const root = await mkdtemp(join(tmpdir(), "harness-demo-"));
+      const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: root } });
+      const first = await app.request("/api/onboarding/demo", { method: "POST" });
+      expect(first.status).toBe(201);
+      expect((await first.json())).toMatchObject({ ok: true, created: true, course: "demo-101" });
+      const second = await app.request("/api/onboarding/demo", { method: "POST" });
+      expect(second.status).toBe(409);
+      await rm(root, { recursive: true, force: true });
+    });
+    const res = await app.request("/api/diagnostics");
+    expect(res.status).toBe(200);
+    const body = JSON.stringify(await res.json());
+    expect(body).not.toContain("secret-token");
+    expect(body).not.toContain("courses/");
+    expect(body).toContain("excludes MCP tokens");
   });
 
   test("serves questions, updates content and verifies", async () => {

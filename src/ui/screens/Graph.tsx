@@ -1,6 +1,5 @@
-import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Copy, X, ZoomIn } from "lucide-react";
+import { ArrowLeft, Copy, RotateCcw, ZoomIn } from "lucide-react";
 import {
   api,
   type ConceptDetail,
@@ -16,9 +15,9 @@ import { Banner, EmptyState, Skeleton } from "../components/ui.tsx";
 import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { defaultCourse } from "../lib/courses.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
-import { useDialogFocus } from "../components/Drawer.tsx";
+import { Sheet } from "../components/Sheet.tsx";
 import { cn } from "../lib/cn.ts";
-import { navigate, useRoute } from "../lib/router.ts";
+import { graphHref, navigate, questionsHref, useRoute } from "../lib/router.ts";
 
 type Mode = "neighborhood" | "overview" | "tree" | "frontier";
 
@@ -49,9 +48,16 @@ export function GraphScreen({
   onStudy: (course: string, goal: string) => void;
 }) {
   const route = useRoute();
+  const graphParams = new URLSearchParams(window.location.search);
+  const requestedCourse = graphParams.get("course");
+  const requestedConcept = graphParams.get("concept");
   const routeSessionId =
     route.name === "session" ? route.id : undefined;
-  const [courseCode, setCourseCode] = useState(defaultCourse(courses, "concepts"));
+  const [courseCode, setCourseCode] = useState(
+    requestedCourse && courses.some((course) => course.code === requestedCourse)
+      ? requestedCourse
+      : defaultCourse(courses, "concepts"),
+  );
   const [mode, setMode] = useState<Mode>("neighborhood");
   const [rootId, setRootId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -80,12 +86,19 @@ export function GraphScreen({
   const [reloadKey, setReloadKey] = useState(0);
   const [sessionConceptIds, setSessionConceptIds] = useState<Set<string>>(new Set());
   const [showSessionOverlay, setShowSessionOverlay] = useState(false);
+  const [resetViewToken, setResetViewToken] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
-    if (!courseCode && courses[0]) setCourseCode(defaultCourse(courses, "concepts"));
+    if (!courseCode && courses[0]) {
+      setCourseCode(
+        requestedCourse && courses.some((course) => course.code === requestedCourse)
+          ? requestedCourse
+          : defaultCourse(courses, "concepts"),
+      );
+    }
   }, [courses, courseCode]);
 
   useEffect(() => {
@@ -99,6 +112,7 @@ export function GraphScreen({
     setFrontier(null);
     setSessionConceptIds(new Set());
     setShowSessionOverlay(false);
+    setResetViewToken((token) => token + 1);
   }, [courseCode]);
 
   useEffect(() => {
@@ -121,8 +135,14 @@ export function GraphScreen({
         setTree(treeData);
         setFrontier(frontierData);
         if (!rootId && graph.nodes.length > 0) {
-          const flagged = graph.nodes.find((node) => node.lecturerFlag) ?? graph.nodes[0];
+          const flagged =
+            (requestedConcept ? graph.nodes.find((node) => node.id === requestedConcept) : undefined) ??
+            graph.nodes.find((node) => node.lecturerFlag) ??
+            graph.nodes[0];
+          if (!flagged) return;
           setRootId(flagged.id);
+          setFocusNodeId(flagged.id);
+          if (requestedConcept && flagged.id === requestedConcept) void loadDetail(flagged.id);
         }
         // Session overlay highlight
         if (routeSessionId) {
@@ -140,7 +160,7 @@ export function GraphScreen({
     return () => {
       cancelled = true;
     };
-  }, [courseCode, reloadKey, routeSessionId]);
+  }, [courseCode, reloadKey, requestedConcept, routeSessionId]);
 
   useEffect(() => {
     const unsubscribe = subscribeHarnessEvents((event) => {
@@ -191,6 +211,7 @@ export function GraphScreen({
   const openNode = useCallback(
     (node: ConceptSummary) => {
       setRootId(node.id);
+      setFocusNodeId(node.id);
       void loadDetail(node.id);
     },
     [loadDetail],
@@ -200,6 +221,8 @@ export function GraphScreen({
     (id: string | null) => {
       setSelectedId(id);
       if (id) {
+        setRootId(id);
+        setFocusNodeId(id);
         const node = nodes.find((n) => n.id === id);
         if (node) void loadDetail(id);
       } else {
@@ -236,6 +259,25 @@ export function GraphScreen({
   const filterOnly = mode === "frontier" ? "frontier" : null;
   const cappedNodes = useMemo(() => {
     let list = nodes;
+    if (mode === "neighborhood" && rootId) {
+      const distances = new Map<string, number>([[rootId, 0]]);
+      const queue = [rootId];
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) continue;
+        const distance = distances.get(current) ?? 0;
+        if (distance >= 2) continue;
+        for (const edge of edges) {
+          const next =
+            edge.from === current ? edge.to : edge.to === current ? edge.from : null;
+          if (next && !distances.has(next)) {
+            distances.set(next, distance + 1);
+            queue.push(next);
+          }
+        }
+      }
+      list = list.filter((node) => distances.has(node.id));
+    }
     if (filterOnly === "frontier") {
       const frontierIds = new Set(frontier?.map((f) => f.concept.id));
       list = list.filter((n) => frontierIds.has(n.id));
@@ -250,7 +292,7 @@ export function GraphScreen({
       return list;
     }
     return list;
-  }, [nodes, frontier, search]);
+  }, [edges, frontier, mode, nodes, rootId, search]);
 
   if (loading && !view && !tree && !frontier) {
     return (
@@ -297,18 +339,19 @@ export function GraphScreen({
             setSelectedId(null);
             setDetail(null);
             setFocusNodeId(null);
+            setResetViewToken((token) => token + 1);
           }}
           options={MODES}
           className="flex-1 max-w-[340px]"
         />
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="relative flex min-w-0 flex-1 items-center gap-2 sm:ml-auto sm:flex-none">
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="Find a topic…"
-            className="min-h-10 w-[220px] rounded-control border border-border-strong bg-surface pl-8 pr-3 type-body-sm text-text placeholder:text-text-muted focus:border-primary"
+            className="min-h-10 w-full min-w-0 rounded-control border border-border-strong bg-surface pl-8 pr-3 type-body-sm text-text placeholder:text-text-muted focus:border-primary sm:w-[220px]"
           />
           <div className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 pointer-events-none text-text-muted">
             <svg
@@ -326,6 +369,18 @@ export function GraphScreen({
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
           </div>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Reset graph view"
+            title="Reset graph view"
+            onClick={() => {
+              setFocusNodeId(null);
+              setResetViewToken((token) => token + 1);
+            }}
+          >
+            <RotateCcw aria-hidden="true" className="size-4" />
+          </Button>
         </div>
       </div>
 
@@ -339,7 +394,7 @@ export function GraphScreen({
           <div className="h-full overflow-y-auto p-4 pt-28 sm:p-6 sm:pt-28">
             <FrontierView items={frontier ?? []} onOpen={openNode} onStudy={onStudy} course={courseCode} />
           </div>
-        ) : containerSize.width > 0 && containerSize.height > 0 ? (
+        ) : containerSize.width > 0 && containerSize.height > 0 && cappedNodes.length > 0 ? (
           <GraphCanvas
             nodes={cappedNodes}
             edges={edges}
@@ -350,10 +405,50 @@ export function GraphScreen({
             onNodeSelect={onNodeSelect}
             selectedId={selectedId}
             focusNodeId={focusNodeId}
+            resetViewToken={resetViewToken}
             sessionId={showSessionOverlay ? routeSessionId : null}
             sessionConceptIds={sessionConceptIds}
           />
-        ) : null}
+        ) : (
+          <div className="flex h-full items-center justify-center p-6">
+            <EmptyState title={search ? "No matching concepts" : "No concepts in this view"}>
+              {search
+                ? "Try a different search term."
+                : "Add cited concepts to this course and they will appear here."}
+            </EmptyState>
+          </div>
+        )}
+        {mode !== "tree" && mode !== "frontier" && cappedNodes.length > 0 && (
+          <details className="absolute bottom-3 left-3 z-10 max-w-[calc(100%-1.5rem)] rounded-panel border border-border-subtle bg-surface shadow-popover">
+            <summary className="cursor-pointer list-none px-3 py-2 type-body-sm font-medium text-text">
+              Concept list ({cappedNodes.length})
+            </summary>
+            <div className="max-h-64 overflow-y-auto border-t border-border-subtle p-2">
+              <ul className="space-y-1" aria-label="Concepts in graph">
+                {cappedNodes.map((node) => (
+                  <li key={node.id}>
+                    <button
+                      type="button"
+                      onClick={() => openNode(node)}
+                      className={cn(
+                        "flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left type-body-sm hover:bg-surface-2",
+                        selectedId === node.id && "bg-primary-soft",
+                      )}
+                    >
+                      <MasteryRing
+                        state={node.mastery.state}
+                        size={20}
+                        label={`${node.title}: ${stateLabel(node.mastery.state)}`}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-text">{node.title}</span>
+                      <span className="type-meta text-text-muted">{stateLabel(node.mastery.state)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </details>
+        )}
       </div>
 
       {error && (
@@ -386,7 +481,6 @@ export function GraphScreen({
           }}
           label={detail.title}
           concept={detail}
-          courseCode={courseCode}
           onStudy={handleStudy}
           onSelectNode={openNode}
           onBack={() => setSelectedId(null)}
@@ -410,7 +504,6 @@ function ConceptDrawerPanel({
   onClose,
   label,
   concept,
-  courseCode,
   onStudy,
   onSelectNode,
   onBack,
@@ -421,7 +514,6 @@ function ConceptDrawerPanel({
   onClose: () => void;
   label: string;
   concept: ConceptDetail;
-  courseCode: string;
   onStudy: (concept: ConceptDetail) => void;
   onSelectNode: (node: ConceptSummary) => void;
   onBack: () => void;
@@ -437,38 +529,21 @@ function ConceptDrawerPanel({
     lastAt: number;
   }>;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useDialogFocus(open, panelRef, onClose);
-
   if (!open) return null;
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div
-        className="absolute inset-0 z-0 bg-black/50"
-        aria-hidden="true"
-        onClick={onClose}
-      />
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        className="relative z-10 flex h-full w-full max-w-[560px] flex-col border-l border-border-subtle bg-surface text-text shadow-popover"
-      >
-        <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex min-h-10 items-center gap-2 rounded-control px-2 type-body-sm text-text-muted hover:bg-surface-2"
-          >
-            <ArrowLeft aria-hidden="true" className="size-4" />
-            <span className="hidden sm:inline">Back</span>
-          </button>
-          <span className="min-w-0 flex-1 truncate type-heading text-text">{label}</span>
-          <IconButtonClose onClose={onClose} />
-        </div>
-        <div className="flex min-h-0 flex-1 overflow-y-auto p-4">
+  return (
+    <Sheet open title={label} onClose={onClose}>
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex min-h-11 items-center gap-2 rounded-control px-2 type-body-sm text-text-muted hover:bg-surface-2"
+        >
+          <ArrowLeft aria-hidden="true" className="size-4" />
+          <span>Back to graph</span>
+        </button>
+      </div>
+      <div>
           <MasteryRing
             state={concept.mastery.state}
             size={40}
@@ -613,34 +688,29 @@ function ConceptDrawerPanel({
               <h3 className="type-label text-text-muted">Practice bank</h3>
               <ul className="mt-1 space-y-1">
                 {concept.practice.map((item) => (
-                  <li key={item.id} className="py-2 type-body-sm">
-                    <p className="text-text">{item.prompt}</p>
-                    <p className="mt-0.5 type-meta text-text-muted">
-                      {item.type} · {item.marks} mark{item.marks === 1 ? "" : "s"} ·{" "}
-                      {item.verified ? "Verified" : "Unverified"}
-                    </p>
-                  </li>
-                ))}
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigate(
+                                questionsHref(concept.course, item.id),
+                              )
+                            }
+                            className="w-full rounded-control border border-transparent py-2 text-left hover:border-border-subtle hover:bg-surface-2"
+                          >
+                            <p className="type-body-sm text-text">{item.prompt}</p>
+                            <p className="mt-0.5 type-meta text-text-muted">
+                              {item.type} · {item.marks} mark{item.marks === 1 ? "" : "s"} ·{" "}
+                              {item.verified ? "Verified" : "Unverified"}
+                            </p>
+                          </button>
+                        </li>
+                      ))}
               </ul>
             </section>
           )}
-        </div>
       </div>
-    </div>,
-    document.body,
-  );
-}
-
-function IconButtonClose({ onClose }: { onClose: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClose}
-      className="min-h-10 min-w-10 rounded-control p-1 text-text-muted hover:bg-surface-2"
-      aria-label="Close"
-    >
-      <X aria-hidden="true" className="size-5" />
-    </button>
+    </Sheet>
   );
 }
 
@@ -655,7 +725,7 @@ function NeighbourChip({
     <button
       type="button"
       onClick={onSelect}
-      className="inline-flex min-h-10 items-center gap-1.5 rounded-chip border border-border-subtle bg-surface px-2.5 py-1 type-body-sm text-text hover:border-primary/40 hover:bg-surface-2"
+      className="inline-flex min-h-11 items-center gap-1.5 rounded-chip border border-border-subtle bg-surface px-2.5 py-1 type-body-sm text-text hover:border-primary/40 hover:bg-surface-2"
       aria-label={`Select ${item.title}`}
     >
       <MasteryRing

@@ -10,9 +10,19 @@ export type Course = {
   concepts: number;
 };
 
+const apiOrigin =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
+    ? "http://127.0.0.1:4747"
+    : "";
+
+function apiUrl(path: string): string {
+  return `${apiOrigin}${path}`;
+}
+
 export type NoteMeta = {
   path: string;
   course: string | null;
+  section: string;
   title: string;
   summary: string;
   snippet: string;
@@ -222,7 +232,7 @@ export type QuestionInput = {
 };
 
 async function sendJson<T>(url: string, method: string, body: unknown, headers: HeadersInit = {}): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     method,
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
@@ -235,7 +245,7 @@ async function sendJson<T>(url: string, method: string, body: unknown, headers: 
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await fetch(apiUrl(url));
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `Request failed: ${res.status}`);
@@ -382,6 +392,7 @@ export type SessionSummary = {
   id: string;
   course: string;
   goal: string;
+  title?: string | null;
   startedAt: number;
   endedAt: number | null;
   summary: string;
@@ -496,6 +507,13 @@ export type Health = {
   version: string;
   vault: string;
   db: string;
+  readiness: {
+    vault: boolean;
+    database: boolean;
+    agent: "listening" | "connected" | "idle" | "none";
+    setupComplete: boolean;
+  };
+  stats: { notes: number; courses: number; tokens: number };
   disk: { freeBytes: number; totalBytes: number; freePercent: number } | null;
 };
 
@@ -504,13 +522,56 @@ export type ServerSettings = {
   mcpToken: string | null;
   vault: string;
   db: string;
+  configuredVault: string;
+  agent: {
+    state: "listening" | "connected" | "idle" | "none";
+    clientName: string | null;
+    lastSeenAt: number | null;
+  };
+  bindHost: string;
+  webUrls: string[];
+  mcpUrls: string[];
   restartRequired?: boolean;
 };
 
 export const api = {
   health: () => getJson<Health>("/api/health"),
+  diagnostics: () => getJson<Record<string, unknown>>("/api/diagnostics"),
   settings: () => getJson<ServerSettings>("/api/settings"),
-  updateSettings: (input: { lan?: boolean; regenerateToken?: boolean }) =>
+  rescanVault: () =>
+    sendJson<{ ok: boolean; vault: string; stats: { notes: number; courses: number; tokens: number } }>(
+      "/api/vault/rescan",
+      "POST",
+      {},
+    ),
+  createDemoCourse: () =>
+    sendJson<{ ok: boolean; created: boolean; course: string; message?: string; stats?: { notes: number; courses: number; tokens: number } }>(
+      "/api/onboarding/demo",
+      "POST",
+      {},
+    ),
+  backupVault: () =>
+    sendJson<{
+      ok: boolean;
+      source: string;
+      destination: string;
+      createdAt: number;
+      database: string;
+      stats: { notes: number; courses: number; tokens: number };
+    }>("/api/vault/backup", "POST", {}),
+  vaultBackups: () =>
+    getJson<{
+      root: string;
+      backups: Array<{
+        name: string;
+        path: string;
+        createdAt: number;
+        format: number | null;
+        stats: { notes?: number; courses?: number; tokens?: number } | null;
+        hasDatabase: boolean;
+      }>;
+    }>("/api/vault/backups"),
+  updateSettings: (input: { lan?: boolean; regenerateToken?: boolean; vaultPath?: string }) =>
     sendJson<ServerSettings>("/api/settings", "POST", input),
   courses: () => getJson<Course[]>("/api/courses"),
   notes: (course: string) => getJson<NoteMeta[]>(`/api/courses/${encodeURIComponent(course)}/notes`),
@@ -610,7 +671,7 @@ export const api = {
     form.set("question_id", questionId);
     form.set("file", file);
     if (text) form.set("text", text);
-    const res = await fetch(`/api/attempts/${encodeURIComponent(attemptId)}/photo`, {
+    const res = await fetch(apiUrl(`/api/attempts/${encodeURIComponent(attemptId)}/photo`), {
       method: "POST",
       body: form,
     });
@@ -637,7 +698,7 @@ export const api = {
     ),
   session: (id: string) => getJson<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}`),
   startSession: async (course: string, goal = "learn") => {
-    const res = await fetch("/api/sessions", {
+    const res = await fetch(apiUrl("/api/sessions"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ course, goal }),

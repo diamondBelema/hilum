@@ -66,8 +66,8 @@ neon accents.
 ## Brand personality
 
 Calm, clinical, specific to anatomy and physiology students. Quiet chrome,
-legible typography, meaning never depends on color alone. H&E
-histology-inspired palette (hematoxylin blue-violet, eosin pink), restrained.
+legible typography, meaning never depends on color alone. A restrained clinical
+blue palette keeps the interface quiet and focused.
 
 ## Anti-references
 

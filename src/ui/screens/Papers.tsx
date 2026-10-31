@@ -33,6 +33,7 @@ import { Sheet } from "../components/Sheet.tsx";
 import { plural } from "../lib/format.ts";
 import { clearActiveAttempt, readActiveAttempt, setActiveAttempt } from "../lib/activeAttempt.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
+import { graphHref, navigate } from "../lib/router.ts";
 
 const MODE_LABEL = { strict: "Strict", sectioned: "Sectioned", practice: "Practice" };
 
@@ -1332,6 +1333,7 @@ function Results({
               <DebriefItem
                 key={item.questionId}
                 item={item}
+                course={results.paper.course}
                 attemptId={results.attempt.id}
                 number={results.items.findIndex((entry) => entry.questionId === item.questionId) + 1}
                 tags={mistakeTags.get(item.questionId) ?? []}
@@ -1351,11 +1353,13 @@ function Results({
 
 function DebriefItem({
   item,
+  course,
   attemptId,
   number,
   tags,
 }: {
   item: AttemptResults["items"][number];
+  course: string;
   attemptId: string;
   number: number;
   tags: string[];
@@ -1395,6 +1399,24 @@ function DebriefItem({
               </Chip>
             ))}
           </p>
+          {item.conceptIds.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {item.conceptIds.map((conceptId) => (
+                <button
+                  key={conceptId}
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      graphHref(course, conceptId),
+                    )
+                  }
+                  className="min-h-11 rounded-chip border border-border-subtle bg-surface-2 px-3 type-body-sm text-text hover:border-primary hover:bg-primary-soft"
+                >
+                  Review {conceptId}
+                </button>
+              ))}
+            </div>
+          )}
           <details className="group mt-2">
             <summary className="flex min-h-9 cursor-pointer items-center gap-1.5 text-xs font-semibold text-text-muted">
               <span className="group-open:hidden">Show answer and explanation</span>

@@ -12,8 +12,10 @@ import { GradingError, GradingService } from "./exams/grading.ts";
 import { SessionError, SessionService } from "./sessions/service.ts";
 import { ConceptError, ConceptService } from "./concepts/service.ts";
 import { EventBus } from "./events.ts";
-import { mkdir, readFile, stat, statfs, unlink, writeFile } from "node:fs/promises";
-import { dirname, extname, join } from "node:path";
+import { access, cp, mkdir, readFile, readdir, stat, statfs, unlink, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { networkInterfaces } from "node:os";
+import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { NoteIndexer } from "./vault/indexer.ts";
 import { VaultService } from "./vault/service.ts";
 import { resolveInside, VaultPathError } from "./vault/paths.ts";
@@ -22,6 +24,27 @@ import { ZodError } from "zod";
 export type AppDeps = {
   config?: Partial<Config>;
 };
+
+function lanAddresses(port: number): string[] {
+  const addresses: string[] = [];
+  for (const entries of Object.values(networkInterfaces())) {
+    for (const entry of entries ?? []) {
+      if (entry.internal || entry.family !== "IPv4") continue;
+      addresses.push(`http://${entry.address}:${port}`);
+    }
+  }
+  return [...new Set(addresses)].sort();
+}
+
+function backupRootFor(config: Config): string {
+  const dbDirectory = dirname(config.dbPath === ":memory:" ? join(config.vaultPath, "app.db") : config.dbPath);
+  const vaultRoot = resolve(config.vaultPath);
+  const candidateRoot = resolve(dbDirectory, "backups");
+  const relativePath = relative(vaultRoot, candidateRoot);
+  return relativePath && !relativePath.startsWith("..")
+    ? join(dirname(vaultRoot), "hilum-backups")
+    : candidateRoot;
+}
 
 export function createApp(deps: AppDeps = {}) {
   const config = loadConfig(deps.config);
@@ -32,8 +55,15 @@ export function createApp(deps: AppDeps = {}) {
   const storedToken = db.query("SELECT value FROM meta WHERE key = ?").get("setting:mcp_token") as
     | { value: string }
     | null;
+  const storedVault = db.query("SELECT value FROM meta WHERE key = ?").get("setting:vault_path") as
+    | { value: string }
+    | null;
   if (storedLan) config.lan = storedLan.value === "1";
   if (storedToken) config.mcpToken = storedToken.value;
+  if (storedVault?.value) {
+    config.configuredVaultPath = storedVault.value;
+    config.vaultPath = storedVault.value;
+  }
   const indexer = new NoteIndexer(db, config.vaultPath);
   const vault = new VaultService(db, config.vaultPath, indexer);
   const questions = new QuestionBank(db, vault);
@@ -96,14 +126,72 @@ export function createApp(deps: AppDeps = {}) {
     } catch {
       disk = null;
     }
+    const vaultReady = await access(config.vaultPath, fsConstants.R_OK | fsConstants.W_OK)
+      .then(() => true)
+      .catch(() => false);
+    const dbReady =
+      config.dbPath === ":memory:" ||
+      (await access(config.dbPath, fsConstants.R_OK | fsConstants.W_OK)
+        .then(() => true)
+        .catch(() => false));
+    const agent = sessions.agentState();
     return c.json({
-      status: "ok",
+      status: vaultReady && dbReady ? "ok" : "degraded",
       version: config.version,
       mcp: "/mcp",
       vault: config.vaultPath,
+      configuredVault: config.configuredVaultPath ?? config.vaultPath,
       db: config.dbPath,
+      readiness: {
+        vault: vaultReady,
+        database: dbReady,
+        agent: agent.state,
+        setupComplete: vaultReady && dbReady && vault.stats().courses > 0,
+      },
       disk,
       stats: vault.stats(),
+    });
+
+    app.get("/api/diagnostics", async (c) => {
+      let disk: { freeBytes: number; totalBytes: number; freePercent: number } | null = null;
+      try {
+        const stats = await statfs(dirname(config.dbPath));
+        const totalBytes = stats.blocks * stats.bsize;
+        const freeBytes = stats.bavail * stats.bsize;
+        disk = {
+          freeBytes,
+          totalBytes,
+          freePercent: totalBytes > 0 ? Math.round((freeBytes / totalBytes) * 1000) / 10 : 0,
+        };
+      } catch {
+        disk = null;
+      }
+      const vaultReadable = await access(config.vaultPath, fsConstants.R_OK).then(() => true).catch(() => false);
+      const vaultWritable = await access(config.vaultPath, fsConstants.W_OK).then(() => true).catch(() => false);
+      const databaseAccessible =
+        config.dbPath === ":memory:" ||
+        (await access(config.dbPath, fsConstants.R_OK | fsConstants.W_OK).then(() => true).catch(() => false));
+      return c.json({
+        generatedAt: Date.now(),
+        version: config.version,
+        runtime: "bun",
+        host: config.hostname,
+        port: config.port,
+        lan: config.lan,
+        vault: {
+          path: config.vaultPath,
+          readable: vaultReadable,
+          writable: vaultWritable,
+          stats: vault.stats(),
+        },
+        database: {
+          path: config.dbPath,
+          accessible: databaseAccessible,
+        },
+        disk,
+        agent: sessions.agentState(),
+        note: "This report excludes MCP tokens and study content.",
+      });
     });
   });
 
@@ -113,8 +201,120 @@ export function createApp(deps: AppDeps = {}) {
       mcpToken: config.mcpToken,
       vault: config.vaultPath,
       db: config.dbPath,
+      agent: sessions.agentState(),
+      bindHost: config.lan ? "0.0.0.0" : config.hostname,
+      webUrls: config.lan
+        ? lanAddresses(config.port)
+        : [`http://${config.hostname}:${config.port}`],
+      mcpUrls: config.lan
+        ? lanAddresses(config.port).map((url) => `${url}/mcp`)
+        : [`http://${config.hostname}:${config.port}/mcp`],
     }),
   );
+
+  app.post("/api/vault/rescan", async (c) => {
+    const stats = await indexer.reindexAll();
+    return c.json({
+      ok: true,
+      vault: config.vaultPath,
+      stats,
+    });
+
+    app.post("/api/onboarding/demo", async (c) => {
+      const course = "demo-101";
+      const courseDir = join(config.vaultPath, "courses", course);
+      if (await access(courseDir).then(() => true).catch(() => false)) {
+        return c.json({ ok: false, created: false, course, message: "Demo course already exists." }, 409);
+      }
+      await mkdir(join(courseDir, "notes"), { recursive: true });
+      await writeFile(
+        join(courseDir, "course.md"),
+        "---\ncode: demo-101\ntitle: Hilum demo course\ndepartment: Study skills\n---\n\n# Hilum demo course\n\nUse this course to explore notes, sessions, the graph and progress.\n",
+        "utf8",
+      );
+      await writeFile(
+        join(courseDir, "INDEX.md"),
+        "# Hilum demo course\n\nThis small course is safe sample content for first-run setup.\n",
+        "utf8",
+      );
+      await writeFile(
+        join(courseDir, "notes", "getting-started.md"),
+        "---\ntitle: Getting started with Hilum\ntopics: [orientation]\n---\n\n# Getting started\n\nHilum connects source notes, teaching sessions, evidence, questions and the knowledge graph.\n",
+        "utf8",
+      );
+      await indexer.reindexAll();
+      return c.json({ ok: true, created: true, course, stats: vault.stats() }, 201);
+    });
+
+    app.post("/api/vault/backup", async (c) => {
+      const timestamp = new Date().toISOString().replaceAll(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+      const backupRoot = backupRootFor(config);
+      const destination = join(backupRoot, `vault-${timestamp}`);
+      await mkdir(backupRoot, { recursive: true });
+      await cp(config.vaultPath, destination, { recursive: true, errorOnExist: true });
+      const databasePath = join(destination, "hilum.sqlite");
+      await writeFile(databasePath, db.serialize());
+      await writeFile(
+        join(destination, "manifest.json"),
+        JSON.stringify(
+          {
+            format: 1,
+            createdAt: Date.now(),
+            vault: config.vaultPath,
+            database: config.dbPath,
+            stats: vault.stats(),
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+      return c.json({
+        ok: true,
+        source: config.vaultPath,
+        destination,
+        createdAt: Date.now(),
+        database: databasePath,
+        stats: vault.stats(),
+      });
+    });
+
+    app.get("/api/vault/backups", async (c) => {
+      const root = backupRootFor(config);
+      let entries;
+      try {
+        entries = await readdir(root, { withFileTypes: true });
+      } catch {
+        return c.json({ root, backups: [] });
+      }
+      const backups = [];
+      for (const entry of entries) {
+        if (!entry.isDirectory() || !entry.name.startsWith("vault-")) continue;
+        const path = join(root, entry.name);
+        const manifestPath = join(path, "manifest.json");
+        try {
+          const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+            format?: number;
+            createdAt?: number;
+            stats?: { notes?: number; courses?: number; tokens?: number };
+          };
+          const info = await stat(path);
+          backups.push({
+            name: entry.name,
+            path,
+            createdAt: manifest.createdAt ?? info.mtimeMs,
+            format: manifest.format ?? null,
+            stats: manifest.stats ?? null,
+            hasDatabase: await access(join(path, "hilum.sqlite")).then(() => true).catch(() => false),
+          });
+        } catch {
+          continue;
+        }
+      }
+      backups.sort((a, b) => b.createdAt - a.createdAt);
+      return c.json({ root, backups });
+    });
+  });
 
   app.post("/api/settings", async (c) => {
     const body = await c.req.json().catch(() => ({}));
@@ -141,11 +341,48 @@ export function createApp(deps: AppDeps = {}) {
         config.mcpToken,
       );
     }
+    if (typeof body.vaultPath === "string" && body.vaultPath.trim()) {
+      const rawPath = body.vaultPath.trim();
+      if (!isAbsolute(rawPath)) {
+        return c.json({ error: "vault path must be absolute" }, 400);
+      }
+      const requested = resolve(rawPath);
+      const validDirectory = await stat(requested)
+        .then(
+          (info) =>
+            info.isDirectory() &&
+            access(requested, fsConstants.R_OK | fsConstants.W_OK)
+              .then(() => true)
+              .catch(() => false),
+        )
+        .catch(() => false);
+      if (!validDirectory) {
+        return c.json(
+          { error: "vault path must be an existing, readable and writable directory" },
+          400,
+        );
+      }
+      db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
+        "setting:vault_path",
+        requested,
+      );
+      config.configuredVaultPath = requested;
+      restartRequired = true;
+    }
     return c.json({
       lan: config.lan,
       mcpToken: config.mcpToken,
       vault: config.vaultPath,
       db: config.dbPath,
+      configuredVault: config.configuredVaultPath ?? config.vaultPath,
+      agent: sessions.agentState(),
+      bindHost: config.lan ? "0.0.0.0" : config.hostname,
+      webUrls: config.lan
+        ? lanAddresses(config.port)
+        : [`http://${config.hostname}:${config.port}`],
+      mcpUrls: config.lan
+        ? lanAddresses(config.port).map((url) => `${url}/mcp`)
+        : [`http://${config.hostname}:${config.port}/mcp`],
       restartRequired,
     });
   });

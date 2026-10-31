@@ -21,9 +21,8 @@ Consistency. 4. Visual identity.
 
 - **The session is the home screen.** The first thing on `/` is a composer, not
   a dashboard. Recent sessions and courses appear only when they exist.
-- **Identity from the subject.** The palette comes from H&E histology:
-  hematoxylin (blue-violet) and eosin (pink). It is calm, clinical and specific
-  to anatomy and physiology students.
+- **Identity from restraint.** A quiet clinical blue provides the visual cue
+  without competing with study content or mastery state.
 - **One memorable element:** the mastery ring, a three-arc ring used wherever a
   concept appears. Everything else stays quiet.
 - **Meaning never depends on color alone.** Every state also has an icon,
@@ -50,14 +49,14 @@ default; Settings can pin Light or Dark and remembers the choice.
 | `--border-strong` | `#8a88a6` | `#686868` | control outlines |
 | `--text` | `#1b1b2e` | `#e6e6e6` | body |
 | `--text-muted` | `#4f4e6b` | `#8d8d8d` | metadata |
-| `--primary` | `#4338a8` | `#8a82ff` | actions, selection |
+| `--primary` | `#315f87` | `#9bc2e3` | actions, selection |
 | `--on-primary` | `#ffffff` | `#141414` | text on primary |
-| `--primary-soft` | `#e6e3fa` | `#1f1d45` | selected row, active tab |
-| `--accent` | `#b3345f` | `#d48db0` | citations, emphasis |
+| `--primary-soft` | `#e6f0f8` | `#1d2b38` | selected row, active tab |
+| `--accent` | `#315f87` | `#9bc2e3` | citations, emphasis |
 | `--correct` | `#17703f` | `#6fd59a` | correct |
 | `--incorrect` | `#b3261e` | `#f08a80` | incorrect |
 | `--warning` | `#8a5100` | `#e2b566` | waiting, warning |
-| `--focus` | `#4338a8` | `#8a82ff` | focus outline |
+| `--focus` | `#315f87` | `#9bc2e3` | focus outline |
 
 Contrast is tested in `tests/contrast.test.ts` (4.5:1 text, 3:1 boundaries and
 focus). The test is the authority; adjust the token, not the requirement.

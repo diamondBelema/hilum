@@ -38,10 +38,12 @@ export function ProgressScreen({
   courses,
   onStudy,
   onOpenNote,
+  onOpenGraph,
 }: {
   courses: Course[];
   onStudy: (course: string, conceptId?: string) => void;
   onOpenNote: (path: string, anchor?: string) => void;
+  onOpenGraph: (course: string, conceptId: string) => void;
 }) {
   const [courseCode, setCourseCode] = useState(defaultCourse(courses, "concepts"));
   const [tree, setTree] = useState<ConceptNode[]>([]);
@@ -60,6 +62,7 @@ export function ProgressScreen({
   }, [courses, courseCode]);
 
   useEffect(() => {
+    setLoading(true);
     setSnapshot(null);
     setTree([]);
     setProposed([]);
@@ -393,6 +396,7 @@ export function ProgressScreen({
           onStudy={() => study(detail)}
           onOpenConcept={(id) => setSelectedId(id)}
           onOpenNote={onOpenNote}
+          onOpenGraph={(conceptId) => onOpenGraph(detail.course, conceptId)}
         />
         )}
       </Sheet>
@@ -407,6 +411,7 @@ function ConceptPanel({
   onStudy,
   onOpenConcept,
   onOpenNote,
+  onOpenGraph,
 }: {
   concept: ConceptDetail;
   onAccept: () => void;
@@ -414,6 +419,7 @@ function ConceptPanel({
   onStudy: () => void;
   onOpenConcept: (id: string) => void;
   onOpenNote: (path: string, anchor?: string) => void;
+  onOpenGraph: (conceptId: string) => void;
 }) {
   const [mergeTarget, setMergeTarget] = useState("");
   const [mergeStatus, setMergeStatus] = useState<string | null>(null);
@@ -468,6 +474,12 @@ function ConceptPanel({
         <Button variant="primary" onClick={onStudy}>
           <Play aria-hidden="true" className="size-4" />
           Study this
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => onOpenGraph(concept.id)}
+        >
+          View in graph
         </Button>
         {concept.status === "proposed" && <Button onClick={onAccept}>Accept topic</Button>}
         {concept.status === "proposed" && (
@@ -670,4 +682,3 @@ function daysOverdue(dueAt: number): number {
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
-

@@ -335,7 +335,7 @@ function Flashcard({ front, back }: { front: string; back: string }) {
       <button
         type="button"
         onClick={() => setFlipped((value) => !value)}
-        className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-control border border-border-subtle px-3 text-sm font-medium hover:bg-surface-2"
+        className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-control border border-border-subtle px-3 text-sm font-medium hover:bg-surface-2"
       >
         <RotateCcw aria-hidden="true" className="size-4" />
         {flipped ? "Hide answer" : "Show answer"}
@@ -597,7 +597,7 @@ function Predict({
         <button
           type="button"
           onClick={() => setShown(true)}
-          className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-control border border-border-subtle px-3 text-sm font-medium hover:bg-surface-2"
+          className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-border-subtle px-3 text-sm font-medium hover:bg-surface-2"
         >
           <Eye aria-hidden="true" className="size-4" /> Reveal
         </button>
@@ -641,7 +641,7 @@ function ShortAnswer({
         <button
           type="button"
           onClick={() => setRevealed(true)}
-          className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-control border border-border-subtle px-3 text-sm font-medium hover:bg-surface-2"
+          className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-border-subtle px-3 text-sm font-medium hover:bg-surface-2"
         >
           <Eye aria-hidden="true" className="size-4" /> Show answer
         </button>
@@ -864,7 +864,7 @@ function Calculation({
         <button
           type="button"
           onClick={() => setRevealed(true)}
-          className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-control border border-border-subtle px-3 text-sm font-medium hover:bg-surface-2"
+          className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-border-subtle px-3 text-sm font-medium hover:bg-surface-2"
         >
           <Eye aria-hidden="true" className="size-4" /> Show answer
         </button>
@@ -1213,7 +1213,7 @@ function ConfidenceRating({
             type="button"
             onClick={() => onChange(option)}
             aria-pressed={value === option}
-            className={`min-h-10 rounded-control border px-3 text-sm ${
+            className={`min-h-11 rounded-control border px-3 text-sm ${
               value === option ? "border-primary bg-primary-soft font-semibold" : "border-border-subtle hover:bg-surface-2"
             }`}
           >

@@ -9,7 +9,7 @@ import { Markdown } from "../Markdown.tsx";
 import { buildResponse, initialValues, missingAnswers } from "../lib/activity.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
 import { cn } from "../lib/cn.ts";
-import { navigate } from "../lib/router.ts";
+import { graphHref, navigate } from "../lib/router.ts";
 import { Composer } from "../components/Composer.tsx";
 
 const INTERACTIVE_TYPES = new Set([
@@ -74,6 +74,13 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
   const [sending, setSending] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [seenCount, setSeenCount] = useState(0);
+  const [sessionConcepts, setSessionConcepts] = useState<Array<{
+    id: string;
+    course: string;
+    title: string;
+    evidenceCount: number;
+    correctCount: number;
+  }>>([]);
 
   const [valuesByActivity, setValuesByActivity] = useState<Record<string, unknown[]>>({});
   const valuesRef = useRef<Record<string, unknown[]>>({});
@@ -100,6 +107,9 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
       .then((detail) => {
         if (!cancelled) {
           setSession(detail);
+          void api.sessionConcepts(detail.id).then((concepts) => {
+            if (!cancelled) setSessionConcepts(concepts);
+          });
           setLoading(false);
           initValues(detail);
           atBottomRef.current = true;
@@ -138,6 +148,16 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
           .then((next) => {
             setSession((current) => (current?.id === id ? next : current));
             initValues(next);
+          })
+          .catch(() => {});
+        void api
+          .sessionConcepts(id)
+          .then((concepts) => {
+            setSessionConcepts((current) => (current.length === concepts.length &&
+              current.every((item, index) => item.id === concepts[index]?.id &&
+                item.evidenceCount === concepts[index]?.evidenceCount)
+              ? current
+              : concepts));
           })
           .catch(() => {});
       }
@@ -362,9 +382,30 @@ export function SessionScreen({ sessionId, onClose, onNewSession, onEndSession, 
         <div className="mx-auto max-w-3xl space-y-4">
           {session && (
             <>
+              {sessionConcepts.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {sessionConcepts.map((concept) => (
+                    <button
+                      key={concept.id}
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          graphHref(concept.course, concept.id),
+                        )
+                      }
+                      className="min-h-11 rounded-chip border border-border-subtle bg-surface px-3 type-body-sm text-text hover:border-primary hover:bg-primary-soft"
+                    >
+                      Graph: {concept.title}
+                    </button>
+                  ))}
+                </div>
+              )}
               {transcriptEmpty && !connected && (
                 <div className="rounded-panel border border-border-subtle bg-surface p-5 type-body-sm text-text">
-                  <p className="font-medium">{session.goal}</p>
+                  <p className="font-medium">{session.title?.trim() || session.goal}</p>
+                  {session.title?.trim() && (
+                    <p className="mt-1 text-text-muted">{session.goal}</p>
+                  )}
                   <p className="mt-2 text-text-muted">
                     Waiting for your agent. Your goal is saved and it will pick it up when it connects.
                   </p>

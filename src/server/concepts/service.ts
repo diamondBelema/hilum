@@ -413,7 +413,10 @@ export class ConceptService {
       throw new ConceptError(`concept already exists: ${id}. Use find_concepts and update it instead.`);
     }
     const cites = validateCites(this.vault, parsed.cites);
-    this.assertRefs([parsed.parent, ...parsed.prerequisites, ...parsed.related, ...parsed.contrasts].filter(isString));
+    this.assertRefs(
+      parsed.course,
+      [parsed.parent, ...parsed.prerequisites, ...parsed.related, ...parsed.contrasts].filter(isString),
+    );
     if (parsed.parent) this.assertNoParentCycle(id, parsed.parent);
     await this.writeFile(id, {
       id,
@@ -463,7 +466,10 @@ export class ConceptService {
     };
     const cites = parsed.cites ? validateCites(this.vault, parsed.cites) : current.cites;
     if (cites.length === 0) throw new ConceptError("at least one citation is required");
-    this.assertRefs([next.parent, ...next.prerequisites, ...next.related, ...next.contrasts].filter(isString));
+    this.assertRefs(
+      row.course,
+      [next.parent, ...next.prerequisites, ...next.related, ...next.contrasts].filter(isString),
+    );
     if (next.parent) this.assertNoParentCycle(id, next.parent);
     await this.writeFile(id, { ...next, cites }, "replace");
     this.sync();
@@ -475,7 +481,10 @@ export class ConceptService {
     if (fromId === toId) throw new ConceptError("a concept cannot link to itself");
     this.sync();
     const from = this.row(fromId);
-    this.row(toId);
+    const to = this.row(toId);
+    if (from.course !== to.course) {
+      throw new ConceptError("linked concepts must belong to the same course");
+    }
     const parts = this.fileParts(from);
     if (type === "parent") {
       this.assertNoParentCycle(fromId, toId);
@@ -888,10 +897,16 @@ export class ConceptService {
     await this.vault.writeNote({ path: `concepts/${id}.md`, content, mode });
   }
 
-  private assertRefs(ids: string[]): void {
+  private assertRefs(course: string, ids: string[]): void {
     for (const id of ids) {
-      if (!this.db.query("SELECT 1 FROM concepts WHERE id = ?").get(id)) {
+      const row = this.db
+        .query("SELECT course FROM concepts WHERE id = ?")
+        .get(id) as { course: string } | null;
+      if (!row) {
         throw new ConceptError(`linked concept not found: ${id}`);
+      }
+      if (row.course !== course) {
+        throw new ConceptError(`linked concept must belong to the same course: ${id}`);
       }
     }
   }

@@ -29,6 +29,7 @@ type GraphCanvasProps = {
   onNodeSelect?: (id: string | null) => void;
   selectedId?: string | null;
   focusNodeId?: string | null;
+  resetViewToken?: number;
   sessionId?: string | null;
   sessionConceptIds?: Set<string>;
   ambient?: boolean;
@@ -138,6 +139,7 @@ export function GraphCanvas({
   onNodeSelect,
   selectedId: selectedIdProp,
   focusNodeId: focusNodeIdProp,
+  resetViewToken = 0,
   sessionId: sessionIdProp,
   sessionConceptIds: sessionConceptIdsProp,
   ambient = false,
@@ -150,6 +152,7 @@ export function GraphCanvas({
   const selectedRef = useRef<string | null>(null);
   const pinnedRef = useRef<Set<string>>(new Set());
   const dragStartRef = useRef<{ sx: number; sy: number; x: number; y: number } | null>(null);
+  const didDragRef = useRef(false);
   const degreeByIdRef = useRef(computeDegree(nodesProp, edgesProp));
   const radiusByIdRef = useRef(computeRadius(degreeByIdRef.current));
 
@@ -240,7 +243,12 @@ export function GraphCanvas({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodesProp.length, edgesProp.length, width, height]);
+  }, [
+    nodesProp.map((node) => node.id).join("|"),
+    edgesProp.map((edge) => `${edge.from}:${edge.to}:${edge.type}`).join("|"),
+    width,
+    height,
+  ]);
 
   // ---------------------------------------------------------------
   // Focus camera on a node
@@ -260,6 +268,14 @@ export function GraphCanvas({
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusNodeIdProp, width, height]);
+
+  useEffect(() => {
+    lastFocusedRef.current = null;
+    transformRef.current = { k: 1, x: 0, y: 0 };
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    draw();
+  }, [resetViewToken]);
 
   // ---------------------------------------------------------------
   // Draw
@@ -569,6 +585,7 @@ export function GraphCanvas({
       const id = findNodeAt(event.clientX, event.clientY);
       if (id) {
         pinnedRef.current.add(id);
+        didDragRef.current = false;
         simRef.current?.alpha(0.4).restart();
       } else {
         dragStartRef.current = {
@@ -577,6 +594,7 @@ export function GraphCanvas({
           x: pan.x,
           y: pan.y,
         };
+        didDragRef.current = false;
       }
     },
     [pan],
@@ -592,6 +610,9 @@ export function GraphCanvas({
       if (drag) {
         const dx = (event.clientX - drag.sx) / transformRef.current.k;
         const dy = (event.clientY - drag.sy) / transformRef.current.k;
+        if (Math.hypot(event.clientX - drag.sx, event.clientY - drag.sy) > 4) {
+          didDragRef.current = true;
+        }
         const nextX = drag.x + dx;
         const nextY = drag.y + dy;
         setPan((prev) => ({
@@ -660,6 +681,10 @@ export function GraphCanvas({
 
   const onClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
+      if (didDragRef.current) {
+        didDragRef.current = false;
+        return;
+      }
       const id = findNodeAt(event.clientX, event.clientY);
       if (!id) {
         if (selectedRef.current !== null) {
