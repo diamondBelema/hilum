@@ -1,8 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hilum">
-  <rect x="24" y="24" width="464" height="464" rx="88" fill="#F6F5FB"/>
-  <circle cx="256" cy="256" r="178" fill="#F4A6C3"/>
-  <circle cx="256" cy="256" r="178" fill="none" stroke="#E27AA3" stroke-width="12"/>
-  <circle cx="272" cy="244" r="92" fill="#4338A8"/>
-  <circle cx="300" cy="216" r="22" fill="#6C63D6"/>
-  <circle cx="236" cy="286" r="12" fill="#2E2680"/>
+  <rect x="24" y="24" width="464" height="464" rx="88" fill="#F7F9FC"/>
+  <path d="M256 104c-84 0-152 68-152 152s68 152 152 152" fill="none" stroke="#7EA6C9" stroke-width="44" stroke-linecap="round"/>
+  <path d="M256 104c84 0 152 68 152 152s-68 152-152 152" fill="none" stroke="#B8D0E5" stroke-width="44" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="38" fill="#315F87"/>
 </svg>

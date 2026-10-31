@@ -1,9 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { parseRoute } from "../src/ui/lib/router.ts";
+import { graphHref, parseRoute, questionsHref } from "../src/ui/lib/router.ts";
 import { isPractice, sessionTitle } from "../src/ui/components/Sidebar.tsx";
 import type { SessionSummary } from "../src/ui/api.ts";
 
 describe("router", () => {
+  test("builds stable deep links for graph integrations", () => {
+    expect(graphHref("ana-211", "loop of Henle")).toBe(
+      "/library/graph?course=ana-211&concept=loop+of+Henle",
+    );
+    expect(questionsHref("ana-211", "q/1")).toBe(
+      "/library/questions?course=ana-211&q=q%2F1",
+    );
+    expect(graphHref("ana-211")).toBe("/library/graph?course=ana-211");
+  });
+
   test("maps the public routes", () => {
     expect(parseRoute("/")).toEqual({ name: "home" });
     expect(parseRoute("/sessions/abc")).toEqual({ name: "session", id: "abc" });

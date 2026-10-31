@@ -100,7 +100,7 @@ export function Sidebar({
           <ul className="space-y-1">
             {filtered.map((session) => {
               const course = courses.find((item) => item.code === session.course);
-              const title = sessionTitle(session.goal);
+              const title = session.title?.trim() || sessionTitle(session.goal);
               return (
                 <li key={session.id}>
                   <Link

@@ -48,6 +48,30 @@ async function checkScreen(name: string, heading: string) {
 
   const main = await page.locator("main#main").count();
   if (main !== 1) fail(`${name}: expected one main landmark`);
+
+  const undersized = await page.evaluate(() => {
+    const selectors = "button, a[href], input, select, textarea, [role='button'], [role='radio']";
+    return [...document.querySelectorAll<HTMLElement>(selectors)]
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.visibility !== "hidden" &&
+          style.display !== "none" &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          (rect.width < 44 || rect.height < 44);
+      })
+      .slice(0, 10)
+      .map((element) => ({
+        tag: element.tagName.toLowerCase(),
+        label: (element.getAttribute("aria-label") || element.textContent || "").trim().slice(0, 80),
+        width: Math.round(element.getBoundingClientRect().width),
+        height: Math.round(element.getBoundingClientRect().height),
+      }));
+  });
+  for (const element of undersized) {
+    fail(`${name}: interactive target below 44px (${element.tag} "${element.label}" ${element.width}x${element.height})`);
+  }
 }
 
 async function openDrawer() {
@@ -84,6 +108,12 @@ try {
   await libraryDrawer.getByRole("link", { name: "Library" }).click();
   await checkScreen("Library", "Library");
   if (!page.url().endsWith("/library")) fail(`Library: unexpected url ${page.url()}`);
+
+  await page.goto(`${base}/library/graph`, { waitUntil: "domcontentloaded" });
+  await checkScreen("Graph", "Graph");
+
+  await page.goto(`${base}/library/questions`, { waitUntil: "domcontentloaded" });
+  await checkScreen("Questions", "Questions");
 
   const settingsDrawer = await openDrawer();
   await settingsDrawer.getByRole("link", { name: "Settings" }).click();

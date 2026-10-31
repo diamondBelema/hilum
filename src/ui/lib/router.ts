@@ -62,6 +62,18 @@ export function hrefFor(to: string): string {
   return to.startsWith("/") ? to : `/${to}`;
 }
 
+export function graphHref(course: string, concept?: string): string {
+  const params = new URLSearchParams({ course });
+  if (concept) params.set("concept", concept);
+  return `/library/graph?${params.toString()}`;
+}
+
+export function questionsHref(course: string, question?: string): string {
+  const params = new URLSearchParams({ course });
+  if (question) params.set("q", question);
+  return `/library/questions?${params.toString()}`;
+}
+
 type LinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
   to: string;
   children: ReactNode;

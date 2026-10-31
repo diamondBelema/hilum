@@ -119,6 +119,30 @@ describe("concept graph", () => {
     await expect(concepts.link(thorax.id, wall.id, "parent")).rejects.toThrow(/cycle/);
   });
 
+  test("rejects cross-course concept links", async () => {
+    await addBase();
+    await mkdir(join(root, "courses/ana-212/notes"), { recursive: true });
+    await writeFile(
+      join(root, "courses/ana-212/course.md"),
+      "---\ntitle: Anatomy 212\n---\n\n# Anatomy 212\n",
+      "utf8",
+    );
+    await writeFile(
+      join(root, "courses/ana-212/notes/heart.md"),
+      "# Heart\n\nThe heart pumps blood.\n",
+      "utf8",
+    );
+    const other = await concepts.add({
+      course: "ana-212",
+      id: "ana-212-heart",
+      title: "Heart",
+      cites: [{ note: "ana-212/notes/heart.md", quote: "heart pumps blood" }],
+    });
+    await expect(concepts.link("ana-211-thorax", other.id, "related")).rejects.toThrow(
+      /same course/,
+    );
+  });
+
   test("builds a tree with subtree rollups", async () => {
     await addBase();
     const tree = concepts.tree("ana-211");
@@ -127,6 +151,32 @@ describe("concept graph", () => {
       ["ana-211-thoracic-wall", 1],
     ]);
     expect(tree[0]?.rollup.total).toBe(2);
+  });
+
+  test("keeps a 300-node graph payload bounded and referentially complete", async () => {
+    const ids: string[] = [];
+    for (let index = 0; index < 300; index += 1) {
+      const id = `ana-211-concept-${String(index).padStart(3, "0")}`;
+      await concepts.add({
+        course: "ana-211",
+        id,
+        title: `Concept ${index}`,
+        parent: ids.at(-1),
+        cites: [CITE],
+        definition: `Definition for concept ${index}.`,
+      });
+      ids.push(id);
+    }
+
+    const graph = concepts.graph("ana-211");
+    const nodeIds = new Set(graph.nodes.map((node) => node.id));
+    expect(graph.nodes).toHaveLength(300);
+    expect(graph.edges).toHaveLength(299);
+    expect(graph.nodes.every((node) => nodeIds.has(node.id))).toBe(true);
+    expect(
+      graph.edges.every((edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to)),
+    ).toBe(true);
+    expect(graph.nodes.every((node) => node.title.length <= 28)).toBe(true);
   });
 });
 

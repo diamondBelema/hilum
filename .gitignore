@@ -1,6 +1,9 @@
 # JavaScript / Bun
 node_modules/
 dist/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/binaries/
 *.log
 .env
 

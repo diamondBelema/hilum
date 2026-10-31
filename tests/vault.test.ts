@@ -54,6 +54,7 @@ describe("vault service", () => {
     const hits = vault.search("sodium");
     expect(hits.length).toBe(1);
     expect(hits[0]?.path).toBe("courses/ana-211/notes/tubules.md");
+    expect(hits[0]?.section).toBe("notes");
     expect(hits[0]?.snippet).toContain("<mark>");
 
     const read = vault.readNote("courses/ana-211/notes/tubules.md");
@@ -68,6 +69,14 @@ describe("vault service", () => {
     });
     expect(created.bytes).toBeGreaterThan(0);
     expect(vault.search("macula").length).toBe(1);
+
+    await writeNote(
+      "courses/ana-211/exam-review/short-answer.md",
+      note("Short answer", "Exam mechanism", "Exam-focused mechanism note", "Use a structured answer."),
+    );
+    await indexer.reindexAll();
+    const examNote = vault.notesForCourse("ana-211").find((item) => item.title === "Exam mechanism");
+    expect(examNote?.section).toBe("exam-review");
 
     await expect(
       vault.writeNote({ path: created.path, content: note("Dup", "Dup", "", ""), mode: "create" }),

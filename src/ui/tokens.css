@@ -1,9 +1,9 @@
 /*
- * Design tokens — reference chrome + H&E brand.
+ * Design tokens — quiet chrome + blue clinical brand.
  *
  * Chrome (bg, surface, borders, text, muted) adopts the reference scheme:
  *   dark bg #141414, raised #1C1C1C, hairline #434343, text #e6e6e6, muted #8d8d8d.
- * Brand keeps H&E: hematoxylin primary, eosin accent (DESIGN 3.1).
+ * Brand uses a restrained clinical blue accent.
  * Expressed via light-dark() so both themes parse in the contrast test.
  */
 :root {
@@ -21,19 +21,19 @@
   --text: light-dark(#1b1b2e, #e6e6e6);
   --text-muted: light-dark(#4f4e6b, #8d8d8d);
 
-  /* Brand — H&E (DESIGN 3.1) */
-  --primary: light-dark(#4338a8, #8a82ff);   /* hematoxylin */
+  /* Brand — quiet clinical blue */
+  --primary: light-dark(#315f87, #9bc2e3);
   --on-primary: light-dark(#ffffff, #141414);
-  --primary-soft: light-dark(#e6e3fa, #1f1d45);
-  --accent: light-dark(#b3345f, #d48db0);   /* eosin */
-  --accent-soft: light-dark(#fbe4ec, #2e1a24);
+  --primary-soft: light-dark(#e6f0f8, #1d2b38);
+  --accent: light-dark(#315f87, #9bc2e3);
+  --accent-soft: light-dark(#e6f0f8, #1d2b38);
   --correct: light-dark(#17703f, #6fd59a);
   --correct-soft: light-dark(#e3f4ea, #11261a);
   --incorrect: light-dark(#b3261e, #f08a80);
   --incorrect-soft: light-dark(#fbe6e4, #301614);
   --warning: light-dark(#8a5100, #e2b566);
   --warning-soft: light-dark(#fff0d6, #2b2209);
-  --focus: light-dark(#4338a8, #8a82ff);
+  --focus: light-dark(#315f87, #9bc2e3);
 
   /* Type scale (rem) */
   --text-xs: 0.8125rem;

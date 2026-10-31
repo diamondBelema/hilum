@@ -25,6 +25,7 @@ import { Markdown } from "../Markdown.tsx";
 import { plural } from "../lib/format.ts";
 import { readActiveAttempt } from "../lib/activeAttempt.ts";
 import { defaultCourse } from "../lib/courses.ts";
+import { graphHref, navigate } from "../lib/router.ts";
 import { Papers } from "./Papers.tsx";
 
 const TYPE_LABEL: Record<QuestionType, string> = {
@@ -41,15 +42,21 @@ const label = "mb-1.5 block text-xs font-semibold text-text";
 type Mode = "bank" | "review" | "papers";
 
 export function Questions({ courses }: { courses: Course[] }) {
+  const params = new URLSearchParams(window.location.search);
+  const requestedCourse = params.get("course");
+  const requestedQuestion = params.get("q");
   const [courseCode, setCourseCode] = useState(
-    () => readActiveAttempt()?.course ?? defaultCourse(courses, "questions"),
+    () =>
+      (requestedCourse && courses.some((course) => course.code === requestedCourse)
+        ? requestedCourse
+        : readActiveAttempt()?.course ?? defaultCourse(courses, "questions")),
   );
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>(() => (readActiveAttempt() ? "papers" : "bank"));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => params.get("q") ?? "");
   const [status, setStatus] = useState<"all" | "verified" | "unverified">("all");
   const [type, setType] = useState<"all" | QuestionType>("all");
 
@@ -74,16 +81,21 @@ export function Questions({ courses }: { courses: Course[] }) {
         if (cancelled) return;
         setQuestions(list);
         setSelectedId((current) =>
-          current && list.some((question) => question.id === current)
+          requestedQuestion && list.some((question) => question.id === requestedQuestion)
+            ? requestedQuestion
+            : current && list.some((question) => question.id === current)
             ? current
             : (list.find((question) => !question.verified)?.id ?? list[0]?.id ?? null),
         );
+        if (requestedQuestion && list.some((question) => question.id === requestedQuestion)) {
+          setMode("review");
+        }
       })
       .catch((err: unknown) => !cancelled && setError(messageOf(err)));
     return () => {
       cancelled = true;
     };
-  }, [courseCode]);
+  }, [courseCode, requestedQuestion]);
 
   const selected = questions?.find((question) => question.id === selectedId) ?? null;
   const verified = questions?.filter((question) => question.verified).length ?? 0;
@@ -133,7 +145,10 @@ export function Questions({ courses }: { courses: Course[] }) {
   if (courses.length === 0) {
     return (
       <div className="max-w-3xl">
-        <h1 className="text-xl font-semibold tracking-tight">Exams</h1>
+        <h1 className="type-title">Question bank</h1>
+        <p className="reading mt-1 type-body-sm text-text-muted">
+          Browse, verify and review the cited questions used by exam papers.
+        </p>
         <div className="mt-6">
           <EmptyState title="No courses yet">
             Add a course and import past papers first. The question bank is built from cited items.
@@ -182,7 +197,7 @@ export function Questions({ courses }: { courses: Course[] }) {
           </label>
           <Button variant="secondary" onClick={() => setMode("papers")}>
             <FileText aria-hidden="true" className="size-4" />
-            Exam papers
+            Build or take an exam
           </Button>
         </div>
       </div>
@@ -536,6 +551,30 @@ function ReviewView({
                   Compare with the source before marking. Unverified content is excluded from exam papers.
                 </Banner>
               </div>
+            )}
+
+            {question.conceptIds.length > 0 && (
+              <section className="mt-4" aria-labelledby="linked-concepts-heading">
+                <h3 id="linked-concepts-heading" className="type-label text-text-muted">
+                  Linked concepts
+                </h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {question.conceptIds.map((conceptId) => (
+                    <button
+                      key={conceptId}
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          graphHref(question.course, conceptId),
+                        )
+                      }
+                      className="min-h-11 rounded-chip border border-border-subtle bg-surface-2 px-3 type-body-sm text-text hover:border-primary hover:bg-primary-soft"
+                    >
+                      {conceptId}
+                    </button>
+                  ))}
+                </div>
+              </section>
             )}
 
             <QuestionEditor
@@ -1078,7 +1117,7 @@ function TrueFalse({
           type="button"
           aria-pressed={value === option}
           onClick={() => onChange(option)}
-          className={`min-h-10 min-w-16 rounded-[calc(var(--radius-control)-2px)] px-2 text-xs font-semibold ${
+          className={`min-h-11 min-w-16 rounded-[calc(var(--radius-control)-2px)] px-2 text-xs font-semibold ${
             value === option ? "bg-primary text-on-primary" : "text-text-muted hover:bg-surface-2"
           }`}
         >

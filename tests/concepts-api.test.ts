@@ -75,6 +75,19 @@ describe("concept and mastery api", () => {
     ]);
     expect(tree[0]?.rollup.total).toBe(2);
 
+    const graph = (await (await app.request("/api/graph?course=ana-211")).json()) as {
+      nodes: { id: string }[];
+      edges: { from: string; to: string; type: string }[];
+    };
+    expect(graph.nodes.map((node) => node.id)).toEqual([
+      "ana-211-thorax",
+      "ana-211-thoracic-wall",
+    ]);
+    expect(graph.edges).toEqual([
+      { from: "ana-211-thoracic-wall", to: "ana-211-thorax", type: "parent" },
+      { from: "ana-211-thoracic-wall", to: "ana-211-thorax", type: "prerequisite" },
+    ]);
+
     const snapshot = (await (await app.request("/api/mastery?course=ana-211")).json()) as {
       counts: { total: number; unseen: number };
     };

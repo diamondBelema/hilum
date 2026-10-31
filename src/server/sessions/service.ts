@@ -807,6 +807,13 @@ export class SessionService {
         Date.now(),
       );
     this.touch(input.sessionId);
+    this.events.publish({
+      type: "session",
+      course: session.course,
+      sessionId: input.sessionId,
+      state: "evidence",
+      at: Date.now(),
+    });
     return { id: Number(result.lastInsertRowid), sessionId: input.sessionId, conceptId: input.conceptId };
   }
 

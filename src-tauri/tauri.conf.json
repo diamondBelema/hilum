@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Hilum",
+  "version": "0.1.0",
+  "identifier": "dev.hilum.study",
+  "build": {
+    "beforeDevCommand": "npm run build:server-sidecar && bun run dev",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeBuildCommand": "npm run build:ui && npm run build:server-sidecar",
+    "frontendDist": "../dist/ui"
+  },
+  "bundle": {
+    "externalBin": ["binaries/hilum-server"],
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "../public/icon-192x192.png",
+      "../public/icon-512x512.png"
+    ]
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "Hilum",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

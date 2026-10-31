@@ -8,6 +8,8 @@ sessions and the knowledge graph. The app makes zero external network requests a
 
 - [Bun](https://bun.sh) >= 1.4
 - A modern browser (phone over LAN works)
+- Linux desktop builds additionally require WebKitGTK 4.1 and librsvg development
+  packages; see the Tauri prerequisites for your platform.
 
 ## Install
 
@@ -35,6 +37,14 @@ Builds the UI on first run, then serves the app and the MCP endpoint on
 | `bun run smoke` | Health, UI shell, MCP initialize |
 | `bun run scripts/copy-db.ts` | Daily DB backup to `state/backups/` |
 | `bun run scripts/export-pack.ts` | Offline data bundle in `.study-pack/` |
+| `npm run tauri:dev` | Run the desktop shell around the local app |
+| `npm run tauri:build` | Build desktop installers (platform prerequisites required) |
+
+The desktop shell is an early Tauri integration. It uses the same React/Hono app
+layer and currently adds native vault folder selection and opening. Packaged
+desktop builds compile and bundle a local Hilum server sidecar; web mode remains
+the reference runtime for now. The sidecar build requires Bun (or uses `npx bun`
+as a fallback).
 
 ## Configuration
 

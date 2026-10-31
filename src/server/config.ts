@@ -10,6 +10,7 @@ export type Config = {
   uploadPath: string;
   lan: boolean;
   mcpToken: string | null;
+  configuredVaultPath?: string;
 };
 
 const ROOT = resolve(import.meta.dir, "../..");
@@ -35,6 +36,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
       overrides.uploadPath ?? process.env.HARNESS_UPLOADS ?? join(dirname(dbPath), "uploads"),
     lan: overrides.lan ?? envFlag("HARNESS_LAN"),
     mcpToken: overrides.mcpToken ?? process.env.HARNESS_MCP_TOKEN ?? null,
+    configuredVaultPath: overrides.configuredVaultPath,
   };
 }
 

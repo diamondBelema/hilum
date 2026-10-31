@@ -52,9 +52,10 @@ export function Editor({
   const [frontmatter, setFrontmatter] = useState<{
     title: string;
     course: string;
+    folder: string;
     topics: string;
     sourceType: string;
-  }>({ title: "", course: course?.code ?? "", topics: "", sourceType: "student_notes" });
+  }>({ title: "", course: course?.code ?? "", folder: "notes", topics: "", sourceType: "student_notes" });
   const [banners, setBanners] = useState<{ kind: "external" | "saved"; message: string }[]>([]);
 
   const editorRef = useRef<HTMLDivElement>(null);
@@ -96,6 +97,7 @@ export function Editor({
         setFrontmatter({
           title: (detail.frontmatter.title as string) ?? "",
           course: detail.frontmatter.course as string ?? "",
+          folder: detail.path.split("/").at(-2) ?? "notes",
           topics: (detail.frontmatter.topics as string[])?.join(", ") ?? "",
           sourceType: (detail.frontmatter.source_type as string) ?? "student_notes",
         });
@@ -122,7 +124,8 @@ export function Editor({
         const course = frontmatter.course.trim();
         const title = frontmatter.title.trim();
         if (!course || !title) throw new Error("Course and title are required");
-        target = `courses/${course}/notes/${slug(title)}.md`;
+        const folder = slug(frontmatter.folder) || "notes";
+        target = `courses/${course}/${folder}/${slug(title)}.md`;
         mode = "create";
       }
       const result = await api.writeNote({ path: target, content, mode, requestId: `editor-${Date.now()}` });
@@ -228,6 +231,15 @@ export function Editor({
             />
           </label>
           <label className="block w-full sm:w-48">
+            <span className="block text-xs font-medium mb-1 text-text-muted">Section / folder</span>
+            <input
+              value={frontmatter.folder}
+              onChange={(event) => setFrontmatter((prev) => ({ ...prev, folder: event.target.value }))}
+              placeholder="exam-review"
+              className="min-h-11 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
+            />
+          </label>
+          <label className="block w-full sm:w-48">
             <span className="block text-xs font-medium mb-1 text-text-muted">Topics (comma separated)</span>
             <input
               value={frontmatter.topics}
@@ -250,8 +262,8 @@ export function Editor({
         </div>
       </div>
 
-      <div className="flex gap-3 h-[calc(100dvh-400px)] min-h-[500px]">
-        <div className="flex-1 border border-border-subtle rounded-panel bg-surface relative">
+      <div className="flex min-h-[480px] flex-col gap-3 lg:h-[calc(100dvh-400px)] lg:min-h-[500px] lg:flex-row">
+        <div className={`relative min-h-[480px] flex-1 rounded-panel border border-border-subtle bg-surface ${mode === "preview" ? "hidden lg:block" : ""}`}>
           <div className="absolute top-2 left-2 z-10 flex gap-1">
             <Button variant="ghost" onClick={() => setMode("source")} disabled={mode === "source"}>
               <ImageIcon aria-hidden="true" className="size-4" />
@@ -268,7 +280,7 @@ export function Editor({
             {saving && <span className="animate-pulse">…</span>}
           </div>
         </div>
-        <div className="flex-1 border border-border-subtle rounded-panel bg-surface p-3 overflow-auto relative min-h-0">
+        <div className={`relative min-h-[480px] flex-1 overflow-auto rounded-panel border border-border-subtle bg-surface p-4 ${mode === "source" ? "hidden lg:block" : ""}`}>
           {mode === "preview" && (
             <div className="markdown prose-sm max-w-none leading-relaxed">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{source}</ReactMarkdown>

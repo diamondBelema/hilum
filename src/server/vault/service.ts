@@ -21,6 +21,7 @@ export type CourseSummary = {
 export type NoteSearchHit = {
   path: string;
   course: string | null;
+  section: string;
   title: string;
   summary: string;
   snippet: string;
@@ -253,7 +254,7 @@ export class VaultService {
         "SELECT path, course, title, summary FROM notes WHERE course = ? ORDER BY path",
       )
       .all(course) as Omit<NoteSearchHit, "snippet">[];
-    return rows.map((row) => ({ ...row, snippet: "" }));
+    return rows.map((row) => ({ ...row, section: noteSection(row.path), snippet: "" }));
   }
 
   search(query: string, course?: string | null, limit = 20): NoteSearchHit[] {
@@ -280,7 +281,8 @@ export class VaultService {
            ORDER BY bm25(notes_fts), n.path LIMIT ?`;
 
       const params = course ? [match, course, capped] : [match, capped];
-      return this.db.query(sql).all(...params) as NoteSearchHit[];
+      return (this.db.query(sql).all(...params) as Omit<NoteSearchHit, "section">[])
+        .map((row) => ({ ...row, section: noteSection(row.path) }));
     } catch {
       return [];
     }
@@ -488,6 +490,15 @@ export class VaultService {
 
 function requireMarkdown(path: string): void {
   if (!path.endsWith(".md")) throw new VaultPathError("only .md files are supported");
+}
+
+function noteSection(path: string): string {
+  const parts = path.split("/");
+  const notesIndex = parts.indexOf("notes");
+  if (notesIndex >= 0 && parts[notesIndex + 1]) return parts[notesIndex + 1]!;
+  const courseIndex = parts.indexOf("courses");
+  if (courseIndex >= 0 && parts[courseIndex + 2]) return parts[courseIndex + 2]!;
+  return "General";
 }
 
 function escapeCell(value: string): string {

@@ -59,6 +59,9 @@ export function Reader({
             {course ? `${course.title} / ` : ""}
             <span className="type-body">{note.title}</span>
           </p>
+          <Chip className="hidden shrink-0 sm:inline-flex">
+            {note.path.split("/").at(-2)?.replaceAll("-", " ") ?? "General"}
+          </Chip>
           <Button
             variant="ghost"
             className="ml-auto px-2 xl:hidden"

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ArrowLeft, BookOpen, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpen, FolderOpen, Plus, Search, Trash2 } from "lucide-react";
 import type { Course, NoteMeta } from "../api.ts";
 import { plural } from "../lib/format.ts";
 import { Button } from "../components/Button.tsx";
@@ -168,39 +168,56 @@ function NoteList({
   onOpenNote: (path: string) => void;
   onDeleteNote: (path: string) => void;
 }) {
+  const grouped = notes.reduce<Record<string, NoteMeta[]>>((groups, note) => {
+    (groups[note.section] ??= []).push(note);
+    return groups;
+  }, {});
+
   return (
-    <ul className="mt-2 divide-y divide-border-subtle border-y border-border-subtle">
-      {notes.map((note) => (
-        <li key={note.path}>
-          <div className="flex min-h-12 w-full items-start gap-3 py-3 text-left hover:bg-surface-2">
-            <button
-              type="button"
-              onClick={() => onOpenNote(note.path)}
-              className="flex min-w-0 items-start gap-3 py-3 text-left hover:bg-surface-2"
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <BookOpen aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-text-muted" />
-              <span className="min-w-0">
-                <span className="block truncate type-body-sm font-medium">{note.title}</span>
-                <span className="mt-0.5 block truncate type-body-sm text-text-muted">
-                  {note.summary || note.path}
-                </span>
-              </span>
-            </button>
-            <Button
-              variant="destructive"
-              size="icon-sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (window.confirm(`Delete “${note.title}”?`)) onDeleteNote(note.path);
-              }}
-              aria-label={`Delete ${note.title}`}
-            >
-              <Trash2 aria-hidden="true" className="size-5" />
-            </Button>
+    <div className="mt-3 space-y-6">
+      {Object.entries(grouped).map(([section, sectionNotes]) => (
+        <section key={section} aria-labelledby={`notes-section-${section}`}>
+          <div className="mb-2 flex items-center gap-2">
+            <FolderOpen aria-hidden="true" className="size-4 text-primary" />
+            <h3 id={`notes-section-${section}`} className="type-label text-text">
+              {section.replaceAll("-", " ")}
+            </h3>
+            <span className="type-meta text-text-muted">{sectionNotes.length}</span>
           </div>
-        </li>
+          <ul className="divide-y divide-border-subtle rounded-panel border border-border-subtle bg-surface">
+            {sectionNotes.map((note) => (
+              <li key={note.path}>
+                <div className="flex min-h-12 w-full items-start gap-3 p-3 text-left hover:bg-surface-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenNote(note.path)}
+                    className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                  >
+                    <BookOpen aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-text-muted" />
+                    <span className="min-w-0">
+                      <span className="block truncate type-body-sm font-medium">{note.title}</span>
+                      <span className="mt-0.5 block truncate type-body-sm text-text-muted">
+                        {note.summary || note.path}
+                      </span>
+                    </span>
+                  </button>
+                  <Button
+                    variant="destructive"
+                    size="icon-sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (window.confirm(`Delete “${note.title}”?`)) onDeleteNote(note.path);
+                    }}
+                    aria-label={`Delete ${note.title}`}
+                  >
+                    <Trash2 aria-hidden="true" className="size-5" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       ))}
-    </ul>
+    </div>
   );
 }
