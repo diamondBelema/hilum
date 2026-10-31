@@ -50,17 +50,7 @@ export function Notes({
   return (
     <div className="max-w-3xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {course && (
-            <Button variant="ghost" className="px-2" onClick={onClearCourse}>
-              <ArrowLeft aria-hidden="true" className="size-5" />
-              <span className="hidden sm:inline">All courses</span>
-            </Button>
-          )}
-          <h1 className="truncate type-title">
-            {course ? course.title : "Notes"}
-          </h1>
-        </div>
+        <h1 className="min-w-0 truncate type-title">{course ? course.title : "Notes"}</h1>
         {course && (
           <Button variant="secondary" onClick={() => onNewNote(course)}>
             <Plus aria-hidden="true" className="size-5" />
@@ -68,6 +58,12 @@ export function Notes({
           </Button>
         )}
       </div>
+      {course && (
+        <Button variant="ghost" className="-ml-2 mt-1 px-2 text-text-muted" onClick={onClearCourse}>
+          <ArrowLeft aria-hidden="true" className="size-4" />
+          <span>All courses</span>
+        </Button>
+      )}
 
       <div className="mt-3 relative w-full sm:w-64">
         <Search
@@ -142,8 +138,7 @@ export function Notes({
       )}
 
       {!loading && !results && course && (
-        <section className="mt-6" aria-labelledby="course-notes">
-          <h2 id="course-notes" className="type-label">Notes</h2>
+        <section className="mt-6" aria-label="Course notes">
           {list.length === 0 ? (
             <div className="mt-3">
               <EmptyState title="No notes indexed for this course">

@@ -6,10 +6,9 @@ import { EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import {
   ArrowLeft,
-  ImageIcon,
+  FileText,
   Save,
   Trash2,
-  Zap,
 } from "lucide-react";
 import { api } from "../api.ts";
 import { type Course } from "../api.ts";
@@ -22,14 +21,6 @@ function slug(value: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
-}
-
-function debounce(fn: () => void, ms: number) {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  return () => {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(fn, ms);
-  };
 }
 
 export function Editor({
@@ -62,6 +53,14 @@ export function Editor({
   const viewRef = useRef<EditorView | null>(null);
 
   const lastWrittenRef = useRef(source);
+
+  function updateFrontmatter(
+    update: (previous: typeof frontmatter) => typeof frontmatter,
+  ) {
+    setFrontmatter(update);
+    setUnsaved(true);
+    setSaved(false);
+  }
 
   useEffect(() => {
     if (!editorRef.current || viewRef.current) return;
@@ -102,6 +101,9 @@ export function Editor({
           sourceType: (detail.frontmatter.source_type as string) ?? "student_notes",
         });
         setSource(detail.body);
+        viewRef.current?.dispatch({
+          changes: { from: 0, to: viewRef.current.state.doc.length, insert: detail.body },
+        });
         lastWrittenRef.current = detail.body;
         setUnsaved(false);
         setSaved(true);
@@ -130,7 +132,7 @@ export function Editor({
       }
       const result = await api.writeNote({ path: target, content, mode, requestId: `editor-${Date.now()}` });
       if (!detailPath) setDetailPath(target);
-      lastWrittenRef.current = content;
+      lastWrittenRef.current = source;
       setUnsaved(false);
       setSaved(true);
       setBanners((prev) => [...prev, { kind: "saved", message: `Saved · ${result.bytes} bytes` }]);
@@ -157,13 +159,11 @@ export function Editor({
     }
   }, [detailPath, onBack]);
 
-  const autosave = debounce(() => {
-    if (unsaved && detailPath) void save();
-  }, 1500);
-
   useEffect(() => {
-    if (unsaved && detailPath) autosave();
-  }, [unsaved, detailPath, autosave]);
+    if (!unsaved || !detailPath) return;
+    const timer = window.setTimeout(() => void save(), 1500);
+    return () => window.clearTimeout(timer);
+  }, [detailPath, save, unsaved]);
 
   function parseFrontmatter(): string {
     const lines: string[] = [];
@@ -181,120 +181,129 @@ export function Editor({
   }
 
   return (
-    <div className="max-w-4xl">
-      <div className="flex items-baseline gap-2 mb-3">
-        <Button variant="ghost" className="px-2" onClick={onBack}>
-          <ArrowLeft aria-hidden="true" className="size-4" />
-          Back
-        </Button>
-        <h1 className="text-xl font-semibold tracking-tight">{!detailPath ? "New note" : "Editor"}</h1>
-        {detailPath && (
-          <Button
-            variant="destructive"
-            onClick={() => void deleteNote()}
-            loading={deleting}
-            aria-label="Delete note"
-          >
-            <Trash2 aria-hidden="true" className="size-4" />
-            Delete
+    <div className="max-w-5xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <Button variant="ghost" className="-ml-2 mb-1 px-2 text-text-muted" onClick={onBack}>
+            <ArrowLeft aria-hidden="true" className="size-4" />
+            <span>Notes</span>
           </Button>
-        )}
+          <h1 className="type-title truncate">{!detailPath ? "New note" : frontmatter.title || "Edit note"}</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="type-meta text-text-muted">{unsaved ? "Unsaved changes" : saved ? "Saved" : "Draft"}</span>
+          <Button variant="primary" onClick={() => void save()} loading={saving} disabled={!unsaved || saving}>
+            <Save aria-hidden="true" className="size-4" />
+            Save
+          </Button>
+          {detailPath && (
+            <Button
+              variant="destructive"
+              size="icon-sm"
+              onClick={() => void deleteNote()}
+              loading={deleting}
+              aria-label="Delete note"
+            >
+              <Trash2 aria-hidden="true" className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
-      {error && <div className="mb-3">{error}</div>}
+      <div className="mt-5">
+        <div className="flex items-center gap-2">
+          <FileText aria-hidden="true" className="size-4 text-primary" />
+          <p className="type-label text-text-muted">Note details</p>
+        </div>
+      </div>
+
+      {error && <div className="mt-3 rounded-control border border-incorrect/40 bg-incorrect-soft p-3 type-body-sm text-incorrect">{error}</div>}
 
       {banners.map((banner, index) => (
-        <div key={index} className={`mb-3 rounded-control border px-3 py-2 ${externalBannerKind(banner.kind)}`}>
-          <p className="text-sm">{banner.message}</p>
+        <div key={index} className={`mt-3 rounded-control border px-3 py-2 ${externalBannerKind(banner.kind)}`}>
+          <p className="type-body-sm">{banner.message}</p>
           {banner.kind === "external" && (
             <p className="mt-2 text-xs text-text-muted">External changes detected.</p>
           )}
         </div>
       ))}
 
-      <div className="mb-4 border border-border-subtle rounded-panel bg-surface p-3">
-        <div className="flex flex-wrap gap-2 items-start">
-          <label className="block w-full sm:w-48">
-            <span className="block text-xs font-medium mb-1 text-text-muted">Title</span>
+      <div className="mt-3 rounded-panel border border-border-subtle bg-surface p-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block type-label text-text-muted">Title</span>
             <input
               value={frontmatter.title}
-              onChange={(event) => setFrontmatter((prev) => ({ ...prev, title: event.target.value }))}
-              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
+              onChange={(event) => updateFrontmatter((prev) => ({ ...prev, title: event.target.value }))}
+              className="min-h-11 w-full rounded-control border border-border-strong bg-bg px-3 py-2 type-body-sm focus:border-primary"
             />
           </label>
-          <label className="block w-full sm:w-48">
-            <span className="block text-xs font-medium mb-1 text-text-muted">Course</span>
+          <label className="block">
+            <span className="mb-1 block type-label text-text-muted">Course</span>
             <input
               value={frontmatter.course}
-              onChange={(event) => setFrontmatter((prev) => ({ ...prev, course: event.target.value }))}
-              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
+              onChange={(event) => updateFrontmatter((prev) => ({ ...prev, course: event.target.value }))}
+              className="min-h-11 w-full rounded-control border border-border-strong bg-bg px-3 py-2 type-body-sm focus:border-primary"
             />
           </label>
-          <label className="block w-full sm:w-48">
-            <span className="block text-xs font-medium mb-1 text-text-muted">Section / folder</span>
+          <label className="block">
+            <span className="mb-1 block type-label text-text-muted">Section / folder</span>
             <input
               value={frontmatter.folder}
-              onChange={(event) => setFrontmatter((prev) => ({ ...prev, folder: event.target.value }))}
+              onChange={(event) => updateFrontmatter((prev) => ({ ...prev, folder: event.target.value }))}
               placeholder="exam-review"
-              className="min-h-11 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
+              className="min-h-11 w-full rounded-control border border-border-strong bg-bg px-3 py-2 type-body-sm focus:border-primary"
             />
           </label>
-          <label className="block w-full sm:w-48">
-            <span className="block text-xs font-medium mb-1 text-text-muted">Topics (comma separated)</span>
+          <label className="block">
+            <span className="mb-1 block type-label text-text-muted">Topics (comma separated)</span>
             <input
               value={frontmatter.topics}
-              onChange={(event) => setFrontmatter((prev) => ({ ...prev, topics: event.target.value }))}
-              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
+              onChange={(event) => updateFrontmatter((prev) => ({ ...prev, topics: event.target.value }))}
+              className="min-h-11 w-full rounded-control border border-border-strong bg-bg px-3 py-2 type-body-sm focus:border-primary"
             />
           </label>
-          <label className="block w-full sm:w-48">
-            <span className="block text-xs font-medium mb-1 text-text-muted">Source type</span>
+          <label className="block">
+            <span className="mb-1 block type-label text-text-muted">Source type</span>
             <input
               value={frontmatter.sourceType}
-              onChange={(event) => setFrontmatter((prev) => ({ ...prev, sourceType: event.target.value }))}
-              className="min-h-10 w-full rounded-control border border-border-strong bg-surface px-2 py-1.5 text-sm focus:border-primary"
+              onChange={(event) => updateFrontmatter((prev) => ({ ...prev, sourceType: event.target.value }))}
+              className="min-h-11 w-full rounded-control border border-border-strong bg-bg px-3 py-2 type-body-sm focus:border-primary"
             />
           </label>
         </div>
-        <div className="mt-3 flex items-center gap-3">
-          <span className="text-xs text-text-muted">Student notes get</span>
-          <code className="text-xs font-mono text-primary">source_type: student_notes, trust: medium</code>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
+          <span className="type-meta text-text-muted">Default metadata</span>
+          <code className="type-code text-primary">source_type: student_notes · trust: medium</code>
         </div>
       </div>
 
-      <div className="flex min-h-[480px] flex-col gap-3 lg:h-[calc(100dvh-400px)] lg:min-h-[500px] lg:flex-row">
-        <div className={`relative min-h-[480px] flex-1 rounded-panel border border-border-subtle bg-surface ${mode === "preview" ? "hidden lg:block" : ""}`}>
-          <div className="absolute top-2 left-2 z-10 flex gap-1">
-            <Button variant="ghost" onClick={() => setMode("source")} disabled={mode === "source"}>
-              <ImageIcon aria-hidden="true" className="size-4" />
-              Markdown
-            </Button>
-            <Button variant="ghost" onClick={() => setMode("preview")} disabled={mode === "preview"}>
-              <Zap aria-hidden="true" className="size-4" />
-              Preview
-            </Button>
+      <div className="mt-4 flex min-h-[520px] flex-col gap-3 lg:h-[calc(100dvh-390px)] lg:flex-row">
+        <div className={`relative min-h-[520px] flex-1 overflow-hidden rounded-panel border border-border-subtle bg-surface ${mode === "preview" ? "hidden lg:block" : ""}`}>
+          <div className="flex items-center justify-between border-b border-border-subtle px-3 py-2">
+              <span className="type-label text-text-muted">Markdown</span>
+              <div className="flex gap-1">
+                <Button variant={mode === "source" ? "secondary" : "ghost"} size="xs" onClick={() => setMode("source")} disabled={mode === "source"}>
+                  Edit
+                </Button>
+                <Button variant={mode === "preview" ? "secondary" : "ghost"} size="xs" onClick={() => setMode("preview")} disabled={mode === "preview"}>
+                  Preview
+                </Button>
+              </div>
           </div>
-          <div ref={editorRef} className="h-full w-full min-h-0" />
-          <div className="absolute bottom-2 left-2 z-10 flex items-center gap-2 text-xs text-text-muted">
-            <span>{unsaved ? "Not saved" : "Saved"}</span>
-            {saving && <span className="animate-pulse">…</span>}
+          <div ref={editorRef} className="h-[calc(100%-49px)] w-full min-h-0 overflow-auto" />
+          <div className="absolute bottom-3 left-3 flex items-center gap-2 type-meta text-text-muted">
+              <span>{unsaved ? "Changes will autosave" : saved ? "Saved" : "Ready"}</span>
+              {saving && <span className="animate-pulse">Saving…</span>}
           </div>
         </div>
-        <div className={`relative min-h-[480px] flex-1 overflow-auto rounded-panel border border-border-subtle bg-surface p-4 ${mode === "source" ? "hidden lg:block" : ""}`}>
+        <div className={`relative min-h-[520px] flex-1 overflow-auto rounded-panel border border-border-subtle bg-surface p-5 ${mode === "source" ? "hidden lg:block" : ""}`}>
           {mode === "preview" && (
-            <div className="markdown prose-sm max-w-none leading-relaxed">
+              <div className="markdown max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{source}</ReactMarkdown>
-            </div>
+              </div>
           )}
         </div>
-      </div>
-
-      <div className="mt-4 flex justify-end gap-2">
-        <Button variant="secondary" onClick={onBack}>Cancel</Button>
-        <Button variant="primary" onClick={() => void save()} loading={saving} disabled={!unsaved || saving}>
-          <Save aria-hidden="true" className="size-4" />
-          {saved ? "Saved" : "Save"}
-        </Button>
       </div>
     </div>
   );

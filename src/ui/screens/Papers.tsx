@@ -168,13 +168,12 @@ export function Papers({ course, onBack }: { course: Course; onBack: () => void 
 
   return (
     <div className="max-w-4xl">
-      <Button variant="ghost" className="px-2" onClick={onBack}>
-        <ChevronLeft aria-hidden="true" className="size-5" />
-        <span className="hidden sm:inline">Question bank</span>
-      </Button>
-
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Button variant="ghost" className="-ml-2 mb-1 px-2 text-text-muted" onClick={onBack}>
+            <ChevronLeft aria-hidden="true" className="size-4" />
+            <span>Question bank</span>
+          </Button>
           <h1 className="type-title">Exam papers</h1>
           <p className="reading mt-1 type-body-sm text-text-muted">
             {course.title} · built only from verified, cited questions.
