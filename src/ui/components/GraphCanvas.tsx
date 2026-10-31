@@ -37,22 +37,40 @@ type GraphCanvasProps = {
 };
 
 // ---------------------------------------------------------------------------
-// CSS variable reader
+// CSS variable readers. Custom properties keep the `light-dark()` expression
+// in their computed value, but canvas paints do not resolve that expression
+// when it is assigned directly to fillStyle/strokeStyle.
 // ---------------------------------------------------------------------------
 
+const colorCache = new Map<string, string>();
+
 function cssVar(name: string): string {
-  return (
-    getComputedStyle(document.documentElement).getPropertyValue(name).trim() ||
-    (name === "--bg" ? "#ffffff" : "#000000")
-  );
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function cssColor(name: string, fallback: string): string {
+  const themeKey = `${document.documentElement.dataset.theme ?? "auto"}:${window.matchMedia("(prefers-color-scheme: dark)").matches}`;
+  const cacheKey = `${themeKey}:${name}`;
+  const cached = colorCache.get(cacheKey);
+  if (cached) return cached;
+
+  const probe = document.createElement("span");
+  probe.style.color = `var(${name})`;
+  probe.style.position = "fixed";
+  probe.style.visibility = "hidden";
+  document.body.appendChild(probe);
+  const resolved = getComputedStyle(probe).color || fallback;
+  probe.remove();
+  colorCache.set(cacheKey, resolved);
+  return resolved;
 }
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const LINK_DISTANCE = 55;
-const CHARGE_STRENGTH = -120;
+const LINK_DISTANCE = 100;
+const CHARGE_STRENGTH = -240;
 const NODE_MIN_RADIUS = 6;
 const NODE_MAX_RADIUS = 18;
 const LABEL_TRUNCATE = 28;
@@ -82,10 +100,10 @@ const EDGE_DASH: Record<string, string | undefined> = {
 };
 
 const EDGE_LINK_DISTANCE: Record<string, number> = {
-  parent: 40,
-  prerequisite: 55,
-  related: 55,
-  contrasts_with: 55,
+  parent: 80,
+  prerequisite: 100,
+  related: 100,
+  contrasts_with: 100,
 };
 
 // ---------------------------------------------------------------------------
@@ -216,7 +234,7 @@ export function GraphCanvas({
 
     const sim = forceSimulation(nodeData as unknown as SimulationNodeDatum[])
       .force("link", linkForce)
-      .force("charge", ((forceManyBody() as any).strength(CHARGE_STRENGTH).distanceMax(300)) as any)
+      .force("charge", ((forceManyBody() as any).strength(CHARGE_STRENGTH).distanceMax(600)) as any)
       .force("center", (forceCenter(width / 2, height / 2) as any) as any)
       .force(
         "collision",
@@ -330,8 +348,13 @@ export function GraphCanvas({
     ctx.translate(x, y);
     ctx.scale(k, k);
 
-    const bg = cssVar("--bg");
-    const textColor = cssVar("--text");
+    const bg = cssColor("--bg", "#141414");
+    const textColor = cssColor("--text", "#e6e6e6");
+    const borderSubtle = cssColor("--border-subtle", "#434343");
+    const borderStrong = cssColor("--border-strong", "#686868");
+    const primary = cssColor("--primary", "#9bc2e3");
+    const textMuted = cssColor("--text-muted", "#8d8d8d");
+    const warning = cssColor("--warning", "#e2b566");
     const sessionConceptIds = sessionConceptIdsProp ?? new Set<string>();
     const sessionId = sessionIdProp;
     const selectedId = selectedIdProp ?? selectedRef.current;
@@ -340,7 +363,7 @@ export function GraphCanvas({
     // competing with labels or the selected concept.
     ctx.save();
     ctx.globalAlpha = 0.18;
-    ctx.strokeStyle = cssVar("--border-subtle");
+    ctx.strokeStyle = borderSubtle;
     ctx.lineWidth = 1 / k;
     const grid = 32;
     const left = -x / k - grid;
@@ -394,7 +417,7 @@ export function GraphCanvas({
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
-      ctx.strokeStyle = isSelectedEdge ? cssVar("--primary") : cssVar("--border-strong");
+      ctx.strokeStyle = isSelectedEdge ? primary : borderStrong;
       ctx.globalAlpha = isSelectedEdge ? 0.95 : selectedId ? 0.18 : 0.42;
       ctx.lineWidth = (isSelectedEdge ? 1.8 : 1) / k;
       if (dash) ctx.setLineDash(dash.split(" ").map(Number));
@@ -414,7 +437,7 @@ export function GraphCanvas({
         ctx.lineTo(-arrowSize, arrowSize / 2);
         ctx.lineTo(-arrowSize, -arrowSize / 2);
         ctx.closePath();
-        ctx.fillStyle = cssVar("--primary");
+        ctx.fillStyle = primary;
         ctx.globalAlpha = isSelectedEdge ? 0.95 : selectedId ? 0.22 : 0.55;
         ctx.fill();
         ctx.restore();
@@ -432,7 +455,7 @@ export function GraphCanvas({
         ctx.beginPath();
         ctx.moveTo(-size, 0);
         ctx.lineTo(size, 0);
-        ctx.strokeStyle = cssVar("--warning");
+        ctx.strokeStyle = warning;
         ctx.lineWidth = 2 / k;
         ctx.globalAlpha = isSelectedEdge ? 0.95 : selectedId ? 0.22 : 0.65;
         ctx.stroke();
@@ -448,7 +471,7 @@ export function GraphCanvas({
         ctx.textBaseline = "middle";
         const label = EDGE_TYPE_SHORT(edge.type);
         const metrics = ctx.measureText(label);
-        ctx.fillStyle = cssVar("--text-muted");
+        ctx.fillStyle = textMuted;
         ctx.globalAlpha = 0.7;
         ctx.fillRect(
           mx - metrics.width / 2 - 2 / k,
@@ -456,7 +479,7 @@ export function GraphCanvas({
           metrics.width + 4 / k,
           12 / k,
         );
-        ctx.fillStyle = cssVar("--text");
+        ctx.fillStyle = textColor;
         ctx.globalAlpha = 1;
         ctx.fillText(label, mx, my);
       }
@@ -498,7 +521,7 @@ export function GraphCanvas({
 
       const fill = MASTERY_FILL[node.mastery.state] ?? 0;
       const strokeVar = MASTERY_STROKE_VAR[node.mastery.state] ?? "--text-muted";
-      const strokeColor = cssVar(strokeVar);
+      const strokeColor = cssColor(strokeVar, textMuted);
 
       ctx.beginPath();
       ctx.arc(0, 0, r, 0, 2 * Math.PI);
@@ -513,12 +536,12 @@ export function GraphCanvas({
       } else if (fill >= 1) {
         // Solid fill
         ctx.fillStyle =
-          node.mastery.state === "decayed" ? cssVar("--warning") : strokeColor;
+          node.mastery.state === "decayed" ? warning : strokeColor;
         ctx.fill();
         // Decayed: dashed outer ring
         if (node.mastery.state === "decayed") {
           ctx.lineWidth = 2 / k;
-          ctx.strokeStyle = cssVar("--primary");
+          ctx.strokeStyle = primary;
           ctx.setLineDash([4, 4]);
           ctx.stroke();
           ctx.setLineDash([]);
@@ -550,7 +573,7 @@ export function GraphCanvas({
         ctx.beginPath();
         ctx.arc(0, 0, r + 3 / k, 0, 2 * Math.PI);
         ctx.lineWidth = 2 / k;
-        ctx.strokeStyle = cssVar("--primary");
+        ctx.strokeStyle = primary;
         ctx.globalAlpha = 0.9;
         ctx.stroke();
         ctx.globalAlpha = 1;
@@ -563,7 +586,7 @@ export function GraphCanvas({
         ctx.beginPath();
         ctx.arc(p.x, p.y, r + 4 / k, 0, 2 * Math.PI);
         ctx.lineWidth = 2 / k;
-        ctx.strokeStyle = cssVar("--primary");
+        ctx.strokeStyle = primary;
         ctx.stroke();
       }
 
@@ -572,7 +595,7 @@ export function GraphCanvas({
         ctx.beginPath();
         ctx.arc(p.x, p.y, r + 2 / k, 0, 2 * Math.PI);
         ctx.lineWidth = 2 / k;
-        ctx.strokeStyle = cssVar("--text");
+        ctx.strokeStyle = textColor;
         ctx.globalAlpha = 0.5;
         ctx.stroke();
         ctx.globalAlpha = 1;
