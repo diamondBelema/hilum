@@ -472,7 +472,7 @@ function LibraryScreen({
           <Library aria-hidden="true" className="size-5 text-primary" />
           <h1 className="type-title text-text">Library</h1>
         </div>
-      )}
+      ) : null}
 
       {section && !LIBRARY_SECTIONS.some((item) => item.slug === section) && section !== "notes" ? (
         <div className="mt-6 rounded-panel border border-border-subtle bg-surface p-4">
