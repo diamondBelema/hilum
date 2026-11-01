@@ -593,7 +593,7 @@ export type ServerSettings = {
 export const api = {
   health: () => getJson<Health>("/api/health"),
   settings: () => getJson<ServerSettings>("/api/settings"),
-  updateSettings: (input: { lan?: boolean; regenerateToken?: boolean }) =>
+  updateSettings: (input: { lan?: boolean; regenerateToken?: boolean; vaultPath?: string }) =>
     sendJson<ServerSettings>("/api/settings", "POST", input),
   courses: () => getJson<Course[]>("/api/courses"),
   goals: (course?: string) =>

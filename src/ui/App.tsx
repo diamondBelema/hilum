@@ -770,6 +770,7 @@ function SettingsScreen() {
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const [demoBusy, setDemoBusy] = useState(false);
   const [vaultPickerBusy, setVaultPickerBusy] = useState(false);
+  const [manualVaultPath, setManualVaultPath] = useState("");
   const [backups, setBackups] = useState<Array<{
     name: string;
     path: string;
@@ -879,6 +880,24 @@ function SettingsScreen() {
       if (!selected) return;
       const next = await api.updateSettings({ vaultPath: selected });
       setSettings(next);
+      setSettingsNotice("Vault saved. Restart Hilum to use the selected folder.");
+    } catch (err) {
+      setSettingsError(messageOf(err));
+    } finally {
+      setVaultPickerBusy(false);
+    }
+  }
+
+  async function setVaultPath() {
+    const path = manualVaultPath.trim();
+    if (!path) return;
+    setVaultPickerBusy(true);
+    setSettingsError(null);
+    setSettingsNotice(null);
+    try {
+      const next = await api.updateSettings({ vaultPath: path });
+      setSettings(next);
+      setManualVaultPath("");
       setSettingsNotice("Vault saved. Restart Hilum to use the selected folder.");
     } catch (err) {
       setSettingsError(messageOf(err));
@@ -1185,25 +1204,43 @@ function SettingsScreen() {
               </p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={vaultPickerBusy}
+                  onClick={() => void chooseVault()}
+                >
+                  <FolderOpen aria-hidden="true" className="size-4" />
+                  {vaultPickerBusy ? "Choosing…" : "Choose vault"}
+                </Button>
+                <input
+                  type="text"
+                  placeholder="Or paste vault path…"
+                  value={manualVaultPath}
+                  onChange={(event) => setManualVaultPath(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void setVaultPath();
+                  }}
+                  className="type-body-sm min-h-11 shrink-0 rounded-control border border-border-subtle bg-surface px-3 text-text w-[220px]"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={vaultPickerBusy || !manualVaultPath.trim()}
+                  onClick={() => void setVaultPath()}
+                >
+                  Set
+                </Button>
+              </div>
               {isDesktopApp() && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={vaultPickerBusy}
-                    onClick={() => void chooseVault()}
-                  >
-                    <FolderOpen aria-hidden="true" className="size-4" />
-                    {vaultPickerBusy ? "Choosing…" : "Choose vault"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void openVaultFolder(settings.vault)}
-                  >
-                    Open folder
-                  </Button>
-                </>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void openVaultFolder(settings.vault)}
+                >
+                  Open folder
+                </Button>
               )}
               <Button
                 variant="outline"
