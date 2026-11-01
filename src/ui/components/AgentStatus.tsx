@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, Copy, Plug } from "lucide-react";
 import { api, type SessionDetail } from "../api.ts";
+import { apiUrl } from "../lib/desktop.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
 import { Button } from "./Button.tsx";
 import { Popover } from "./Popover.tsx";
@@ -13,7 +14,7 @@ export function AgentStatus({ sessionId }: { sessionId: string | null }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const copyRef = useRef<HTMLButtonElement>(null);
   const labelId = useId();
-  const endpoint = `${window.location.origin}/mcp`;
+  const endpoint = apiUrl("/mcp");
 
   useEffect(() => {
     setDetail(null);

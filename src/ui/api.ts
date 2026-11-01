@@ -1,3 +1,5 @@
+import { apiUrl } from "./lib/desktop.ts";
+
 export type Course = {
   code: string;
   title: string;
@@ -222,7 +224,7 @@ export type QuestionInput = {
 };
 
 async function sendJson<T>(url: string, method: string, body: unknown, headers: HeadersInit = {}): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     method,
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
@@ -235,7 +237,7 @@ async function sendJson<T>(url: string, method: string, body: unknown, headers: 
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await fetch(apiUrl(url));
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `Request failed: ${res.status}`);
@@ -610,7 +612,7 @@ export const api = {
     form.set("question_id", questionId);
     form.set("file", file);
     if (text) form.set("text", text);
-    const res = await fetch(`/api/attempts/${encodeURIComponent(attemptId)}/photo`, {
+    const res = await fetch(apiUrl(`/api/attempts/${encodeURIComponent(attemptId)}/photo`), {
       method: "POST",
       body: form,
     });
@@ -637,7 +639,7 @@ export const api = {
     ),
   session: (id: string) => getJson<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}`),
   startSession: async (course: string, goal = "learn") => {
-    const res = await fetch("/api/sessions", {
+    const res = await fetch(apiUrl("/api/sessions"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ course, goal }),
@@ -737,7 +739,7 @@ export const api = {
       correctCount: number;
     }>>(`/api/sessions/${encodeURIComponent(sessionId)}/concepts`),
   backupVault: async () => {
-    const res = await fetch("/api/vault/backup", { method: "POST" });
+    const res = await fetch(apiUrl("/api/vault/backup"), { method: "POST" });
     if (!res.ok) {
       const payload = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(payload.error ?? `Request failed: ${res.status}`);
@@ -745,7 +747,7 @@ export const api = {
     return res.json() as Promise<{ ok: boolean; destination: string }>;
   },
   vaultBackups: async () => {
-    const res = await fetch("/api/vault/backups");
+    const res = await fetch(apiUrl("/api/vault/backups"));
     if (!res.ok) {
       const payload = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(payload.error ?? `Request failed: ${res.status}`);

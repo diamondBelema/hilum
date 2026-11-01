@@ -8,6 +8,7 @@ import { ActivityRenderer } from "../components/ActivityRenderer.tsx";
 import { Markdown } from "../Markdown.tsx";
 import { buildResponse, initialValues, missingAnswers } from "../lib/activity.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
+import { apiUrl } from "../lib/desktop.ts";
 import { cn } from "../lib/cn.ts";
 import { navigate } from "../lib/router.ts";
 import { Composer } from "../components/Composer.tsx";
@@ -328,7 +329,7 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
     }
   }, [onResume, resuming, sessionId]);
 
-  const endpoint = `${window.location.origin}/mcp`;
+  const endpoint = apiUrl("/mcp");
 
   const totalItems = (session?.transcript.length ?? 0) + optimisticMessages.length;
   const jumpCount = userScrolled ? Math.max(0, totalItems - seenCount) : 0;
