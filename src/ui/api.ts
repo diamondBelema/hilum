@@ -586,6 +586,7 @@ export type ServerSettings = {
   lan: boolean;
   mcpToken: string | null;
   vault: string;
+  configuredVault: string;
   db: string;
   restartRequired?: boolean;
 };

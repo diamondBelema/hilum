@@ -243,6 +243,7 @@ export function createApp(deps: AppDeps = {}) {
       lan: config.lan,
       mcpToken: config.mcpToken,
       vault: config.vaultPath,
+      configuredVault: config.configuredVaultPath ?? config.vaultPath,
       db: config.dbPath,
       agent: sessions.agentState(),
       bindHost: config.lan ? "0.0.0.0" : config.hostname,
