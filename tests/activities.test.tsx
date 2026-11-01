@@ -87,6 +87,20 @@ describe("ActivitySpec", () => {
     ).toThrow(/unknown activity component "model3d".*Available types: flashcard, cloze/);
   });
 
+  test("validates fenced SMILES in activity content", () => {
+    const valid = parseActivitySpec({
+      cites: [CITE],
+      components: [{ type: "theory", prompt: "```smiles\nCCO\n```" }],
+    });
+    expect(valid.components[0]?.type).toBe("theory");
+    expect(() =>
+      parseActivitySpec({
+        cites: [CITE],
+        components: [{ type: "theory", prompt: "```smiles\nnot a molecule\n```" }],
+      }),
+    ).toThrow(/invalid SMILES/);
+  });
+
   test("validates answers and marks objective responses", () => {
     const spec = parseActivitySpec({
       cites: [CITE],
