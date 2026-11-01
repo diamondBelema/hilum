@@ -624,6 +624,10 @@ export class ConceptService {
       const prereqIds = prereqs.get(concept.id) ?? [];
       const prereqReady = prereqIds.every((id) => {
         const prereq = byId.get(id);
+        if (!prereq) {
+          console.warn(`Ignoring missing prerequisite ${id} for concept ${concept.id}`);
+          return true;
+        }
         return prereq
           ? prereq.mastery.state === "understood" || prereq.mastery.state === "mastered"
           : false;
@@ -642,7 +646,9 @@ export class ConceptService {
       if (prereqIds.length === 0) rank += 4;
       if (examDays !== null && examDays <= 42) rank += Math.max(0, (42 - examDays) / 3);
       let reason = "Prerequisites done";
-      if (concept.mastery.overdue) {
+      if (concept.status === "proposed") {
+        reason = "Unreviewed concept";
+      } else if (concept.mastery.overdue) {
         reason = `Review due${concept.mastery.decayDueAt ? `, ${Math.max(1, Math.round((Date.now() - concept.mastery.decayDueAt) / DAY))} days overdue` : ""}`;
       } else if (recentErrors > 0) {
         reason = `${recentErrors} ${recentErrors === 1 ? "miss" : "misses"} in the last week`;

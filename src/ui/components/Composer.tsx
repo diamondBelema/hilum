@@ -1,7 +1,7 @@
 import { uuid } from "../lib/uuid.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, BookOpen, GraduationCap, ListChecks, Loader2, RotateCcw } from "lucide-react";
-import type { Course } from "../api.ts";
+import type { Course, Goal } from "../api.ts";
 import { api } from "../api.ts";
 import { Button } from "./Button.tsx";
 import { CoursePicker } from "./CoursePicker.tsx";
@@ -14,6 +14,8 @@ export type ComposerIntent =
   | { kind: "need-course"; message: string }
   | { kind: "empty" }
   | { kind: "start"; goal: string };
+
+type StartOptions = { goalId?: string; timeBoxMin?: number | null };
 
 export function startIntent(
   goal: string,
@@ -61,7 +63,7 @@ export function Composer({
 }: {
   view: ComposerView;
   courses: Course[];
-  onStart?: (course: Course, goal: string) => void;
+  onStart?: (course: Course, goal: string, options?: StartOptions) => void;
   currentCourse?: Course | null;
   /** Course code, used when the full Course object has not loaded yet. */
   sessionCourseCode?: string;
@@ -80,6 +82,9 @@ export function Composer({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [homeMode, setHomeMode] = useState<ComposerMode>("teach");
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [selectedGoalId, setSelectedGoalId] = useState("");
+  const [timeBoxMin, setTimeBoxMin] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
   const storageKey = draftKey ? `hilum:draft:${draftKey}` : null;
@@ -93,6 +98,22 @@ export function Composer({
 
   useEffect(() => {
     if (view === "home" && selectedCourse) writeLastCourse(selectedCourse.code);
+  }, [view, selectedCourse]);
+
+  useEffect(() => {
+    if (view !== "home" || !selectedCourse) return;
+    let cancelled = false;
+    void api.goals(selectedCourse.code).then((items) => {
+      if (cancelled) return;
+      setGoals(items.filter((item) => item.status === "active"));
+      setSelectedGoalId((current) => current && items.some((item) => item.id === current) ? current : items[0]?.id ?? "");
+    }).catch(() => {
+      if (!cancelled) {
+        setGoals([]);
+        setSelectedGoalId("");
+      }
+    });
+    return () => { cancelled = true; };
   }, [view, selectedCourse]);
 
   // Restore a saved draft once per key; persist on change; empty removes it.
@@ -149,7 +170,10 @@ export function Composer({
       if (intent.kind === "empty") return;
       setDraft("");
       try {
-        await onStart?.(selectedCourse!, intent.goal);
+        await onStart?.(selectedCourse!, intent.goal, {
+          goalId: selectedGoalId || undefined,
+          timeBoxMin,
+        });
       } catch (err) {
         setDraft(text);
         setSendError(err instanceof Error ? err.message : "Could not start the session. Try again.");
@@ -164,7 +188,7 @@ export function Composer({
       setDraft(text);
       setSendError(err instanceof Error ? err.message : "Message not sent. Your text is back in the box.");
     }
-  }, [draft, sending, view, courses, selectedCourse, homeMode, onStart, onSend]);
+  }, [draft, sending, view, courses, selectedCourse, homeMode, onStart, onSend, selectedGoalId, timeBoxMin]);
 
   if (view === "session" && ended) {
     return (
@@ -251,6 +275,28 @@ export function Composer({
                   ]}
                   className="shrink-0"
                 />
+                {goals.length > 0 && (
+                  <select
+                    aria-label="Study goal"
+                    value={selectedGoalId}
+                    onChange={(event) => setSelectedGoalId(event.target.value)}
+                    className="min-h-11 max-w-[190px] rounded-chip border border-border-subtle bg-surface px-2.5 type-meta text-text"
+                  >
+                    <option value="">No goal</option>
+                    {goals.map((goal) => <option key={goal.id} value={goal.id}>{goal.title}</option>)}
+                  </select>
+                )}
+                <select
+                  aria-label="Session time box"
+                  value={timeBoxMin ?? ""}
+                  onChange={(event) => setTimeBoxMin(event.target.value ? Number(event.target.value) : null)}
+                  className="min-h-11 rounded-chip border border-border-subtle bg-surface px-2.5 type-meta text-text"
+                >
+                  <option value="">No time box</option>
+                  <option value="25">25 min</option>
+                  <option value="45">45 min</option>
+                  <option value="60">60 min</option>
+                </select>
               </>
             ) : (
               <>

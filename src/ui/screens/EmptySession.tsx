@@ -1,6 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Clock } from "lucide-react";
-import type { Course, SessionSummary } from "../api.ts";
+import { api, type Course, type SessionSummary, type Task } from "../api.ts";
 import { Composer } from "../components/Composer.tsx";
 import { Link } from "../lib/router.ts";
 import { cn } from "../lib/cn.ts";
@@ -9,7 +9,7 @@ type EmptySessionProps = {
   courses: Course[];
   sessions: SessionSummary[];
   activeSessionId: string | null;
-  onNewSession: (course: Course | null, goal?: string) => void;
+  onNewSession: (course: Course | null, goal?: string, options?: { goalId?: string; timeBoxMin?: number | null }) => void;
 };
 
 export function EmptySession({
@@ -18,9 +18,26 @@ export function EmptySession({
   onNewSession,
 }: EmptySessionProps) {
   const recent = sessions.slice(0, 3);
+  const [dueTasks, setDueTasks] = useState<Task[]>([]);
+  const [taskError, setTaskError] = useState<string | null>(null);
+
+  const loadTasks = useCallback(() => {
+    if (courses.length === 0) return;
+    const today = new Date().toISOString().slice(0, 10);
+    void Promise.all(courses.map((course) => api.tasks(course.code, "open")))
+      .then((lists) => {
+        setDueTasks(lists.flat().filter((task) => task.due_date === today));
+        setTaskError(null);
+      })
+      .catch((err: unknown) => setTaskError(err instanceof Error ? err.message : String(err)));
+  }, [courses]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
   const start = useCallback(
-    (course: Course, goal: string) => {
-      void onNewSession(course, goal);
+    (course: Course, goal: string, options?: { goalId?: string; timeBoxMin?: number | null }) => {
+      void onNewSession(course, goal, options);
     },
     [onNewSession],
   );
@@ -38,8 +55,36 @@ export function EmptySession({
           <Composer
             view="home"
             courses={courses}
-            onStart={(course, goal) => void start(course, goal)}
+            onStart={(course, goal, options) => void start(course, goal, options)}
           />
+
+          {dueTasks.length > 0 && (
+            <section className="mt-6 rounded-panel border border-border-subtle bg-surface p-4">
+              <h2 className="type-heading text-text">Due today</h2>
+              <ul className="mt-3 space-y-2">
+                {dueTasks.map((task) => (
+                  <li key={task.id} className="flex items-center justify-between gap-3 rounded-control border border-border-subtle px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="type-body-sm truncate text-text">{task.title}</p>
+                      <p className="type-meta text-text-muted">{task.course} · {task.kind}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="min-h-11 shrink-0 rounded-control border border-border-strong px-3 type-body-sm font-medium text-text hover:bg-surface-2"
+                      onClick={() => {
+                        void api.updateTask(task.id, { status: "done" }).then(loadTasks).catch((err: unknown) => {
+                          setTaskError(err instanceof Error ? err.message : String(err));
+                        });
+                      }}
+                    >
+                      Done
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {taskError && <p className="type-meta mt-2 text-incorrect" role="alert">{taskError}</p>}
 
           {recent.length > 0 && (
             <section className="mt-6 border-t border-border-subtle pt-4">

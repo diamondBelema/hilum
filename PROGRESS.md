@@ -410,4 +410,14 @@ Append-only log. Newest entry at the bottom.
 
 - `bun run verify` passes: typecheck clean, 113 tests pass, smoke ok, all 9 e2e specs pass.
 
+## 2026-11-01 — Documentation reconciliation
+
+- Added `CURRENT_STATUS.md` as the current implementation summary, separating
+  present behavior from historical audit and milestone records.
+- Updated `README.md` with the current MCP surface, teaching-guide workflow,
+  goals/plans/tasks/pacing behavior, and current validation commands.
+- Updated `SPEC.md` to identify implemented prompts/tools and explicitly mark
+  `teach_topic`, `write_exam_questions`, and `harness://protocol` as planned
+  rather than silently presenting them as available.
+- `AGENTS.md` remains the detailed agent-facing teaching playbook.
 

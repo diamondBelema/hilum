@@ -12,13 +12,13 @@ export class CitationError extends Error {
   }
 }
 
-type Section = { id: string; start: number; end: number; text: string };
+type Section = { id: string; title: string; level: number; start: number; end: number; text: string };
 
 const HEADING = /^(#{1,6})\s+(.+?)\s*$/;
 
 function sections(body: string): Section[] {
   const lines = body.split("\n");
-  const heads: { id: string; start: number; level: number; line: number }[] = [];
+  const heads: { id: string; title: string; start: number; level: number }[] = [];
   let offset = 0;
   let fenced = false;
 
@@ -32,9 +32,9 @@ function sections(body: string): Section[] {
       const title = explicit ? raw.replace(/\s*\{#[\w-]+\}\s*$/, "") : raw;
       heads.push({
         id: explicit?.[1] ?? slug(title),
+        title,
         start: offset,
         level: (match[1] ?? "#").length,
-        line: index,
       });
     }
     offset += line.length + 1;
@@ -50,11 +50,19 @@ function sections(body: string): Section[] {
     }
     return {
       id: head.id,
+      title: head.title,
+      level: head.level,
       start: head.start,
       end,
       text: body.slice(head.start, end),
     };
   });
+}
+
+export function listSections(body: string, levels = [2, 3]): { id: string; title: string; level: number }[] {
+  return sections(body)
+    .filter((section) => levels.includes(section.level))
+    .map(({ id, title, level }) => ({ id, title, level }));
 }
 
 export function normalizeQuote(value: string): string {

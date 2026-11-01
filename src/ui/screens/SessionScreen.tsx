@@ -1,7 +1,7 @@
 import { ArrowRight, Check, Copy, MessageCircle, Network, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "../lib/router.ts";
-import { api, type Course, type SessionDetail, type SessionActivity, type Cite, type ActivitySpec } from "../api.ts";
+import { api, type Course, type SessionDetail, type SessionActivity, type Cite, type ActivitySpec, type Pacing } from "../api.ts";
 import { Button } from "../components/Button.tsx";
 import { Banner } from "../components/ui.tsx";
 import { ActivityRenderer } from "../components/ActivityRenderer.tsx";
@@ -68,6 +68,9 @@ function classifyError(err: unknown): { message: string; isNotFound: boolean; is
 
 export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScreenProps) {
   const [session, setSession] = useState<SessionDetail | null>(null);
+  const [pacing, setPacing] = useState<Pacing | null>(null);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  const [nudgeBusy, setNudgeBusy] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ message: string; isNotFound: boolean; isNetwork: boolean } | null>(null);
@@ -136,6 +139,57 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
       cancelled = true;
     };
   }, [sessionId, tabId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => {
+      void api.pacing(sessionId).then((value) => {
+        if (!cancelled) setPacing(value);
+      }).catch(() => {
+        if (!cancelled) setPacing(null);
+      });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [sessionId]);
+
+  useEffect(() => {
+    setNudgeDismissed(false);
+  }, [pacing?.active_item?.id]);
+
+  const handleNudge = async (action: "move_on" | "more_time" | "simplify") => {
+    if (!pacing?.active_item || nudgeBusy) return;
+    setNudgeBusy(true);
+    try {
+      if (action === "move_on") {
+        await api.updatePlanItem(pacing.active_item.id, { status: "deferred", partial: true });
+        if (pacing.goal && session) {
+          await api.createTask({
+            course: session.course,
+            goal_id: pacing.goal.id,
+            plan_item_id: pacing.active_item.id,
+            title: `Revisit: ${pacing.active_item.title}`,
+            kind: "revisit",
+          });
+        }
+      } else if (action === "simplify") {
+        await api.askAgent(sessionId, `Simplify the current plan item "${pacing.active_item.title}" so we can make progress without silently cutting the goal.`);
+      }
+      setNudgeDismissed(true);
+      if (action === "move_on") {
+        const next = await api.pacing(sessionId);
+        setPacing(next);
+      }
+    } catch (err) {
+      setError(classifyError(err));
+    } finally {
+      setNudgeBusy(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -419,6 +473,34 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
 
   return (
     <div className="relative h-full w-full flex flex-col overflow-hidden bg-bg">
+      {pacing && (
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border-subtle bg-surface px-3 py-2 sm:px-4">
+          <div className="min-w-0">
+            <p className="type-meta text-text-muted">
+              {pacing.active_item ? `Current: ${pacing.active_item.title}` : pacing.goal ? pacing.goal.title : "Session"}
+            </p>
+            <p className="type-body-sm text-text">
+              {pacing.active_item
+                ? `${pacing.active_item.elapsed_min} min · ${pacing.active_item.est_min_range[0]}-${pacing.active_item.est_min_range[1]} min`
+                : `${pacing.plan.done}/${pacing.plan.total} plan items done`}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 type-meta text-text-muted">
+            {pacing.goal?.days_left !== null && pacing.goal && <span>{pacing.goal.days_left} days left</span>}
+            {pacing.session.time_box_min !== null && (
+              <span>{pacing.session.remaining_min} min left</span>
+            )}
+            {pacing.active_item?.nudge === "over_estimate" && !nudgeDismissed && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-chip bg-warning-soft px-2 py-1 text-warning">Taking longer than planned</span>
+                <Button size="xs" variant="outline" loading={nudgeBusy} onClick={() => void handleNudge("move_on")}>Move on</Button>
+                <Button size="xs" variant="ghost" disabled={nudgeBusy} onClick={() => void handleNudge("more_time")}>10 more minutes</Button>
+                <Button size="xs" variant="ghost" disabled={nudgeBusy} onClick={() => void handleNudge("simplify")}>Simplify</Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {session && sessionConcepts.length > 0 && (
         <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border-subtle bg-bg px-3 py-2 sm:px-4">
           <Button
