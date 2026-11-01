@@ -18,6 +18,7 @@ import { subscribeHarnessEvents } from "../lib/events.ts";
 import { Sheet } from "../components/Sheet.tsx";
 import { cn } from "../lib/cn.ts";
 import { graphHref, navigate, questionsHref, useRoute } from "../lib/router.ts";
+import { readPersisted, writePersisted } from "../lib/persistedState.ts";
 
 type Mode = "neighborhood" | "overview" | "tree" | "frontier";
 
@@ -51,17 +52,24 @@ export function GraphScreen({
   const graphParams = new URLSearchParams(window.location.search);
   const requestedCourse = graphParams.get("course");
   const requestedConcept = graphParams.get("concept");
+  const saved = readPersisted<{
+    courseCode?: string;
+    mode?: Mode;
+    search?: string;
+  }>("hilum:graph-state", {});
   const routeSessionId =
     route.name === "session" ? route.id : undefined;
   const [courseCode, setCourseCode] = useState(
     requestedCourse && courses.some((course) => course.code === requestedCourse)
       ? requestedCourse
-      : defaultCourse(courses, "concepts"),
+      : saved.courseCode && courses.some((course) => course.code === saved.courseCode)
+        ? saved.courseCode
+        : defaultCourse(courses, "concepts"),
   );
-  const [mode, setMode] = useState<Mode>("neighborhood");
+  const [mode, setMode] = useState<Mode>(saved.mode ?? "neighborhood");
   const [rootId, setRootId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(saved.search ?? "");
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [view, setView] = useState<{ nodes: ConceptSummary[]; edges: { from: string; to: string; type: string }[] } | null>(null);
   const [tree, setTree] = useState<ConceptNode[] | null>(null);
@@ -92,10 +100,16 @@ export function GraphScreen({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
+    if (courseCode) writePersisted("hilum:graph-state", { courseCode, mode, search });
+  }, [courseCode, mode, search]);
+
+  useEffect(() => {
     if (!courseCode && courses[0]) {
       setCourseCode(
         requestedCourse && courses.some((course) => course.code === requestedCourse)
           ? requestedCourse
+          : saved.courseCode && courses.some((course) => course.code === saved.courseCode)
+            ? saved.courseCode
           : defaultCourse(courses, "concepts"),
       );
     }
@@ -105,7 +119,6 @@ export function GraphScreen({
     setRootId(null);
     setSelectedId(null);
     setDetail(null);
-    setSearch("");
     setFocusNodeId(null);
     setView(null);
     setTree(null);
@@ -309,7 +322,7 @@ export function GraphScreen({
   }
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-bg">
       {/* Top overlay */}
       <div className="absolute inset-x-0 top-0 z-20 p-3 sm:p-4">
         <div className="mx-auto flex max-w-6xl flex-wrap items-end gap-3 rounded-panel border border-border-subtle bg-surface/95 p-3 shadow-popover">
