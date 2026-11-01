@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./tokens.css";
+@import "katex/dist/katex.min.css";
 
 /* Variable faces, Latin subset only. We deliberately point at the package's
    Latin WOFF2 files instead of its index.css, which would bundle Cyrillic,
@@ -271,6 +272,34 @@
 .markdown pre code {
   background: none;
   padding: 0;
+}
+
+.markdown .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+}
+
+.markdown .katex-error,
+.markdown .smiles-error {
+  color: var(--warning);
+}
+
+.markdown pre:has(.smiles-block) {
+  text-align: center;
+}
+
+.markdown .smiles-block {
+  display: block;
+  overflow-x: auto;
+  color: var(--text);
+}
+
+.markdown .smiles-block svg {
+  display: block;
+  width: min(100%, 28rem);
+  min-height: 8rem;
+  margin: 0 auto;
 }
 
 .markdown table {

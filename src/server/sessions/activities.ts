@@ -1,4 +1,5 @@
 import { z } from "zod";
+import SmilesDrawer from "smiles-drawer";
 
 export const ACTIVITY_TYPES = [
   "flashcard",
@@ -308,6 +309,30 @@ export type ActivityResponse = {
   think_aloud?: string;
 };
 
+export function validateSmilesBlocks(value: unknown): void {
+  if (typeof value === "string") {
+    const blocks = /```smiles[^\r\n]*\r?\n([\s\S]*?)```/gi;
+    for (const match of value.matchAll(blocks)) {
+      const smiles = match[1]?.trim() ?? "";
+      if (!smiles) throw new ActivitySpecError("smiles code block must not be empty");
+      try {
+        SmilesDrawer.Parser.parse(smiles);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "invalid SMILES";
+        throw new ActivitySpecError(`invalid SMILES "${smiles}": ${message}`);
+      }
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) validateSmilesBlocks(item);
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value)) validateSmilesBlocks(item);
+  }
+}
+
 export function parseActivitySpec(input: unknown): ActivitySpec {
   if (!input || typeof input !== "object") {
     throw new ActivitySpecError("ActivitySpec must be an object");
@@ -328,6 +353,7 @@ export function parseActivitySpec(input: unknown): ActivitySpec {
     const first = parsed.error.issues[0];
     throw new ActivitySpecError(`${first?.path.join(".") || "spec"}: ${first?.message ?? "invalid ActivitySpec"}`);
   }
+  validateSmilesBlocks(parsed.data);
   for (const component of parsed.data.components) {
     if (component.type === "cloze" && clozeAnswers(component.text).length === 0) {
       throw new ActivitySpecError("cloze needs at least one {{blank}}");

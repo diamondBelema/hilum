@@ -1,5 +1,10 @@
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import "katex/contrib/mhchem";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import SmilesDrawer from "smiles-drawer";
 import { slug } from "./lib/markdown.ts";
 
 type Props = {
@@ -104,9 +109,19 @@ export function Markdown({ body, notePath, onZoomImage }: Props) {
   return (
     <div className="markdown leading-[inherit]">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHeadingIds]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[
+          rehypeHeadingIds,
+          [rehypeKatex, { errorColor: "var(--warning)", strict: "ignore" }],
+        ]}
         components={{
+          code: ({ className, children }) => {
+            const language = /language-(\w+)/.exec(className ?? "")?.[1];
+            if (language !== "smiles") {
+              return <code className={className}>{children}</code>;
+            }
+            return <SmilesBlock value={String(children).replace(/\n$/, "")} />;
+          },
           img: ({ src, alt }) => {
             if (!src) return null;
             const resolved = resolveImageSrc(src, notePath);
@@ -138,5 +153,57 @@ export function Markdown({ body, notePath, onZoomImage }: Props) {
         {encodeDestinations(body)}
       </ReactMarkdown>
     </div>
+  );
+}
+
+function SmilesBlock({ value }: { value: string }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    const readTheme = () =>
+      document.documentElement.dataset.theme === "dark" ||
+      (!document.documentElement.dataset.theme && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    const updateTheme = () => setDark(readTheme());
+    updateTheme();
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    media.addEventListener("change", updateTheme);
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => {
+      media.removeEventListener("change", updateTheme);
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const target = svgRef.current;
+    if (!target) return;
+    setError(null);
+    try {
+      SmilesDrawer.parse(
+        value,
+        (graph) => {
+          if (!svgRef.current) return;
+          new SmilesDrawer.SvgDrawer({}).draw(graph, svgRef.current, dark ? "dark" : "light");
+        },
+        (parseError) => setError(parseError.message || "Invalid SMILES"),
+      );
+    } catch (parseError) {
+      setError(parseError instanceof Error ? parseError.message : "Invalid SMILES");
+    }
+  }, [value, dark]);
+
+  return (
+    <span className="smiles-block" aria-label={`Skeletal structure for ${value}`}>
+      {error ? (
+        <span className="smiles-error" role="alert">
+          Could not render SMILES: {error}
+        </span>
+      ) : (
+        <svg ref={svgRef} role="img" aria-label={`Skeletal structure for ${value}`} />
+      )}
+    </span>
   );
 }
