@@ -48,7 +48,7 @@ export function Notes({
   const list = results ?? notes;
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="min-w-0 truncate type-title">{course ? course.title : "Notes"}</h1>
         {course && (

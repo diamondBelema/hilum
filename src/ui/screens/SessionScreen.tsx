@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Copy, MessageCircle } from "lucide-react";
+import { ArrowRight, Check, Copy, MessageCircle, Network, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "../lib/router.ts";
 import { api, type Course, type SessionDetail, type SessionActivity, type Cite, type ActivitySpec } from "../api.ts";
@@ -9,8 +9,10 @@ import { Markdown } from "../Markdown.tsx";
 import { buildResponse, initialValues, missingAnswers } from "../lib/activity.ts";
 import { subscribeHarnessEvents } from "../lib/events.ts";
 import { cn } from "../lib/cn.ts";
-import { graphHref, navigate } from "../lib/router.ts";
+import { navigate } from "../lib/router.ts";
 import { Composer } from "../components/Composer.tsx";
+import { GraphCanvas } from "../components/GraphCanvas.tsx";
+import type { ConceptSummary } from "../api.ts";
 
 const INTERACTIVE_TYPES = new Set([
   "mcq_single",
@@ -78,6 +80,14 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
     evidenceCount: number;
     correctCount: number;
   }>>([]);
+  const [graphOpen, setGraphOpen] = useState(false);
+  const [graphFocusId, setGraphFocusId] = useState<string | null>(null);
+  const [graphData, setGraphData] = useState<{
+    nodes: ConceptSummary[];
+    edges: { from: string; to: string; type: string }[];
+  } | null>(null);
+  const [graphSize, setGraphSize] = useState({ width: 0, height: 0 });
+  const graphContainerRef = useRef<HTMLDivElement>(null);
 
   const [valuesByActivity, setValuesByActivity] = useState<Record<string, unknown[]>>({});
   const valuesRef = useRef<Record<string, unknown[]>>({});
@@ -161,6 +171,33 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
     });
     return unsubscribe;
   }, [session?.id]);
+
+  useEffect(() => {
+    if (!graphOpen || !session?.course) return;
+    let cancelled = false;
+    api
+      .graph(session.course)
+      .then((data) => {
+        if (!cancelled) setGraphData(data);
+      })
+      .catch(() => {
+        if (!cancelled) setGraphData(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [graphOpen, session?.course]);
+
+  useEffect(() => {
+    if (!graphOpen) return;
+    const element = graphContainerRef.current;
+    if (!element) return;
+    const resize = () => setGraphSize({ width: element.clientWidth, height: element.clientHeight });
+    const observer = new ResizeObserver(resize);
+    observer.observe(element);
+    resize();
+    return () => observer.disconnect();
+  }, [graphOpen]);
 
   const initValues = (detail: SessionDetail) => {
     setValuesByActivity((current) => {
@@ -403,19 +440,29 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
                 </Banner>
               )}
               {sessionConcepts.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setGraphFocusId(null);
+                      setGraphOpen(true);
+                    }}
+                  >
+                    <Network aria-hidden="true" className="size-4" />
+                    Open map
+                  </Button>
                   {sessionConcepts.map((concept) => (
                     <button
                       key={concept.id}
                       type="button"
-                      onClick={() =>
-                        navigate(
-                          graphHref(concept.course, concept.id),
-                        )
-                      }
+                      onClick={() => {
+                        setGraphFocusId(concept.id);
+                        setGraphOpen(true);
+                      }}
                       className="min-h-11 rounded-chip border border-border-subtle bg-surface px-3 type-body-sm text-text hover:border-primary hover:bg-primary-soft"
                     >
-                      Graph: {concept.title}
+                      {concept.title}
                     </button>
                   ))}
                 </div>
@@ -678,6 +725,45 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
             draftKey={`session:${sessionId}`}
           />
         </div>
+      )}
+
+      {graphOpen && (
+        <aside className="absolute inset-y-3 right-3 z-30 flex w-[min(42rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-panel border border-border-subtle bg-surface shadow-popover">
+          <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border-subtle px-4">
+            <div className="min-w-0">
+              <p className="type-body-sm font-semibold text-text">Session map</p>
+              <p className="type-meta text-text-muted">Connections from this session are highlighted.</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close session map"
+              onClick={() => setGraphOpen(false)}
+            >
+              <X aria-hidden="true" className="size-5" />
+            </Button>
+          </div>
+          <div ref={graphContainerRef} className="relative min-h-0 flex-1">
+            {graphData && graphSize.width > 0 && graphSize.height > 0 ? (
+              <GraphCanvas
+                nodes={graphData.nodes}
+                edges={graphData.edges}
+                width={graphSize.width}
+                height={graphSize.height}
+                course={session?.course}
+                sessionId={sessionId}
+                sessionConceptIds={new Set(sessionConcepts.map((concept) => concept.id))}
+                focusNodeId={graphFocusId}
+                selectedId={graphFocusId}
+                onNodeSelect={(id) => setGraphFocusId(id)}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center p-6 type-body-sm text-text-muted">
+                Loading session map…
+              </div>
+            )}
+          </div>
+        </aside>
       )}
 
       {!userScrolled || jumpCount === 0 ? null : (

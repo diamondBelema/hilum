@@ -1,6 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import {
-  ArrowLeft,
   ArrowRight,
   AlertTriangle,
   BarChart3,
@@ -24,7 +23,7 @@ import { SegmentedControl } from "./components/SegmentedControl.tsx";
 import { DesignGallery } from "./screens/DesignGallery.tsx";
 import { EmptySession } from "./screens/EmptySession.tsx";
 import { SessionScreen } from "./screens/SessionScreen.tsx";
-import { graphHref, Link, navigate, useRoute, type Route } from "./lib/router.ts";
+import { graphHref, Link, navigate, goBack, useRoute, type Route } from "./lib/router.ts";
 import { cn } from "./lib/cn.ts";
 import { chooseInitialCourse, readLastCourse } from "./components/CoursePicker.tsx";
 import { useTheme, type Theme, useReaderPrefs } from "./theme.ts";
@@ -47,7 +46,6 @@ const NotesLazy = lazy(() => import("./screens/Notes.tsx").then((mod) => ({ defa
 const ReaderLazy = lazy(() => import("./screens/Reader.tsx").then((mod) => ({ default: mod.Reader }))) as React.ComponentType<{
   note: { path: string; title: string; summary: string; tags: string[]; frontmatter: Record<string, unknown>; body: string } | null;
   course: Course | null;
-  onBack: () => void;
   onOpenNote: (path: string, anchor?: string) => void;
   onEditNote?: (path: string) => void;
   onDeleteNote?: (path: string) => void;
@@ -418,7 +416,7 @@ function LibraryScreen({
   const view = (
     <Suspense fallback={<p className="type-body-sm text-text-muted">Loading…</p>}>
       {section === "notes" && editing ? (
-        <div className="mx-auto max-w-5xl">
+        <div className="w-full">
           <EditorLazy
             course={courses.find((item) => item.code === requestedCourse) ?? courses.find((item) => item.code === notePath?.split("/")[1]) ?? selectedCourse}
             notePath={notePath}
@@ -426,11 +424,15 @@ function LibraryScreen({
           />
         </div>
       ) : section === "notes" && notePath ? (
-        <div className="mx-auto max-w-5xl">
-          <ReaderRoute path={notePath} anchor={noteAnchor} courses={courses} onBack={() => navigate("/library/notes")} />
+        <div className="w-full">
+          <ReaderRoute
+            path={notePath}
+            anchor={noteAnchor}
+            courses={courses}
+          />
         </div>
       ) : section === "notes" ? (
-        <div className="mx-auto max-w-5xl">
+        <div className="w-full">
           <NotesRoute courses={courses} selectedCourse={selectedCourse} setSelectedCourse={setSelectedCourse} />
         </div>
       ) : section === "exams" ? (
@@ -438,11 +440,11 @@ function LibraryScreen({
           <PapersRoute courses={courses} />
         </div>
       ) : section === "questions" ? (
-        <div className="mx-auto max-w-5xl">
+        <div className="w-full">
           <QuestionsRoute courses={courses} />
         </div>
       ) : section === "progress" ? (
-        <div className="mx-auto max-w-5xl">
+        <div className="w-full">
           <ProgressRoute courses={courses} onNewSession={onNewSession} />
         </div>
       ) : section === "graph" ? (
@@ -459,18 +461,9 @@ function LibraryScreen({
     </Suspense>
   );
   return (
-    <div className={cn("w-full p-4 sm:p-6 lg:p-8", !section && "mx-auto max-w-6xl")}>
+    <div className={cn("w-full p-4 sm:p-6 lg:p-8", section === "graph" && "p-0", !section && "mx-auto max-w-6xl")}>
       {section ? (
-        <div className="mx-auto max-w-5xl">
-          <Button
-            variant="ghost"
-            className="-ml-2 mb-4 px-2 text-text-muted"
-            onClick={() => navigate("/library")}
-          >
-            <ArrowLeft aria-hidden="true" className="size-4" />
-            <span>Library</span>
-          </Button>
-        </div>
+        <div className="mb-4" aria-hidden="true" />
       ) : (
         <div className="flex items-center gap-2">
           <Library aria-hidden="true" className="size-5 text-primary" />
@@ -638,12 +631,10 @@ function ReaderRoute({
   path,
   anchor,
   courses,
-  onBack,
 }: {
   path: string;
   anchor: string | undefined;
   courses: Course[];
-  onBack: () => void;
 }) {
   const [note, setNote] = useState<{ path: string; title: string; summary: string; tags: string[]; frontmatter: Record<string, unknown>; body: string } | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
@@ -672,7 +663,6 @@ function ReaderRoute({
     <ReaderLazy
       note={note as import("./api.ts").NoteDetail | null}
       course={course}
-      onBack={onBack}
       onOpenNote={(nextPath: string, nextAnchor: string | undefined) =>
         navigate(`/library/notes?path=${encodeURIComponent(nextPath)}${nextAnchor ? `&anchor=${encodeURIComponent(nextAnchor)}` : ""}`)
       }
@@ -680,7 +670,7 @@ function ReaderRoute({
       onDeleteNote={async (nextPath) => {
         if (!window.confirm(`Delete “${note?.title ?? "this note"}”?`)) return;
         await api.deleteNote(nextPath);
-        onBack();
+        goBack("/library/notes");
       }}
     />
   );

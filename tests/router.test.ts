@@ -1,9 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { graphHref, parseRoute, questionsHref } from "../src/ui/lib/router.ts";
+import { graphHref, hasContextBackFrom, parseRoute, questionsHref } from "../src/ui/lib/router.ts";
 import { isPractice, sessionTitle } from "../src/ui/components/Sidebar.tsx";
 import type { SessionSummary } from "../src/ui/api.ts";
 
 describe("router", () => {
+  test("treats the previous route as the source of contextual back navigation", () => {
+    expect(hasContextBackFrom(null)).toBe(false);
+    expect(hasContextBackFrom("/library")).toBe(false);
+    expect(hasContextBackFrom("/library?course=ana-211")).toBe(false);
+    expect(hasContextBackFrom("/library/graph?course=ana-211")).toBe(true);
+    expect(hasContextBackFrom("/sessions/session-1")).toBe(true);
+  });
+
   test("builds stable deep links for graph integrations", () => {
     expect(graphHref("ana-211", "loop of Henle")).toBe(
       "/library/graph?course=ana-211&concept=loop+of+Henle",

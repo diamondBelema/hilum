@@ -144,8 +144,7 @@ export function Questions({ courses }: { courses: Course[] }) {
 
   if (courses.length === 0) {
     return (
-      <div className="max-w-3xl">
-        <h1 className="type-title">Question bank</h1>
+      <div className="w-full">
         <p className="reading mt-1 type-body-sm text-text-muted">
           Browse, verify and review the cited questions used by exam papers.
         </p>
@@ -165,10 +164,9 @@ export function Questions({ courses }: { courses: Course[] }) {
   }
 
   return (
-    <div className={mode === "review" ? "max-w-6xl" : "max-w-4xl"}>
+    <div className="w-full">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="type-title">{mode === "review" ? "Review question" : "Question bank"}</h1>
           <p className="reading mt-1 type-body-sm text-text-muted">
             {mode === "review"
               ? "Check the parsed question against its source, then mark it verified."

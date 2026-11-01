@@ -17,6 +17,13 @@ export type Route =
   | { name: "not-found"; path: string };
 
 const NAVIGATE_EVENT = "hilum:navigate";
+const ROUTE_STATE_KEY = "__hilum";
+
+type RouteState = { __hilum?: { from: string } };
+
+function routePath(value: string): string {
+  return value.split(/[?#]/, 1)[0] || "/";
+}
 
 export function parseRoute(pathname: string): Route {
   const path = pathname.replace(/\/+$/, "") || "/";
@@ -53,9 +60,30 @@ export function useRoute(): Route {
 
 export function navigate(to: string, options: { replace?: boolean } = {}) {
   if (to === `${window.location.pathname}${window.location.search}${window.location.hash}`) return;
-  if (options.replace) window.history.replaceState(null, "", to);
-  else window.history.pushState(null, "", to);
+  const from = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const state: RouteState = { [ROUTE_STATE_KEY]: { from } };
+  if (options.replace) window.history.replaceState(state, "", to);
+  else window.history.pushState(state, "", to);
   window.dispatchEvent(new Event(NAVIGATE_EVENT));
+}
+
+export function previousRoute(): string | null {
+  const state = window.history.state as RouteState | null;
+  return state?.[ROUTE_STATE_KEY]?.from ?? null;
+}
+
+export function goBack(fallback: string): void {
+  if (previousRoute()) window.history.back();
+  else navigate(fallback);
+}
+
+export function hasContextBack(): boolean {
+  return hasContextBackFrom(previousRoute());
+}
+
+export function hasContextBackFrom(previous: string | null): boolean {
+  if (!previous) return false;
+  return routePath(previous) !== "/library" && routePath(previous) !== "/";
 }
 
 export function hrefFor(to: string): string {

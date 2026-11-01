@@ -175,6 +175,8 @@ export function GraphCanvas({
   const rafRef = useRef<number>(0);
   const transformRef = useRef({ k: 1, x: 0, y: 0 });
   const hoveredRef = useRef<string | null>(null);
+  const hoverFrameRef = useRef<number | null>(null);
+  const hoverPhaseRef = useRef(0);
   const selectedRef = useRef<string | null>(null);
   const pinnedRef = useRef<Set<string>>(new Set());
   const dragStartRef = useRef<{ sx: number; sy: number; x: number; y: number } | null>(null);
@@ -358,6 +360,8 @@ export function GraphCanvas({
     const sessionConceptIds = sessionConceptIdsProp ?? new Set<string>();
     const sessionId = sessionIdProp;
     const selectedId = selectedIdProp ?? selectedRef.current;
+    const hoveredId = hoverNode;
+    const activeId = selectedId ?? hoveredId;
 
     // A restrained graph-paper texture makes the canvas feel spatial without
     // competing with labels or the selected concept.
@@ -387,7 +391,7 @@ export function GraphCanvas({
     // --- Edges ---
     const visibleEdges = edgesProp.filter(
       (e) =>
-        (selectedId === null || e.from === selectedId || e.to === selectedId) &&
+        (activeId === null || e.from === activeId || e.to === activeId) &&
         degreeByIdRef.current.has(e.from) &&
         degreeByIdRef.current.has(e.to),
     );
@@ -412,14 +416,16 @@ export function GraphCanvas({
 
       const isSelectedEdge =
         selectedId !== null && (edge.from === selectedId || edge.to === selectedId);
+      const isHoveredEdge =
+        selectedId === null && hoveredId !== null && (edge.from === hoveredId || edge.to === hoveredId);
       const dash = EDGE_DASH[edge.type];
 
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
-      ctx.strokeStyle = isSelectedEdge ? primary : borderStrong;
-      ctx.globalAlpha = isSelectedEdge ? 0.95 : selectedId ? 0.18 : 0.42;
-      ctx.lineWidth = (isSelectedEdge ? 1.8 : 1) / k;
+      ctx.strokeStyle = isSelectedEdge || isHoveredEdge ? primary : borderStrong;
+      ctx.globalAlpha = isSelectedEdge || isHoveredEdge ? 0.95 : selectedId || hoveredId ? 0.12 : 0.42;
+      ctx.lineWidth = (isSelectedEdge || isHoveredEdge ? 1.8 : 1) / k;
       if (dash) ctx.setLineDash(dash.split(" ").map(Number));
       else ctx.setLineDash([]);
       ctx.stroke();
@@ -488,7 +494,6 @@ export function GraphCanvas({
     }
 
     // --- Nodes ---
-    const hoveredId = hoverNode;
     for (const node of nodesProp) {
       const p = nodePos(node.id);
       if (!p) continue;
@@ -497,9 +502,9 @@ export function GraphCanvas({
       const selected = selectedId === node.id;
       const isHovered = hoveredId === node.id;
       const dimmed =
-        selectedId !== null &&
-        selectedId !== node.id &&
-        !isNeighbour(selectedId, node.id) &&
+        activeId !== null &&
+        activeId !== node.id &&
+        !isNeighbour(activeId, node.id) &&
         hoveredId !== node.id;
 
       // Session overlay highlight
@@ -512,7 +517,8 @@ export function GraphCanvas({
         node.status === "proposed";
 
       ctx.save();
-      ctx.translate(p.x, p.y);
+      const shake = isHovered ? Math.sin(hoverPhaseRef.current) * 1.5 : 0;
+      ctx.translate(p.x + shake, p.y);
       ctx.scale(k, k);
 
       if (dimmed) ctx.globalAlpha = 0.12;
@@ -779,6 +785,24 @@ export function GraphCanvas({
   useEffect(() => {
     draw();
   }, [zoom, pan.x, pan.y, nodesProp.length, edgesProp.length, hoverNode]);
+
+  useEffect(() => {
+    if (!hoverNode) {
+      if (hoverFrameRef.current !== null) cancelAnimationFrame(hoverFrameRef.current);
+      hoverFrameRef.current = null;
+      return;
+    }
+    const animate = () => {
+      hoverPhaseRef.current += 0.35;
+      draw();
+      hoverFrameRef.current = requestAnimationFrame(animate);
+    };
+    hoverFrameRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (hoverFrameRef.current !== null) cancelAnimationFrame(hoverFrameRef.current);
+      hoverFrameRef.current = null;
+    };
+  }, [hoverNode]);
 
   // ---------------------------------------------------------------
   // Render

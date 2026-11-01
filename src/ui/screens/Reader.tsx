@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft,
   Edit,
   Keyboard,
   ListTree,
@@ -21,14 +20,12 @@ import { useReaderPrefs, useTheme, type Theme } from "../theme.ts";
 export function Reader({
   note,
   course,
-  onBack,
   onOpenNote,
   onEditNote,
   onDeleteNote,
 }: {
   note: NoteDetail;
   course: Course | null;
-  onBack: () => void;
   onOpenNote: (path: string, anchor?: string) => void;
   onEditNote?: (path: string) => void;
   onDeleteNote?: (path: string) => void;
@@ -48,13 +45,9 @@ export function Reader({
   }, [note.path]);
 
   return (
-    <div className="flex max-w-[1120px] gap-6 px-4 pt-4 pb-24 sm:px-6 lg:px-8">
-      <article className="min-w-0 flex-1 reading">
+    <div className="flex w-full gap-6 px-4 pt-4 pb-24 sm:px-6 lg:px-8">
+      <article className="reader-article min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" className="px-2" onClick={onBack}>
-            <ArrowLeft aria-hidden="true" className="size-5" />
-            <span className="hidden sm:inline">Back</span>
-          </Button>
           <p className="hidden min-w-0 flex-1 truncate type-body-sm sm:block">
             {course ? `${course.title} / ` : ""}
             <span className="type-body">{note.title}</span>
@@ -92,20 +85,18 @@ export function Reader({
           )}
         </div>
 
-        <div className="mt-4" style={{ fontSize: size, lineHeight }}>
-          <h1 className="type-title">{note.title}</h1>
-          {note.summary && (
-            <p className="type-body-sm mt-2 text-text-muted">{note.summary}</p>
-          )}
-          {note.tags.length > 0 && (
-            <ul className="mt-3 flex flex-wrap gap-1.5">
-              {note.tags.map((tag) => (
-                <li key={tag}>
-                  <Chip>{tag}</Chip>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="mt-4 rounded-panel border border-border-subtle bg-surface p-5 sm:p-6" style={{ fontSize: size, lineHeight }}>
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border-subtle pb-5">
+            <div className="min-w-0">
+              <h1 className="type-title">{note.title}</h1>
+              {note.summary && <p className="mt-2 max-w-3xl type-body-sm text-text-muted">{note.summary}</p>}
+            </div>
+            {note.tags.length > 0 && (
+              <ul className="flex max-w-xl flex-wrap justify-end gap-1.5">
+                {note.tags.map((tag) => <li key={tag}><Chip>{tag}</Chip></li>)}
+              </ul>
+            )}
+          </div>
           <div className="mt-6 border-t border-border-subtle pt-3">
             <Markdown
               body={stripLeadingH1(note.body)}
