@@ -28,7 +28,7 @@ import { graphHref, Link, navigate, goBack, useRoute, type Route } from "./lib/r
 import { cn } from "./lib/cn.ts";
 import { chooseInitialCourse, readLastCourse, writeLastCourse } from "./components/CoursePicker.tsx";
 import { useTheme, type Theme, useReaderPrefs } from "./theme.ts";
-import { isDesktopApp, openVaultFolder, pickVaultDirectory } from "./lib/desktop.ts";
+import { apiUrl, isDesktopApp, openVaultFolder, pickVaultDirectory } from "./lib/desktop.ts";
 
 const NotesLazy = lazy(() => import("./screens/Notes.tsx").then((mod) => ({ default: mod.Notes }))) as React.ComponentType<{
   courses: Course[];
@@ -765,7 +765,7 @@ function SettingsScreen() {
   }>>([]);
   const [copied, setCopied] = useState<"endpoint" | "token" | false>(false);
   const [tokenShown, setTokenShown] = useState(false);
-  const endpoint = `${window.location.origin}/mcp`;
+  const endpoint = apiUrl("/mcp");
 
   useEffect(() => {
     let cancelled = false;

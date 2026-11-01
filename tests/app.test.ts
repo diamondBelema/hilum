@@ -5,6 +5,25 @@ import { tmpdir } from "node:os";
 import { createApp } from "../src/server/app.ts";
 
 describe("http api", () => {
+  test("allows the packaged Tauri UI to call the sidecar", async () => {
+    const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: "/tmp/vault" } });
+    const res = await app.request("/api/health", {
+      headers: { origin: "http://tauri.localhost" },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBe("http://tauri.localhost");
+
+    const preflight = await app.request("/api/settings", {
+      method: "OPTIONS",
+      headers: {
+        origin: "http://tauri.localhost",
+        "access-control-request-method": "POST",
+      },
+    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-methods")).toContain("POST");
+  });
+
   test("health reports ok, version, mcp and vault", async () => {
     const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: "/tmp/vault" } });
     const res = await app.request("/api/health");

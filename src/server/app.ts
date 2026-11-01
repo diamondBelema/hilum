@@ -80,6 +80,22 @@ export function createApp(deps: AppDeps = {}) {
   const concepts = new ConceptService(db, vault);
   const app = new Hono();
 
+  app.use("*", async (c, next) => {
+    const origin = c.req.header("origin");
+    if (
+      origin === "http://tauri.localhost" ||
+      origin === "https://tauri.localhost" ||
+      origin === "tauri://localhost"
+    ) {
+      c.header("access-control-allow-origin", origin);
+      c.header("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+      c.header("access-control-allow-headers", "content-type,authorization");
+      c.header("vary", "Origin");
+    }
+    if (c.req.method === "OPTIONS") return c.body(null, 204);
+    await next();
+  });
+
   const requireToken = async (c: Parameters<Parameters<typeof app.use>[1]>[0], next: () => Promise<void>) => {
     if (config.lan && config.mcpToken) {
       const header = c.req.header("authorization") ?? "";
