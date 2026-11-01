@@ -25,7 +25,7 @@ import { EmptySession } from "./screens/EmptySession.tsx";
 import { SessionScreen } from "./screens/SessionScreen.tsx";
 import { graphHref, Link, navigate, goBack, useRoute, type Route } from "./lib/router.ts";
 import { cn } from "./lib/cn.ts";
-import { chooseInitialCourse, readLastCourse } from "./components/CoursePicker.tsx";
+import { chooseInitialCourse, readLastCourse, writeLastCourse } from "./components/CoursePicker.tsx";
 import { useTheme, type Theme, useReaderPrefs } from "./theme.ts";
 import { isDesktopApp, openVaultFolder, pickVaultDirectory } from "./lib/desktop.ts";
 
@@ -281,11 +281,7 @@ function AppShell() {
             />
           )}
           {route.name === "library" && (
-            <LibraryScreen
-              key={window.location.search}
-              section={route.section}
-              onNewSession={createSession}
-            />
+            <LibraryScreen section={route.section} onNewSession={createSession} />
           )}
           {route.name === "settings" && <SettingsScreen />}
           {route.name === "not-found" && (
@@ -461,10 +457,17 @@ function LibraryScreen({
     </Suspense>
   );
   return (
-    <div className={cn("w-full p-4 sm:p-6 lg:p-8", section === "graph" && "p-0", !section && "mx-auto max-w-6xl")}>
-      {section ? (
-        <div className="mb-4" aria-hidden="true" />
-      ) : (
+    <div
+      className={cn(
+        "w-full",
+        section
+          ? section === "graph"
+            ? "p-0"
+            : "px-4 pb-4 pt-0 sm:px-6 sm:pb-6 sm:pt-0 lg:px-8 lg:pb-8 lg:pt-0"
+          : "mx-auto max-w-6xl p-4 sm:p-6 lg:p-8",
+      )}
+    >
+      {!section ? (
         <div className="flex items-center gap-2">
           <Library aria-hidden="true" className="size-5 text-primary" />
           <h1 className="type-title text-text">Library</h1>
@@ -614,7 +617,10 @@ function NotesRoute({
       results={results}
       query={query}
       onQuery={setQuery}
-      onSelectCourse={setSelectedCourse}
+      onSelectCourse={(course) => {
+        writeLastCourse(course.code);
+        setSelectedCourse(course);
+      }}
       onClearCourse={() => setSelectedCourse(null)}
       onOpenNote={(path) => navigate(`/library/notes?path=${encodeURIComponent(path)}`)}
       onNewNote={(course) => {

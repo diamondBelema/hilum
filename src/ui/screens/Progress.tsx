@@ -24,6 +24,7 @@ import { MasteryRing } from "../components/MasteryRing.tsx";
 import { Sheet } from "../components/Sheet.tsx";
 import { Banner, Chip, EmptyState, ProgressBar, Skeleton } from "../components/ui.tsx";
 import { defaultCourse } from "../lib/courses.ts";
+import { readPersisted, writePersisted } from "../lib/persistedState.ts";
 
 const STATE_ORDER = ["unseen", "familiar", "understood", "mastered", "decayed"] as const;
 const STATE_LABELS = {
@@ -45,7 +46,12 @@ export function ProgressScreen({
   onOpenNote: (path: string, anchor?: string) => void;
   onOpenGraph: (course: string, conceptId: string) => void;
 }) {
-  const [courseCode, setCourseCode] = useState(defaultCourse(courses, "concepts"));
+  const [courseCode, setCourseCode] = useState(() => {
+    const saved = readPersisted<string | null>("hilum:progress-course", null);
+    return saved && courses.some((course) => course.code === saved)
+      ? saved
+      : defaultCourse(courses, "concepts");
+  });
   const [tree, setTree] = useState<ConceptNode[]>([]);
   const [snapshot, setSnapshot] = useState<MasterySnapshot | null>(null);
   const [proposed, setProposed] = useState<ConceptSummary[]>([]);
@@ -58,7 +64,18 @@ export function ProgressScreen({
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (!courseCode && courses[0]) setCourseCode(defaultCourse(courses, "concepts"));
+    if (courseCode) writePersisted("hilum:progress-course", courseCode);
+  }, [courseCode]);
+
+  useEffect(() => {
+    if (!courseCode && courses[0]) {
+      const saved = readPersisted<string | null>("hilum:progress-course", null);
+      setCourseCode(
+        saved && courses.some((course) => course.code === saved)
+          ? saved
+          : defaultCourse(courses, "concepts"),
+      );
+    }
   }, [courses, courseCode]);
 
   useEffect(() => {

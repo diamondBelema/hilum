@@ -26,6 +26,7 @@ import { plural } from "../lib/format.ts";
 import { readActiveAttempt } from "../lib/activeAttempt.ts";
 import { defaultCourse } from "../lib/courses.ts";
 import { graphHref, navigate } from "../lib/router.ts";
+import { readPersisted, writePersisted } from "../lib/persistedState.ts";
 import { Papers } from "./Papers.tsx";
 
 const TYPE_LABEL: Record<QuestionType, string> = {
@@ -45,20 +46,33 @@ export function Questions({ courses }: { courses: Course[] }) {
   const params = new URLSearchParams(window.location.search);
   const requestedCourse = params.get("course");
   const requestedQuestion = params.get("q");
+  const saved = readPersisted<{
+    courseCode?: string;
+    mode?: Mode;
+    query?: string;
+    status?: "all" | "verified" | "unverified";
+    type?: "all" | QuestionType;
+  }>("hilum:questions-state", {});
   const [courseCode, setCourseCode] = useState(
     () =>
       (requestedCourse && courses.some((course) => course.code === requestedCourse)
         ? requestedCourse
-        : readActiveAttempt()?.course ?? defaultCourse(courses, "questions")),
+        : saved.courseCode && courses.some((course) => course.code === saved.courseCode)
+          ? saved.courseCode
+          : readActiveAttempt()?.course ?? defaultCourse(courses, "questions")),
   );
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>(() => (readActiveAttempt() ? "papers" : "bank"));
+  const [mode, setMode] = useState<Mode>(() => saved.mode ?? (readActiveAttempt() ? "papers" : "bank"));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [query, setQuery] = useState(() => params.get("q") ?? "");
-  const [status, setStatus] = useState<"all" | "verified" | "unverified">("all");
-  const [type, setType] = useState<"all" | QuestionType>("all");
+  const [query, setQuery] = useState(() => params.get("q") ?? saved.query ?? "");
+  const [status, setStatus] = useState<"all" | "verified" | "unverified">(saved.status ?? "all");
+  const [type, setType] = useState<"all" | QuestionType>(saved.type ?? "all");
+
+  useEffect(() => {
+    if (courseCode) writePersisted("hilum:questions-state", { courseCode, mode, query, status, type });
+  }, [courseCode, mode, query, status, type]);
 
   useEffect(() => {
     if (courseCode) return;
@@ -66,6 +80,8 @@ export function Questions({ courses }: { courses: Course[] }) {
     const next =
       active && courses.some((course) => course.code === active.course)
         ? active.course
+        : saved.courseCode && courses.some((course) => course.code === saved.courseCode)
+          ? saved.courseCode
         : defaultCourse(courses, "questions");
     if (next) setCourseCode(next);
   }, [courses, courseCode]);

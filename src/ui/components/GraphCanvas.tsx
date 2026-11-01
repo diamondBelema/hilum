@@ -214,6 +214,8 @@ export function GraphCanvas({
       (node) => ({
         id: node.id,
         radius: radiusForNode(node, degreeByIdRef.current),
+        x: width / 2,
+        y: height / 2,
         fx: undefined,
         fy: undefined,
       }),

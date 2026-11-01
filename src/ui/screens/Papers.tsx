@@ -170,10 +170,6 @@ export function Papers({ course, onBack }: { course: Course; onBack: () => void 
     <div className="w-full">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Button variant="ghost" className="-ml-2 mb-1 px-2 text-text-muted" onClick={onBack}>
-            <ChevronLeft aria-hidden="true" className="size-4" />
-            <span>Question bank</span>
-          </Button>
           <p className="reading mt-1 type-body-sm text-text-muted">
             {course.title} · built only from verified, cited questions.
           </p>
