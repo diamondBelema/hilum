@@ -2,7 +2,12 @@
 
 Local-first study and exam-simulation app for medical students. A markdown vault is the
 source of truth; an MCP server exposes notes, questions, exams, grading, live teaching
-sessions and the knowledge graph. The app makes zero external network requests at runtime.
+sessions, goals and the knowledge graph. The app is designed to make zero external
+network requests at runtime.
+
+**Current implementation status:** see [`CURRENT_STATUS.md`](CURRENT_STATUS.md).
+Historical milestone and audit evidence remains in `PROGRESS.md`, `STATUS.md`, and
+[`docs/ui-audit/`](docs/ui-audit/).
 
 ## Requirements
 
@@ -32,7 +37,7 @@ Builds the UI on first run, then serves the app and the MCP endpoint on
 | --- | --- |
 | `bun run start` | Build UI + serve app and MCP on port 4747 |
 | `bun run dev` | Server on 4747 + Vite dev server on 5173 |
-| `bun run verify` | Typecheck + tests + smoke (UI, API, MCP) |
+| `bun run verify` | Typecheck + unit tests + localhost smoke + browser e2e |
 | `bun run test` | Unit tests |
 | `bun run smoke` | Health, UI shell, MCP initialize |
 | `bun run scripts/copy-db.ts` | Daily DB backup to `state/backups/` |
@@ -57,7 +62,7 @@ All optional; defaults are fine for local use.
 | `HARNESS_VAULT` | `./vault` | Vault directory |
 | `HARNESS_DB` | `./state/app.db` | SQLite database |
 | `HARNESS_UPLOADS` | beside the DB | Photo-answer uploads |
-| `HARNESS_MCP_TOKEN` | unset | Reserved; not enforced yet |
+| `HARNESS_MCP_TOKEN` | unset | Bearer token used for LAN MCP access when configured |
 
 ## Vault
 
@@ -112,27 +117,40 @@ One endpoint: `http://127.0.0.1:4747/mcp` (streamable HTTP). Example global conf
 Tool groups:
 
 - **Vault:** `read_note`, `write_note`, `search_notes`, `list_courses`, `get_index`, `list_assets`, `update_course`
-- **Teaching loop:** `session_start`, `push_activity`, `await_response`, `record_evidence`, `get_agent_requests`, `bank_activity`, `session_end`
+- **Teaching guide and loop:** `get_teaching_guide`, `session_start`, `get_active_session`, `get_session`, `push_activity`, `await_response`, `say`, `record_evidence`, `get_agent_requests`, `bank_activity`, `session_end`, `set_session_title`
 - **Concepts:** `find_concepts`, `add_concept`, `update_concept`, `link_concepts`, `get_concept`, `get_graph`, `get_mastery`, `get_next_concepts`, `get_weak_topics`, `record_real_result`
-- **Questions and exams:** `add_questions`, `import_past_paper`, `list_questions`, `get_question`, `verify_question`, `create_paper`, `list_papers`, `get_paper`, `get_attempt_results`
+- **Questions and exams:** `add_questions`, `import_past_paper`, `list_questions`, `get_question`, `update_question`, `verify_question`, `create_paper`, `list_papers`, `get_paper`, `get_attempt_results`
 - **Grading:** `get_pending_grading`, `submit_grade`
+- **Goals, plans, tasks and pacing:** `get_goal`, `update_goal`, `propose_plan`, `update_plan_item`, `propose_plan_change`, `get_coverage`, `get_pacing`, `add_task`, `update_task`, `list_tasks`
 
 Prompts: `run_session(course)`, `grade_theory_answer(answer_id)`, `exam_debrief(attempt_id)`.
+The full teaching playbook is available through `get_teaching_guide` and is
+also stored in the repository root as `AGENTS.md`.
 
 ## Start a teaching session
 
 1. `bun run start` and open `http://127.0.0.1:4747`.
 2. Add cited concepts (MCP `add_concept` or the Progress screen).
-3. Study tab → the frontier shows what to study next and what is due for review.
-4. Click **Study this** to open a live session; the agent drives activities via MCP
-   while you answer.
-5. End the session (`session_end`); mastery updates from evidence automatically.
+3. Optionally create a goal in **Plan**, set its deadline/daily study minutes, and
+   approve the generated draft plan.
+4. Study tab → the frontier and due reviews show what to study next. Choose a goal
+   and optional 25/45/60-minute time box when starting a session.
+5. The agent calls `get_active_session`, reads `AGENTS.md` through
+   `get_teaching_guide` when needed, and drives cited activities via MCP while you
+   answer.
+6. Pacing, coverage, carry-over, and task completion are calculated by the server.
+   The agent can propose changes, but the student approves plan changes.
+7. End the session (`session_end`); mastery updates from evidence automatically.
 
 ## Notes
 
 - Concepts, questions and activities cannot be saved without citations that resolve
   against the vault (note + anchor + verbatim quote).
 - Mastery is derived from evidence only; it is never edited by hand.
+- Goal plans are soft proposals. Draft plans and plan changes require explicit
+  student approval/application; the agent must not approve its own changes.
+- Student time is measured from activity creation to answer, capped per activity;
+  agent latency is excluded from pacing.
 - Graph tab: 2-hop neighborhood view by default, overview mode with search; tap a node
   for its definition, citations, evidence timeline and practice bank.
 - Fonts are served locally and the server makes no outbound requests.

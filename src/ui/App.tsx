@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   BarChart3,
   Check,
+  ClipboardList,
   Copy,
   FileText,
   FolderOpen,
@@ -73,6 +74,9 @@ const GraphLazy = lazy(() => import("./screens/Graph.tsx").then((mod) => ({ defa
   courses: Course[];
   onStudy: (course: string, goal: string) => void;
 }>;
+const PlanLazy = lazy(() => import("./screens/Plan.tsx").then((mod) => ({ default: mod.PlanScreen }))) as React.ComponentType<{
+  courses: Course[];
+}>;
 
 export function App() {
   if (location.pathname === "/_design") return <DesignGallery />;
@@ -117,13 +121,13 @@ function AppShell() {
   const activeSessionId = route.name === "session" ? route.id : null;
 
   const createSession = useCallback(
-    async (course: Course | null, goal?: string) => {
+    async (course: Course | null, goal?: string, options?: { goalId?: string; timeBoxMin?: number | null }) => {
       if (!course) {
         navigate("/");
         return;
       }
       try {
-        const created = await api.startSession(course.code, goal ?? "learn");
+        const created = await api.startSession(course.code, goal ?? "learn", options);
         setSessions((previous) => [
           {
             id: created.id,
@@ -374,6 +378,13 @@ const LIBRARY_SECTIONS = [
     icon: BarChart3,
   },
   {
+    slug: "plan",
+    title: "Plan",
+    description: "Set goals, review proposed plans and track coverage.",
+    label: "Direction",
+    icon: ClipboardList,
+  },
+  {
     slug: "graph",
     title: "Graph",
     description: "Explore the relationships between concepts.",
@@ -445,6 +456,10 @@ function LibraryScreen({
         <div className="w-full">
           <ProgressRoute courses={courses} onNewSession={onNewSession} />
         </div>
+        ) : section === "plan" ? (
+          <div className="w-full">
+            <PlanLazy courses={courses} />
+          </div>
       ) : section === "graph" ? (
         <div className="h-full w-full">
             <GraphRoute

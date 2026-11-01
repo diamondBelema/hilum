@@ -226,6 +226,21 @@ describe("mastery", () => {
     expect(opened[0]?.reason).toMatch(/Lecturer flagged|high exam weight/);
   });
 
+  test("ignores dangling prerequisites and labels proposed concepts as unreviewed", async () => {
+    const proposed = await concepts.add({
+      course: "ana-211",
+      id: "ana-211-proposed",
+      title: "Proposed topic",
+      status: "proposed",
+      prerequisites: ["missing-concept"],
+      cites: [CITE],
+      definition: "A proposed topic.",
+    });
+    const next = concepts.next("ana-211", 5);
+    expect(next.map((item) => item.concept.id)).toContain(proposed.id);
+    expect(next.find((item) => item.concept.id === proposed.id)?.reason).toBe("Unreviewed concept");
+  });
+
   test("dashboard reports course progress and the review queue", async () => {
     await addBase();
     const dashboard = await concepts.dashboard();

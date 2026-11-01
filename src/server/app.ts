@@ -20,6 +20,7 @@ import { NoteIndexer } from "./vault/indexer.ts";
 import { VaultService } from "./vault/service.ts";
 import { resolveInside, VaultPathError } from "./vault/paths.ts";
 import { ZodError } from "zod";
+import { GoalError, GoalService } from "./goals/service.ts";
 
 export type AppDeps = {
   config?: Partial<Config>;
@@ -76,8 +77,9 @@ export function createApp(deps: AppDeps = {}) {
     events,
     `http://${config.hostname}:${config.port}`,
   );
-  const sessions = new SessionService(db, vault, events);
   const concepts = new ConceptService(db, vault);
+  const goals = new GoalService(db, vault, events, concepts);
+  const sessions = new SessionService(db, vault, events, goals);
   const app = new Hono();
 
   app.use("*", async (c, next) => {
@@ -116,7 +118,8 @@ export function createApp(deps: AppDeps = {}) {
       err instanceof ExamError ||
       err instanceof GradingError ||
       err instanceof SessionError ||
-      err instanceof ConceptError
+      err instanceof ConceptError ||
+      err instanceof GoalError
     ) {
       return c.json({ error: err.message }, 400);
     }
@@ -743,6 +746,52 @@ export function createApp(deps: AppDeps = {}) {
 
   app.get("/api/dashboard", async (c) => c.json(await concepts.dashboard()));
 
+  app.get("/api/goals", (c) => c.json(goals.list(c.req.query("course"))));
+  app.get("/api/goals/:id", (c) => c.json(goals.get(c.req.param("id"))));
+  app.get("/api/sessions/:id/pacing", (c) => c.json(goals.getPacing(c.req.param("id"))));
+  app.get("/api/coverage", (c) => {
+    const course = c.req.query("course");
+    if (!course) return c.json({ error: "course is required" }, 400);
+    return c.json(goals.getCoverage(course));
+  });
+  app.post("/api/goals", async (c) => {
+    const body = await c.req.json();
+    return c.json(await goals.create(body, body.request_id), 201);
+  });
+  app.patch("/api/goals/:id", async (c) => {
+    const body = await c.req.json();
+    return c.json(goals.update(c.req.param("id"), body, body.request_id));
+  });
+  app.post("/api/goals/:id/plan", async (c) => {
+    const body = await c.req.json<{ items?: unknown[]; request_id?: string }>();
+    return c.json(await goals.proposePlan(c.req.param("id"), body.items ?? [], body.request_id), 201);
+  });
+  app.post("/api/goals/:id/plan-changes", async (c) => {
+    const body = await c.req.json();
+    return c.json(goals.proposePlanChange(c.req.param("id"), body, body.request_id), 201);
+  });
+  app.get("/api/goals/:id/plan-changes", (c) => c.json(goals.listPlanChanges(c.req.param("id"))));
+  app.get("/api/plan-changes/:id", (c) => c.json(goals.getPlanChange(c.req.param("id"))));
+  app.post("/api/plan-changes/:id/apply", (c) => c.json(goals.applyPlanChange(c.req.param("id"))));
+  app.patch("/api/plan-items/:id", async (c) => {
+    const body = await c.req.json();
+    return c.json(goals.updatePlanItem(c.req.param("id"), body, body.request_id));
+  });
+  app.post("/api/tasks", async (c) => {
+    const body = await c.req.json();
+    return c.json(await goals.addTask(body, body.request_id), 201);
+  });
+  app.patch("/api/tasks/:id", async (c) => {
+    const body = await c.req.json();
+    return c.json(goals.updateTask(c.req.param("id"), body, body.request_id));
+  });
+  app.get("/api/tasks", (c) => {
+    const course = c.req.query("course");
+    if (!course) return c.json({ error: "course is required" }, 400);
+    const status = c.req.query("status");
+    return c.json(goals.listTasks(course, status === "open" || status === "done" || status === "dropped" ? status : undefined));
+  });
+
   app.get("/api/concepts", (c) =>
     c.json(
       concepts.list(
@@ -803,9 +852,15 @@ export function createApp(deps: AppDeps = {}) {
   app.get("/api/sessions/history", (c) => c.json(sessions.history(c.req.query("course"))));
 
   app.post("/api/sessions", async (c) => {
-    const body = await c.req.json<{ course?: string; goal?: string }>();
+    const body = await c.req.json<{ course?: string; goal?: string; goal_id?: string | null; time_box_min?: number | null }>();
     try {
-      return c.json(await sessions.start(String(body.course ?? ""), body.goal, null, "app"), 201);
+      return c.json(
+        await sessions.start(String(body.course ?? ""), body.goal, null, "app", {
+          goalId: body.goal_id,
+          timeBoxMin: body.time_box_min,
+        }),
+        201,
+      );
     } catch (err) {
       const e = err as { status?: number; sessionId?: string };
       if (e.status === 409) {
@@ -912,7 +967,7 @@ export function createApp(deps: AppDeps = {}) {
   });
 
   app.all("/mcp", (c) =>
-    handleMcpRequest(c.req.raw, config, vault, questions, papers, runner, grading, sessions, concepts),
+    handleMcpRequest(c.req.raw, config, vault, questions, papers, runner, grading, sessions, concepts, goals),
   );
 
   app.get("/_design", async (c) => c.html(await Bun.file(paths.uiIndex).text()));
@@ -931,7 +986,7 @@ export function createApp(deps: AppDeps = {}) {
     return c.html(await Bun.file(paths.uiIndex).text());
   });
 
-  return { app, config, db, vault, indexer, questions, papers, runner, grading, sessions, concepts };
+  return { app, config, db, vault, indexer, questions, papers, runner, grading, sessions, concepts, goals };
 }
 
 function zodMessage(err: ZodError): string {

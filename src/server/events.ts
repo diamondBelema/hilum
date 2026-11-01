@@ -9,7 +9,8 @@ export type HarnessEvent =
       clientName: string | null;
       lastSeenAt: number | null;
       at: number;
-    };
+    }
+  | { type: "goal" | "plan" | "task"; course: string; goalId?: string; taskId?: string; state: string; at: number };
 
 export class EventBus {
   private readonly listeners = new Set<(event: HarnessEvent) => void>();

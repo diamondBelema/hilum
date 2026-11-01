@@ -12,6 +12,64 @@ export type Course = {
   concepts: number;
 };
 
+export type Goal = {
+  id: string;
+  course: string;
+  title: string;
+  deadline: string | null;
+  study_min_per_day: number | null;
+  status: "active" | "done" | "archived";
+  plan_items: PlanItem[];
+  tasks: Task[];
+  coverage?: {
+    sections: number;
+    covered_accepted: number;
+    covered_accepted_unverified?: number;
+    covered_proposed: number;
+    covered_proposed_unverified?: number;
+    uncovered: { note: string; anchor: string; title: string }[];
+  };
+};
+
+export type PlanItem = {
+  id: string;
+  title: string;
+  kind: "learn" | "map" | "review";
+  position: number;
+  est_min_low: number;
+  est_min_high: number;
+  actual_sec: number;
+  status: "todo" | "active" | "done" | "deferred" | "skipped";
+  partial: number;
+  plan_state: "draft" | "approved";
+};
+
+export type Task = {
+  id: string;
+  course: string;
+  goal_id: string | null;
+  plan_item_id: string | null;
+  title: string;
+  kind: "practice" | "review" | "revisit" | "custom";
+  target_json?: Record<string, unknown> | null;
+  due_date: string | null;
+  status: "open" | "done" | "dropped";
+  source: "user" | "agent";
+};
+
+export type PlanChange = {
+  id: string;
+  goal_id: string;
+  status: "draft" | "applied";
+  created_at: number;
+  diff: {
+    add: { title: string; kind: string; position: number; est_min_low: number; est_min_high: number }[];
+    remove: string[];
+    reorder: { id: string; position: number }[];
+    defer: string[];
+  };
+};
+
 export type NoteMeta = {
   path: string;
   course: string | null;
@@ -353,6 +411,9 @@ export type SessionDetail = {
   id: string;
   course: string;
   goal: string;
+  goalId: string | null;
+  timeBoxMin: number | null;
+  activePlanItemId: string | null;
   title: string | null;
   startedAt: number;
   endedAt: number | null;
@@ -378,6 +439,26 @@ export type SessionDetail = {
     data: SessionActivity | { id: number; kind: string; text: string; cites: Cite[]; unverified: boolean; createdAt: number } | { id: number; text: string; status: string; createdAt: number };
   }[];
   evidenceCount: number;
+};
+
+export type Pacing = {
+  now: string;
+  goal: { id: string; title: string; deadline: string | null; days_left: number | null } | null;
+  plan: {
+    done: number;
+    total: number;
+    remaining_min_range: [number, number];
+    status: "behind" | "ahead" | "on_track" | null;
+  };
+  coverage: { sections: number; covered_accepted: number; covered_proposed: number };
+  active_item: {
+    id: string;
+    title: string;
+    elapsed_min: number;
+    est_min_range: [number, number];
+    nudge: "over_estimate" | null;
+  } | null;
+  session: { elapsed_min: number; time_box_min: number | null; remaining_min: number | null };
 };
 
 export type SessionSummary = {
@@ -515,6 +596,37 @@ export const api = {
   updateSettings: (input: { lan?: boolean; regenerateToken?: boolean }) =>
     sendJson<ServerSettings>("/api/settings", "POST", input),
   courses: () => getJson<Course[]>("/api/courses"),
+  goals: (course?: string) =>
+    getJson<Goal[]>(`/api/goals${course ? `?course=${encodeURIComponent(course)}` : ""}`),
+  createGoal: (input: {
+    course: string;
+    title: string;
+    deadline?: string | null;
+    study_min_per_day?: number | null;
+  }) => sendJson<Goal>("/api/goals", "POST", input),
+  updateGoal: (id: string, input: Partial<Pick<Goal, "title" | "deadline" | "study_min_per_day" | "status">>) =>
+    sendJson<Goal>(`/api/goals/${encodeURIComponent(id)}`, "PATCH", input),
+  updatePlanItem: (id: string, input: { plan_state?: "draft" | "approved"; status?: PlanItem["status"]; partial?: boolean; position?: number }) =>
+    sendJson<Goal>(`/api/plan-items/${encodeURIComponent(id)}`, "PATCH", input),
+  planChanges: (goalId: string) =>
+    getJson<PlanChange[]>(`/api/goals/${encodeURIComponent(goalId)}/plan-changes`),
+  applyPlanChange: (id: string) =>
+    sendJson<Goal>(`/api/plan-changes/${encodeURIComponent(id)}/apply`, "POST", {}),
+  coverage: (course: string) =>
+    getJson<NonNullable<Goal["coverage"]>>(`/api/coverage?course=${encodeURIComponent(course)}`),
+  tasks: (course: string, status?: Task["status"]) =>
+    getJson<Task[]>(`/api/tasks?course=${encodeURIComponent(course)}${status ? `&status=${status}` : ""}`),
+  createTask: (input: {
+    course: string;
+    goal_id?: string | null;
+    plan_item_id?: string | null;
+    title: string;
+    kind?: Task["kind"];
+    target_json?: Record<string, unknown> | null;
+    due_date?: string | null;
+  }) => sendJson<Task>("/api/tasks", "POST", input),
+  updateTask: (id: string, input: { status?: Task["status"] }) =>
+    sendJson<Task>(`/api/tasks/${encodeURIComponent(id)}`, "PATCH", input),
   notes: (course: string) => getJson<NoteMeta[]>(`/api/courses/${encodeURIComponent(course)}/notes`),
   notesTree: (course: string) =>
     getJson<NoteMeta[]>(`/api/notes/tree?course=${encodeURIComponent(course)}`),
@@ -638,11 +750,12 @@ export const api = {
       `/api/sessions/active${course ? `?course=${encodeURIComponent(course)}` : ""}`,
     ),
   session: (id: string) => getJson<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}`),
-  startSession: async (course: string, goal = "learn") => {
+  pacing: (id: string) => getJson<Pacing>(`/api/sessions/${encodeURIComponent(id)}/pacing`),
+  startSession: async (course: string, goal = "learn", options?: { goalId?: string; timeBoxMin?: number | null }) => {
     const res = await fetch(apiUrl("/api/sessions"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ course, goal }),
+      body: JSON.stringify({ course, goal, goal_id: options?.goalId, time_box_min: options?.timeBoxMin }),
     });
     if (!res.ok) {
       const payload = (await res.json().catch(() => ({}))) as { error?: string; sessionId?: string };

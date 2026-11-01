@@ -170,6 +170,72 @@ function migrate(db: Db): void {
       agent_seen_at INTEGER
     );
 
+    CREATE TABLE IF NOT EXISTS goals (
+      id TEXT PRIMARY KEY,
+      course TEXT NOT NULL,
+      title TEXT NOT NULL,
+      deadline TEXT,
+      study_min_per_day INTEGER,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS plan_items (
+      id TEXT PRIMARY KEY,
+      goal_id TEXT NOT NULL,
+      concept_id TEXT,
+      note_path TEXT,
+      note_anchor TEXT,
+      title TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'learn',
+      partial INTEGER NOT NULL DEFAULT 0,
+      position INTEGER NOT NULL,
+      est_min_low INTEGER NOT NULL,
+      est_min_high INTEGER NOT NULL,
+      actual_sec INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'todo',
+      plan_state TEXT NOT NULL DEFAULT 'draft',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS plan_items_goal ON plan_items(goal_id, position);
+
+    CREATE TABLE IF NOT EXISTS plan_changes (
+      id TEXT PRIMARY KEY,
+      goal_id TEXT NOT NULL,
+      diff_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_at INTEGER NOT NULL,
+      applied_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS tasks (
+      id TEXT PRIMARY KEY,
+      course TEXT NOT NULL,
+      goal_id TEXT,
+      plan_item_id TEXT,
+      title TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'custom',
+      target_json TEXT,
+      due_date TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      source TEXT NOT NULL DEFAULT 'user',
+      created_at INTEGER NOT NULL,
+      done_at INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS tasks_open ON tasks(course, status, due_date);
+
+    CREATE TABLE IF NOT EXISTS session_plan_nudges (
+      session_id TEXT NOT NULL,
+      plan_item_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (session_id, plan_item_id, kind)
+    );
+
     CREATE INDEX IF NOT EXISTS sessions_course ON sessions(course, started_at);
 
     CREATE TABLE IF NOT EXISTS session_focus (
@@ -263,6 +329,9 @@ function migrate(db: Db): void {
   if (!activityColumns.some((column) => column.name === "render_seen")) {
     db.exec("ALTER TABLE activities ADD COLUMN render_seen INTEGER NOT NULL DEFAULT 0");
   }
+  if (!activityColumns.some((column) => column.name === "plan_item_id")) {
+    db.exec("ALTER TABLE activities ADD COLUMN plan_item_id TEXT");
+  }
 
   const questionColumns = db.query("PRAGMA table_info(questions)").all() as { name: string }[];
   if (!questionColumns.some((column) => column.name === "verified_by")) {
@@ -289,6 +358,15 @@ function migrate(db: Db): void {
   if (!sessionColumns.some((column) => column.name === "title")) {
     db.exec("ALTER TABLE sessions ADD COLUMN title TEXT");
   }
+  if (!sessionColumns.some((column) => column.name === "goal_id")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN goal_id TEXT");
+  }
+  if (!sessionColumns.some((column) => column.name === "time_box_min")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN time_box_min INTEGER");
+  }
+  if (!sessionColumns.some((column) => column.name === "active_plan_item_id")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN active_plan_item_id TEXT");
+  }
 
   const requestColumns = db.query("PRAGMA table_info(agent_requests)").all() as { name: string }[];
   if (!requestColumns.some((column) => column.name === "client_id")) {
@@ -306,6 +384,6 @@ function migrate(db: Db): void {
 
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
-    "9",
+    "11",
   );
 }

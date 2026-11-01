@@ -5,6 +5,7 @@ import type { Db } from "../db.ts";
 import type { VaultService } from "../vault/service.ts";
 import { slug } from "../vault/paths.ts";
 import type { EventBus } from "../events.ts";
+import type { GoalService } from "../goals/service.ts";
 import { validateCites, type Cite } from "../questions/citations.ts";
 import {
   ActivitySpecError,
@@ -33,6 +34,9 @@ type SessionRow = {
   summary: string;
   note_path: string | null;
   agent_seen_at: number | null;
+  goal_id: string | null;
+  time_box_min: number | null;
+  active_plan_item_id: string | null;
 };
 
 type ActivityRow = {
@@ -80,6 +84,9 @@ export type SessionDetail = {
   id: string;
   course: string;
   goal: string;
+  goalId: string | null;
+  timeBoxMin: number | null;
+  activePlanItemId: string | null;
   title: string | null;
   startedAt: number;
   endedAt: number | null;
@@ -149,6 +156,7 @@ export class SessionService {
     readonly db: Db,
     private readonly vault: VaultService,
     private readonly events: EventBus,
+    private readonly goals?: GoalService,
   ) {}
 
   private previousAgentState: string | null = null;
@@ -163,7 +171,13 @@ export class SessionService {
     this.db.query("UPDATE sessions SET agent_seen_at = ? WHERE id = ?").run(Date.now(), id);
   }
 
-  async start(course: string, goal = "learn", title: string | null = null, actor: "agent" | "app" = "app"): Promise<SessionDetail> {
+  async start(
+    course: string,
+    goal = "learn",
+    title: string | null = null,
+    actor: "agent" | "app" = "app",
+    options: { goalId?: string | null; timeBoxMin?: number | null } = {},
+  ): Promise<SessionDetail> {
     if (!course.trim()) throw new SessionError("course is required");
     const exists = (await this.vault.listCourses()).some((item) => item.code === course);
     if (!exists) throw new SessionError(`course not found: ${course}`);
@@ -191,8 +205,19 @@ export class SessionService {
     const id = `sess-${crypto.randomUUID().slice(0, 8)}`;
     const now = Date.now();
     this.db
-      .query("INSERT INTO sessions (id, course, goal, title, started_at, agent_seen_at) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(id, course, goal, title ?? null, now, null);
+      .query(
+        "INSERT INTO sessions (id, course, goal, title, goal_id, time_box_min, started_at, agent_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(id, course, goal, title ?? null, options.goalId ?? null, options.timeBoxMin ?? null, now, null);
+    if (options.goalId) {
+      const goalRow = this.db
+        .query("SELECT course FROM goals WHERE id = ?")
+        .get(options.goalId) as { course: string } | null;
+      if (!goalRow || goalRow.course !== course) {
+        this.db.query("DELETE FROM sessions WHERE id = ?").run(id);
+        throw new SessionError(`goal does not belong to course: ${options.goalId}`);
+      }
+    }
     if (actor === "app" && goal.trim()) {
       this.request(id, goal);
     }
@@ -358,6 +383,9 @@ export class SessionService {
       id: row.id,
       course: row.course,
       goal: row.goal,
+      goalId: row.goal_id,
+      timeBoxMin: row.time_box_min,
+      activePlanItemId: row.active_plan_item_id,
       title: row.title,
       startedAt: row.started_at,
       endedAt: row.ended_at,
@@ -382,7 +410,7 @@ export class SessionService {
     };
   }
 
-  async pushActivity(sessionId: string, input: unknown): Promise<SessionActivity> {
+  async pushActivity(sessionId: string, input: unknown, planItemId?: string | null): Promise<SessionActivity> {
     const session = this.sessionRow(sessionId);
     if (session.ended_at) throw new SessionError("session has ended");
     let spec: ActivitySpec;
@@ -408,10 +436,33 @@ export class SessionService {
     const now = Date.now();
     this.db
       .query(
-        `INSERT INTO activities (id, session_id, course, spec_json, cites_json, concept_ids, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        `INSERT INTO activities (id, session_id, course, spec_json, cites_json, concept_ids, plan_item_id, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
       )
-      .run(id, sessionId, session.course, JSON.stringify(spec), JSON.stringify(cites),         JSON.stringify(conceptIds), now);
+      .run(
+        id,
+        sessionId,
+        session.course,
+        JSON.stringify(spec),
+        JSON.stringify(cites),
+        JSON.stringify(conceptIds),
+        planItemId ?? session.active_plan_item_id ?? null,
+        now,
+      );
+    if (planItemId ?? session.active_plan_item_id) {
+      const activeId = planItemId ?? session.active_plan_item_id;
+      const item = this.db.query(
+        `SELECT plan_items.id
+         FROM plan_items
+         JOIN goals ON goals.id = plan_items.goal_id
+         WHERE plan_items.id = ? AND goals.course = ?`,
+      ).get(activeId, session.course);
+      if (!item) throw new SessionError(`plan item does not belong to course: ${activeId}`);
+      this.db.query("UPDATE sessions SET active_plan_item_id = ? WHERE id = ?").run(
+        activeId,
+        sessionId,
+      );
+    }
     this.touch(sessionId);
     this.markRequestsAnswered(sessionId);
     this.events.publish({
@@ -449,6 +500,7 @@ export class SessionService {
       .query("UPDATE activities SET response_json = ?, status = 'answered', answered_at = ? WHERE id = ?")
       .run(JSON.stringify(response), now, activityId);
     this.writeEvidence(sessionId, activityId, spec, response, Math.max(0, Math.round(timeSec)));
+    this.goals?.autoCompleteTasks(session.course, sessionId);
     this.events.publish({
       type: "activity",
       course: session.course,
@@ -892,6 +944,7 @@ export class SessionService {
     const session = this.sessionRow(sessionId);
     if (session.ended_at) return this.detail(sessionId);
     const now = Date.now();
+    this.goals?.recordSessionCarryOver(sessionId, now);
     const counts = this.db
       .query(
         `SELECT COUNT(*) AS activities,

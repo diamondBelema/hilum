@@ -1,6 +1,7 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
+import { readFile } from "node:fs/promises";
 import type { Config } from "./config.ts";
 import type { VaultService } from "./vault/service.ts";
 import type { QuestionBank } from "./questions/service.ts";
@@ -9,6 +10,7 @@ import type { ExamRunner } from "./exams/attempts.ts";
 import type { PaperService } from "./exams/papers.ts";
 import type { SessionService } from "./sessions/service.ts";
 import type { ConceptService } from "./concepts/service.ts";
+import type { GoalService } from "./goals/service.ts";
 import { conceptInputSchema, conceptPatchSchema, EDGE_TYPES } from "./concepts/validation.ts";
 import {
   MISTAKE_TAGS,
@@ -116,6 +118,7 @@ const INSTRUCTIONS = `This server is the Exam Harness for a medical student.
 The markdown vault is the source of truth; read INDEX.md before notes.
 Each course may set answer_style in course.md. session_start returns that file: follow its command-word and answer-structure rules when probing, teaching or drafting model answers.
 Always begin with get_active_session to learn which session the student has open, then use its session_id for all subsequent session tools.
+Call get_teaching_guide at the start of a teaching session when you need the full teaching playbook.
 Teaching protocol: get_active_session (or session_start if none), read the index, probe with activities, diagnose, teach, record evidence, session_end.
 Never invent content without citations; unverified content must be marked unverified.
 Exam simulations are deterministic and run without an agent.
@@ -133,6 +136,7 @@ export function createMcpServer(
   grading: GradingService,
   sessions: SessionService,
   concepts: ConceptService,
+  goals?: GoalService,
 ): McpServer {
   const server = new McpServer(
     { name: "exam-harness", version: config.version },
@@ -152,6 +156,24 @@ export function createMcpServer(
     ],
     isError: true,
   });
+
+  server.registerTool(
+    "get_teaching_guide",
+    {
+      description:
+        "Return the repository teaching playbook for live Hilum sessions: probing, diagnosis, teaching formats, citations, evidence recording, goals, pacing, and session ending.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const path = new URL("../../AGENTS.md", import.meta.url);
+        const guide = await readFile(path, "utf8");
+        return { content: [{ type: "text" as const, text: guide }] };
+      } catch (err) {
+        return fail(new Error(`teaching guide unavailable: ${err instanceof Error ? err.message : String(err)}`));
+      }
+    },
+  );
 
   const clientName = (): string => {
     const info = server.server.getClientVersion();
@@ -637,17 +659,231 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
   );
 
   server.registerTool(
+    "get_pacing",
+    {
+      description: "Return deterministic server-side pacing for a live session.",
+      inputSchema: { session_id: z.string().min(1) },
+    },
+    withPresence(async ({ session_id }) => {
+      try {
+        return json(goals!.getPacing(session_id));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "get_coverage",
+    {
+      description: "Return note sections mapped to accepted and proposed concepts for a course.",
+      inputSchema: { course: z.string().min(1) },
+    },
+    withPresence(async ({ course }) => {
+      try {
+        return json(goals!.getCoverage(course));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "get_goal",
+    {
+      description: "Return a goal with its plan items and tasks.",
+      inputSchema: { goal_id: z.string().min(1) },
+    },
+    withPresence(async ({ goal_id }) => {
+      try {
+        return json(goals!.get(goal_id));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "propose_plan",
+    {
+      description: "Create validated draft plan items for a goal. The student must approve them separately.",
+      inputSchema: {
+        goal_id: z.string().min(1),
+        items: z.array(z.object({
+          concept_id: z.string().nullable().optional(),
+          note_path: z.string().nullable().optional(),
+          note_anchor: z.string().nullable().optional(),
+          title: z.string().min(1),
+          kind: z.enum(["learn", "map", "review"]).default("learn"),
+          position: z.number().int().nonnegative(),
+          est_min_low: z.number().int().positive(),
+          est_min_high: z.number().int().positive(),
+        })),
+        request_id: z.string().optional(),
+      },
+    },
+    withPresence(async ({ goal_id, items, request_id }) => {
+      try {
+        return json(await goals!.proposePlan(goal_id, items, request_id));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "update_goal",
+    {
+      description: "Update a goal title, deadline, daily study minutes or lifecycle status.",
+      inputSchema: {
+        goal_id: z.string().min(1),
+        title: z.string().min(1).optional(),
+        deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        study_min_per_day: z.number().int().positive().nullable().optional(),
+        status: z.enum(["active", "done", "archived"]).optional(),
+        request_id: z.string().optional(),
+      },
+    },
+    withPresence(async ({ goal_id, request_id, ...patch }) => {
+      try {
+        return json(goals!.update(goal_id, patch, request_id));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "propose_plan_change",
+    {
+      description: "Create a validated draft change to a goal plan. The student must apply it separately.",
+      inputSchema: {
+        goal_id: z.string().min(1),
+        add: z.array(z.object({
+          concept_id: z.string().nullable().optional(),
+          note_path: z.string().nullable().optional(),
+          note_anchor: z.string().nullable().optional(),
+          title: z.string().min(1),
+          kind: z.enum(["learn", "map", "review"]).default("learn"),
+          position: z.number().int().nonnegative(),
+          est_min_low: z.number().int().positive(),
+          est_min_high: z.number().int().positive(),
+        })).optional(),
+        remove: z.array(z.string().min(1)).optional(),
+        reorder: z.array(z.object({ id: z.string().min(1), position: z.number().int().nonnegative() })).optional(),
+        defer: z.array(z.string().min(1)).optional(),
+        request_id: z.string().optional(),
+      },
+    },
+    withPresence(async ({ goal_id, request_id, ...diff }) => {
+      try {
+        return json(goals!.proposePlanChange(goal_id, diff, request_id));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "update_plan_item",
+    {
+      description: "Update a plan item status or mark it partial. Plan approval is a student UI action.",
+      inputSchema: {
+        plan_item_id: z.string().min(1),
+        status: z.enum(["active", "done", "deferred", "skipped"]).optional(),
+        partial: z.boolean().optional(),
+        request_id: z.string().optional(),
+      },
+    },
+    withPresence(async ({ plan_item_id, status, partial, request_id }) => {
+      try {
+        return json(goals!.updatePlanItem(plan_item_id, { status, partial }, request_id));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "add_task",
+    {
+      description: "Create a course-scoped task linked to an optional goal or plan item.",
+      inputSchema: {
+        course: z.string().min(1),
+        goal_id: z.string().nullable().optional(),
+        plan_item_id: z.string().nullable().optional(),
+        title: z.string().min(1),
+        kind: z.enum(["practice", "review", "revisit", "custom"]).default("custom"),
+        target_json: z.record(z.unknown()).nullable().optional(),
+        due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        source: z.enum(["user", "agent"]).default("agent"),
+        request_id: z.string().optional(),
+      },
+    },
+    withPresence(async (input) => {
+      try {
+        return json(await goals!.addTask(input, input.request_id));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "update_task",
+    {
+      description: "Mark a task open, done or dropped.",
+      inputSchema: {
+        task_id: z.string().min(1),
+        status: z.enum(["open", "done", "dropped"]),
+        request_id: z.string().optional(),
+      },
+    },
+    withPresence(async ({ task_id, status, request_id }) => {
+      try {
+        return json(goals!.updateTask(task_id, { status }, request_id));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "list_tasks",
+    {
+      description: "List tasks for a course.",
+      inputSchema: { course: z.string().min(1), status: z.enum(["open", "done", "dropped"]).optional() },
+    },
+    withPresence(async ({ course, status }) => {
+      try {
+        return json(goals!.listTasks(course, status));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
     "session_start",
     {
       description:
-        "Start or resume a live teaching session. Without course, returns the focused session or the newest open session across courses. With course, returns the newest open session for that course, or starts one if none is open. Optionally pass a title for a new session.",
-      inputSchema: { course: z.string().optional(), goal: z.string().optional(), title: z.string().optional() },
+        "Start or resume a live teaching session. Without course, returns the focused session or the newest open session across courses. With course, returns the newest open session for that course, or starts one if none is open. Optionally pass a title, goal_id and time_box_min for a new session.",
+      inputSchema: {
+        course: z.string().optional(),
+        goal: z.string().optional(),
+        title: z.string().optional(),
+        goal_id: z.string().nullable().optional(),
+        time_box_min: z.number().int().positive().nullable().optional(),
+      },
     },
-    withPresence(async ({ course, goal, title }) => {
+    withPresence(async ({ course, goal, title, goal_id, time_box_min }) => {
       try {
         let session;
         if (course) {
-          session = await sessions.start(course, goal ?? "learn", title ?? null, "agent");
+          session = await sessions.start(course, goal ?? "learn", title ?? null, "agent", {
+            goalId: goal_id,
+            timeBoxMin: time_box_min,
+          });
         } else {
           const focused = sessions.focused();
           if (focused) {
@@ -751,15 +987,16 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
     "push_activity",
     {
       description:
-        "Push one validated ActivitySpec to the live session. Components: flashcard, cloze, mcq_single, tf_multi, theory, worked_example_stepper, predict_reveal, compare_table, mermaid_diagram, confidence_rating, think_aloud. Every spec needs cites whose anchors and quotes exist in the vault.",
+        "Push one validated ActivitySpec to the live session. Components: flashcard, cloze, mcq_single, mcq_multi, tf_multi, short_answer, matching, ordering, theory, calculation, worked_example_stepper, predict_reveal, compare_table, mermaid_diagram, concept_map, label_diagram, timeline, annotated_image, spotter_station, confidence_rating, think_aloud, muddy_point, spot_the_error, teach_back, case_vignette. Every component should carry concept_ids; every spec needs cites whose anchors and quotes exist in the vault.",
       inputSchema: {
         session_id: z.string().min(1),
         spec: z.unknown(),
+        plan_item_id: z.string().nullable().optional(),
       },
     },
-    withPresence(async ({ session_id, spec }) => {
+    withPresence(async ({ session_id, spec, plan_item_id }) => {
       try {
-        return json(await sessions.pushActivity(session_id, spec));
+        return json(await sessions.pushActivity(session_id, spec, plan_item_id));
       } catch (err) {
         return fail(err);
       }
@@ -778,7 +1015,8 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
     },
     withPresence(async ({ session_id, timeout_seconds }) => {
       try {
-        return json(await sessions.awaitResponse(session_id, timeout_seconds));
+        const result = await sessions.awaitResponse(session_id, timeout_seconds);
+        return json({ ...result, pacing: goals?.getPacing(session_id) ?? null });
       } catch (err) {
         return fail(err);
       }
@@ -1178,8 +1416,9 @@ export async function handleMcpRequest(
   grading: GradingService,
   sessions: SessionService,
   concepts: ConceptService,
+  goals: GoalService,
 ): Promise<Response> {
-  const server = createMcpServer(config, vault, questions, papers, runner, grading, sessions, concepts);
+  const server = createMcpServer(config, vault, questions, papers, runner, grading, sessions, concepts, goals);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
