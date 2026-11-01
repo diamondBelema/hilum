@@ -73,9 +73,14 @@ const LINK_DISTANCE = 100;
 const CHARGE_STRENGTH = -240;
 const NODE_MIN_RADIUS = 6;
 const NODE_MAX_RADIUS = 18;
-const LABEL_TRUNCATE = 28;
+const LABEL_TRUNCATE = 24;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3.0;
+// On-screen node size grows as zoom^0.5 (not linearly), so zooming in doesn't balloon the circles.
+const NODE_ZOOM_EXPONENT = 0.5;
+// Non-focused labels fade in between these zoom levels.
+const LABEL_FADE_START = 0.9;
+const LABEL_FADE_END = 1.4;
 
 const MASTERY_FILL: Record<string, number> = {
   unseen: 0,
@@ -344,6 +349,10 @@ export function GraphCanvas({
 
     const dpr = Math.min(window.devicePixelRatio ?? 1, 2);
     const { k, x, y } = transformRef.current;
+    // Local scale applied around each node: on-screen radius = r * k^NODE_ZOOM_EXPONENT.
+    const nodeScale = Math.pow(k, NODE_ZOOM_EXPONENT - 1);
+    // One screen pixel in node-local units, so strokes stay crisp at any zoom.
+    const unit = 1 / (nodeScale * k);
 
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -411,10 +420,10 @@ export function GraphCanvas({
       const uy = dy / dist;
       const ra = radiusByIdRef.current.get(edge.from) ?? NODE_MIN_RADIUS;
       const rb = radiusByIdRef.current.get(edge.to) ?? NODE_MIN_RADIUS;
-      const x1 = a.x + ux * (ra + 2);
-      const y1 = a.y + uy * (ra + 2);
-      const x2 = b.x - ux * (rb + 2);
-      const y2 = b.y - uy * (rb + 2);
+      const x1 = a.x + ux * (ra * nodeScale + 2 / k);
+      const y1 = a.y + uy * (ra * nodeScale + 2 / k);
+      const x2 = b.x - ux * (rb * nodeScale + 2 / k);
+      const y2 = b.y - uy * (rb * nodeScale + 2 / k);
 
       const isSelectedEdge =
         selectedId !== null && (edge.from === selectedId || edge.to === selectedId);
@@ -474,7 +483,7 @@ export function GraphCanvas({
       if (isSelectedEdge && EDGE_TYPE_SHORT(edge.type)) {
         const mx = (x1 + x2) / 2;
         const my = (y1 + y2) / 2;
-        ctx.font = `${Math.max(9, 10 / k)}px ${cssVar("--font-ui")}`;
+        ctx.font = `${10 / k}px ${cssVar("--font-ui")}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         const label = EDGE_TYPE_SHORT(edge.type);
@@ -521,7 +530,7 @@ export function GraphCanvas({
       ctx.save();
       const shake = isHovered ? Math.sin(hoverPhaseRef.current) * 1.5 : 0;
       ctx.translate(p.x + shake, p.y);
-      ctx.scale(k, k);
+      ctx.scale(nodeScale, nodeScale);
 
       if (dimmed) ctx.globalAlpha = 0.12;
       if (sessionDimmed && !selected) ctx.globalAlpha = 0.4;
@@ -538,7 +547,7 @@ export function GraphCanvas({
         // Hollow ring
         ctx.fillStyle = bg;
         ctx.fill();
-        ctx.lineWidth = 2 / k;
+        ctx.lineWidth = 2 * unit;
         ctx.strokeStyle = strokeColor;
         ctx.stroke();
       } else if (fill >= 1) {
@@ -548,9 +557,9 @@ export function GraphCanvas({
         ctx.fill();
         // Decayed: dashed outer ring
         if (node.mastery.state === "decayed") {
-          ctx.lineWidth = 2 / k;
+          ctx.lineWidth = 2 * unit;
           ctx.strokeStyle = primary;
-          ctx.setLineDash([4, 4]);
+          ctx.setLineDash([4 * unit, 4 * unit]);
           ctx.stroke();
           ctx.setLineDash([]);
         }
@@ -558,7 +567,7 @@ export function GraphCanvas({
         // Partial fill
         ctx.fillStyle = bg;
         ctx.fill();
-        ctx.lineWidth = 2 / k;
+        ctx.lineWidth = 2 * unit;
         ctx.strokeStyle = strokeColor;
         ctx.stroke();
         ctx.beginPath();
@@ -571,7 +580,7 @@ export function GraphCanvas({
         ctx.globalAlpha = 1;
         ctx.beginPath();
         ctx.arc(0, 0, r, 0, 2 * Math.PI);
-        ctx.lineWidth = 1 / k;
+        ctx.lineWidth = 1 * unit;
         ctx.strokeStyle = strokeColor;
         ctx.stroke();
       }
@@ -579,8 +588,8 @@ export function GraphCanvas({
       // Session highlight ring
       if (inSession && !selected) {
         ctx.beginPath();
-        ctx.arc(0, 0, r + 3 / k, 0, 2 * Math.PI);
-        ctx.lineWidth = 2 / k;
+        ctx.arc(0, 0, r + 3 * unit, 0, 2 * Math.PI);
+        ctx.lineWidth = 2 * unit;
         ctx.strokeStyle = primary;
         ctx.globalAlpha = 0.9;
         ctx.stroke();
@@ -592,7 +601,7 @@ export function GraphCanvas({
       // Selection ring
       if (selected) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, r + 4 / k, 0, 2 * Math.PI);
+        ctx.arc(p.x, p.y, r * nodeScale + 4 / k, 0, 2 * Math.PI);
         ctx.lineWidth = 2 / k;
         ctx.strokeStyle = primary;
         ctx.stroke();
@@ -611,38 +620,55 @@ export function GraphCanvas({
     }
 
     // --- Labels ---
-    const showLabels = hoverNode !== null || selectedRef.current !== null || k >= 1.55;
-    if (showLabels) {
-      ctx.font = `${Math.max(11, 13 / k)}px ${cssVar("--font-prose")}`;
+    // --- Labels ---
+    // Constant 12px on screen, faded in with zoom, and culled on overlap so they never pile up.
+    {
+      const fade = Math.min(1, Math.max(0, (k - LABEL_FADE_START) / (LABEL_FADE_END - LABEL_FADE_START)));
+      const focusId = selectedRef.current ?? hoverNode;
+      const fontPx = 12 / k;
+      ctx.font = `${fontPx}px ${cssVar("--font-prose")}`;
       ctx.textBaseline = "middle";
       ctx.textAlign = "center";
 
-      const labelNodes = nodesProp.filter(
-        (n) =>
-          hoverNode === n.id ||
-          selectedRef.current === n.id ||
-          isNeighbour(n.id, selectedRef.current ?? "") ||
-          k >= 1.55,
-      );
+      const degree = degreeByIdRef.current;
+      const ranked = nodesProp
+        .map((n: ConceptSummary) => {
+          const isFocus = n.id === hoverNode || n.id === selectedRef.current;
+          const isNear = !!focusId && isNeighbour(n.id, focusId);
+          const inSess = sessionId !== null && sessionConceptIds.has(n.id);
+          const rank = isFocus ? 3 : isNear || inSess ? 2 : 1;
+          return { n, rank, weight: (degree.get(n.id) ?? 0) + n.examWeight };
+        })
+        .filter((entry) => entry.rank > 1 || fade > 0)
+        .sort((a, b) => b.rank - a.rank || b.weight - a.weight);
 
-      for (const node of labelNodes) {
-        const p = nodePos(node.id);
+      const placed: Array<{ l: number; t: number; r: number; b: number }> = [];
+      for (const { n, rank } of ranked) {
+        const p = nodePos(n.id);
         if (!p) continue;
-        const title = truncate(node.title, LABEL_TRUNCATE);
-        const metrics = ctx.measureText(title);
-        const tw = metrics.width;
-        const th = 13 / k;
-        const px = p.x;
-        const py = p.y - (radiusByIdRef.current.get(node.id) ?? NODE_MIN_RADIUS) - 8 / k;
+        const title = truncate(n.title, LABEL_TRUNCATE);
+        const tw = ctx.measureText(title).width;
+        const th = fontPx * 1.3;
+        const cx = p.x;
+        const cy = p.y - (radiusByIdRef.current.get(n.id) ?? NODE_MIN_RADIUS) * nodeScale - 8 / k;
+        const box = {
+          l: cx - tw / 2 - 3 / k,
+          r: cx + tw / 2 + 3 / k,
+          t: cy - th / 2 - 2 / k,
+          b: cy + th / 2 + 2 / k,
+        };
+        if (rank < 3 && placed.some((q) => box.l < q.r && box.r > q.l && box.t < q.b && box.b > q.t)) continue;
+        placed.push(box);
 
+        const alpha = rank > 1 ? 1 : fade;
         ctx.fillStyle = bg;
-        ctx.globalAlpha = 0.85;
-        ctx.fillRect(px - tw / 2 - 3 / k, py - th / 2 - 2 / k, tw + 6 / k, th + 4 / k);
-        ctx.globalAlpha = 1;
-
+        ctx.globalAlpha = 0.85 * alpha;
+        ctx.fillRect(box.l, box.t, box.r - box.l, box.b - box.t);
         ctx.fillStyle = textColor;
-        ctx.fillText(title, px, py);
+        ctx.globalAlpha = alpha;
+        ctx.fillText(title, cx, cy);
       }
+      ctx.globalAlpha = 1;
     }
 
     ctx.restore();
@@ -674,13 +700,22 @@ export function GraphCanvas({
 
   function findNodeAt(sx: number, sy: number): string | null {
     const c = screenToCanvas(sx, sy);
-    const rMax = NODE_MAX_RADIUS / transformRef.current.k;
+    const k = transformRef.current.k;
+    const nodeScale = Math.pow(k, NODE_ZOOM_EXPONENT - 1);
+    let best: string | null = null;
+    let bestDist = Infinity;
     for (const node of nodesProp) {
       const p = nodePos(node.id);
       if (!p) continue;
-      if (Math.hypot(p.x - c.x, p.y - c.y) < rMax) return node.id;
+      // Hit area matches the drawn circle, with a 12px minimum so small nodes stay tappable.
+      const hitRadius = Math.max((radiusByIdRef.current.get(node.id) ?? NODE_MIN_RADIUS) * nodeScale, 12 / k);
+      const d = Math.hypot(p.x - c.x, p.y - c.y);
+      if (d < hitRadius && d < bestDist) {
+        best = node.id;
+        bestDist = d;
+      }
     }
-    return null;
+    return best;
   }
 
   function localPoint(event: { clientX: number; clientY: number }): { x: number; y: number } {

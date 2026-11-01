@@ -12,6 +12,7 @@ import { cn } from "../lib/cn.ts";
 import { navigate } from "../lib/router.ts";
 import { Composer } from "../components/Composer.tsx";
 import { GraphCanvas } from "../components/GraphCanvas.tsx";
+import { uuid } from "../lib/uuid.ts";
 import type { ConceptSummary } from "../api.ts";
 
 const INTERACTIVE_TYPES = new Set([
@@ -103,7 +104,7 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
   const firstLoadRef = useRef(true);
   const atBottomRef = useRef(true);
 
-  const [tabId] = useState(() => crypto.randomUUID());
+  const [tabId] = useState(() => uuid());
 
   useEffect(() => {
     let cancelled = false;
@@ -417,6 +418,35 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
 
   return (
     <div className="relative h-full w-full flex flex-col overflow-hidden bg-bg">
+      {session && sessionConcepts.length > 0 && (
+        <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border-subtle bg-bg px-3 py-2 sm:px-4">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              setGraphFocusId(null);
+              setGraphOpen(true);
+            }}
+          >
+            <Network aria-hidden="true" className="size-4" />
+            Open map
+          </Button>
+          {sessionConcepts.map((concept) => (
+            <button
+              key={concept.id}
+              type="button"
+              onClick={() => {
+                setGraphFocusId(concept.id);
+                setGraphOpen(true);
+              }}
+              className="min-h-11 shrink-0 rounded-chip border border-border-subtle bg-surface px-3 type-body-sm text-text hover:border-primary hover:bg-primary-soft"
+            >
+              {concept.title}
+            </button>
+          ))}
+        </div>
+      )}
       <div
         className={cn(
           "flex-1 min-h-0 overflow-y-auto px-3 pt-3 pb-1 sm:px-4 sm:pt-4",
@@ -431,41 +461,13 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
           if (atBottom) setSeenCount(totalItems);
         }}
       >
-        <div className="mx-auto max-w-4xl space-y-3">
+        <div className="w-full max-w-4xl space-y-3">
           {session && (
             <>
               {error && (
                 <Banner tone="error">
                   {error.message}
                 </Banner>
-              )}
-              {sessionConcepts.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setGraphFocusId(null);
-                      setGraphOpen(true);
-                    }}
-                  >
-                    <Network aria-hidden="true" className="size-4" />
-                    Open map
-                  </Button>
-                  {sessionConcepts.map((concept) => (
-                    <button
-                      key={concept.id}
-                      type="button"
-                      onClick={() => {
-                        setGraphFocusId(concept.id);
-                        setGraphOpen(true);
-                      }}
-                      className="min-h-11 rounded-chip border border-border-subtle bg-surface px-3 type-body-sm text-text hover:border-primary hover:bg-primary-soft"
-                    >
-                      {concept.title}
-                    </button>
-                  ))}
-                </div>
               )}
               {transcriptEmpty && !connected && (
                 <div className="rounded-panel border border-border-subtle bg-surface p-5 type-body-sm text-text">

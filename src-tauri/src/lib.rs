@@ -4,6 +4,7 @@ use std::process::Command;
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_updater::UpdaterExt;
 
 #[tauri::command]
 async fn pick_vault_directory<R: Runtime>(app: AppHandle<R>) -> Result<Option<String>, String> {
@@ -52,6 +53,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(desktop)]
             {
@@ -71,6 +73,15 @@ pub fn run() {
                     .env("PORT", "4747")
                     .spawn()
                     .map_err(|error| error.to_string())?;
+
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(updater) = handle.updater() {
+                        if let Ok(Some(update)) = updater.check().await {
+                            let _ = update.download_and_install(|_, _| {}, || {}).await;
+                        }
+                    }
+                });
             }
             Ok(())
         })

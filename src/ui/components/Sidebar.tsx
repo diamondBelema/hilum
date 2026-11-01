@@ -41,7 +41,7 @@ export function Sidebar({
   }, [courses, filter, search, sessions]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-surface">
+    <div className="flex h-full min-h-0 w-full flex-col bg-surface">
       <div className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border-subtle px-3">
         <img src="/icon.svg" alt="" aria-hidden="true" className="size-6 rounded-control" />
         <span className="type-body-sm font-semibold tracking-tight text-text">Hilum</span>

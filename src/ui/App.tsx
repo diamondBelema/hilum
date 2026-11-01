@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   AlertTriangle,
@@ -23,6 +23,7 @@ import { SegmentedControl } from "./components/SegmentedControl.tsx";
 import { DesignGallery } from "./screens/DesignGallery.tsx";
 import { EmptySession } from "./screens/EmptySession.tsx";
 import { SessionScreen } from "./screens/SessionScreen.tsx";
+import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { graphHref, Link, navigate, goBack, useRoute, type Route } from "./lib/router.ts";
 import { cn } from "./lib/cn.ts";
 import { chooseInitialCourse, readLastCourse, writeLastCourse } from "./components/CoursePicker.tsx";
@@ -273,12 +274,13 @@ function AppShell() {
             />
           )}
           {route.name === "session" && (
-            <SessionScreen
-              key={`${route.id}:${sessionVersion}`}
-              sessionId={route.id}
-              onResume={resumeSession}
-              onEndSession={() => setEndOpen(true)}
-            />
+            <ErrorBoundary key={`${route.id}:${sessionVersion}`} moduleName="Session">
+              <SessionScreen
+                sessionId={route.id}
+                onResume={resumeSession}
+                onEndSession={() => setEndOpen(true)}
+              />
+            </ErrorBoundary>
           )}
           {route.name === "library" && (
             <LibraryScreen section={route.section} onNewSession={createSession} />
@@ -444,7 +446,7 @@ function LibraryScreen({
           <ProgressRoute courses={courses} onNewSession={onNewSession} />
         </div>
       ) : section === "graph" ? (
-        <div className="w-full">
+        <div className="h-full w-full">
             <GraphRoute
               courses={courses}
               onStudy={(courseCode, goal) => {
@@ -462,8 +464,8 @@ function LibraryScreen({
         "w-full",
         section
           ? section === "graph"
-            ? "p-0"
-            : "px-4 pb-4 pt-0 sm:px-6 sm:pb-6 sm:pt-0 lg:px-8 lg:pb-8 lg:pt-0"
+            ? "h-full p-0"
+            : "px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-6 lg:px-8 lg:pb-8 lg:pt-8"
           : "mx-auto max-w-6xl p-4 sm:p-6 lg:p-8",
       )}
     >
@@ -540,8 +542,11 @@ function NotesRoute({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<NoteMeta[] | null>(null);
 
+  // "All courses" must stick: without this flag the effect below re-selects the remembered course immediately.
+  const clearedRef = useRef(false);
+
   useEffect(() => {
-    if (selectedCourse || courses.length === 0) return;
+    if (selectedCourse || courses.length === 0 || clearedRef.current) return;
     const remembered = chooseInitialCourse(courses, readLastCourse());
     if (remembered) setSelectedCourse(remembered);
   }, [courses, selectedCourse]);
@@ -618,10 +623,14 @@ function NotesRoute({
       query={query}
       onQuery={setQuery}
       onSelectCourse={(course) => {
+        clearedRef.current = false;
         writeLastCourse(course.code);
         setSelectedCourse(course);
       }}
-      onClearCourse={() => setSelectedCourse(null)}
+      onClearCourse={() => {
+        clearedRef.current = true;
+        setSelectedCourse(null);
+      }}
       onOpenNote={(path) => navigate(`/library/notes?path=${encodeURIComponent(path)}`)}
       onNewNote={(course) => {
         if (!course) return;

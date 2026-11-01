@@ -24,28 +24,92 @@ async function readCourseAnswerStyle(
   status: string | null;
   kinds: unknown[] | null;
   content: string;
+  fallback: boolean;
 } | null> {
+  // Prefer the per-course answer-style.md profile; fall back to the generic profile.
   const info = (await vault.listCourses()).find((item) => item.code === course);
   const configured = info?.answerStyle?.trim();
-  if (!configured) return null;
 
-  const candidates = configured.startsWith("courses/")
-    ? [configured]
-    : [configured, `courses/${configured}`, `courses/${course}/${configured}`];
-  for (const path of candidates) {
-    try {
-      const note = vault.readNote(path);
-      return {
-        path: note.path,
-        status: typeof note.frontmatter.status === "string" ? note.frontmatter.status : null,
-        kinds: Array.isArray(note.frontmatter.kinds) ? note.frontmatter.kinds : null,
-        content: note.body,
-      };
-    } catch {
-      continue;
+  if (configured) {
+    // Legacy path: answer_style in course.md frontmatter points to a note.
+    const candidates = configured.startsWith("courses/")
+      ? [configured]
+      : [configured, `courses/${configured}`, `courses/${course}/${configured}`];
+    for (const path of candidates) {
+      try {
+        const note = vault.readNote(path);
+        return {
+          path: note.path,
+          status: typeof note.frontmatter.status === "string" ? note.frontmatter.status : null,
+          kinds: Array.isArray(note.frontmatter.kinds) ? note.frontmatter.kinds : null,
+          content: note.body,
+          fallback: false,
+        };
+      } catch {
+        continue;
+      }
     }
   }
-  return null;
+
+  // New path: courses/<course>/answer-style.md, with generic fallback.
+  const profile = vault.loadAnswerStyle(course);
+  if (!profile.content.trim()) return null;
+  return {
+    path: profile.path,
+    status: null,
+    kinds: null,
+    content: profile.content,
+    fallback: profile.fallback,
+  };
+}
+
+/**
+ * Select the matching template from a course answer-style profile.
+ * Parses the profile to detect subject type and question type, then returns
+ * a human-readable label like "Physiology -> essay" or "Anatomy -> Muscle".
+ * The agent states this label in a collapsed/debug line so wrong template picks are easy to spot.
+ */
+function selectTemplate(profileContent: string, goal: string): string {
+  const lower = `${goal}`.toLowerCase();
+  // Anatomy sub-type templates
+  const anatomySubtypes: Record<string, string> = {
+    muscle: "Muscle",
+    bone: "Bone",
+    nerve: "Nerve",
+    artery: "Artery / Vein",
+    vein: "Artery / Vein",
+    organ: "Organ / Viscus",
+    viscus: "Organ / Viscus",
+    joint: "Joint",
+    plexus: "Plexus",
+    axilla: "Region / Space / Canal",
+    "femoral triangle": "Region / Space / Canal",
+    "inguinal canal": "Region / Space / Canal",
+    "cubital fossa": "Region / Space / Canal",
+    embryology: "Embryology / Development",
+    development: "Embryology / Development",
+    histology: "Histology",
+  };
+  for (const [key, label] of Object.entries(anatomySubtypes)) {
+    if (lower.includes(key)) return `Anatomy -> ${label}`;
+  }
+  if (lower.includes("anatomy") || lower.includes("gross anatomy") || lower.includes("upper limb") || lower.includes("lower limb")) {
+    return "Anatomy -> (default — specify structure type for precise template)";
+  }
+  // Physiology
+  if (lower.includes("physiology") || lower.includes("renal") || lower.includes("nephron") || lower.includes("gfr") || lower.includes("filtration") || lower.includes("tubular") || lower.includes("acid-base") || lower.includes("raas") || lower.includes("micturition") || lower.includes("respiratory") || lower.includes("cardiac") || lower.includes("cardiovascular") || lower.includes("blood") || lower.includes("neuroscience") || lower.includes("autonomic")) {
+    return "Physiology -> essay";
+  }
+  // Community medicine
+  if (lower.includes("community") || lower.includes("epidemiology") || lower.includes("epidemiological") || lower.includes("prevention") || lower.includes("control") || lower.includes("phc") || lower.includes("primary health") || lower.includes("nigeria") || lower.includes("malaria") || lower.includes("typhoid") || lower.includes("cholera") || lower.includes("meningitis") || lower.includes("immunisation") || lower.includes("epi schedule") || lower.includes("surveillance") || lower.includes("screening") || lower.includes("biostatistics") || lower.includes("study design") || lower.includes("sampling")) {
+    return "Community Medicine -> essay_disease";
+  }
+  // Question-type detection from goal text
+  if (lower.includes("compare") || lower.includes("contrast") || lower.includes("differentiate")) return "Generic -> compare_contrast";
+  if (lower.includes("calculate") || lower.includes("formula") || lower.includes("compute")) return "Generic -> calculation";
+  if (lower.includes("short note") || lower.includes("saq") || lower.includes("brief note") || lower.includes("write briefly")) return "Generic -> short_note";
+  if (lower.includes("mcq") || lower.includes("sba") || lower.includes("single best") || lower.includes("multiple choice")) return "Generic -> mcq_sba";
+  return "Generic -> essay";
 }
 
 const INSTRUCTIONS = `This server is the Exam Harness for a medical student.
@@ -607,13 +671,17 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
         return json({
           session,
           answer_style: answerStyle,
+          answer_style_template: answerStyle
+            ? selectTemplate(answerStyle.content, session.goal)
+            : null,
+          answer_style_fallback: answerStyle?.fallback ?? false,
           mastery_snapshot: concepts.snapshot(session.course),
           due_items: concepts.due(session.course, 8),
           frontier: concepts.next(session.course, 5),
           last_session: sessions.history(session.course)[0] ?? null,
           note: answerStyle
-            ? "Start with the decay review queue, then the frontier. Follow answer_style for command words, structure and marking expectations. Read the cited notes before probing, and record evidence for every taught concept."
-            : "Start with the decay review queue, then the frontier. Read the cited notes before probing, and record evidence for every taught concept.",
+            ? `Answer style loaded from ${answerStyle.path}${answerStyle.fallback ? " (generic fallback — no per-course profile found)" : ""}. Selected template: ${selectTemplate(answerStyle.content, session.goal)}. Follow its headings, length_by_marks, and grading_rubric when probing, teaching, grading or drafting model answers. Start with the decay review queue, then the frontier. Read the cited notes before probing, and record evidence for every taught concept.`
+            : "No answer style profile found. Start with the decay review queue, then the frontier. Read the cited notes before probing, and record evidence for every taught concept.",
         });
       } catch (err) {
         return fail(err);

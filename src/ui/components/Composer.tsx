@@ -1,3 +1,4 @@
+import { uuid } from "../lib/uuid.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUp, BookOpen, GraduationCap, ListChecks, Loader2, RotateCcw } from "lucide-react";
 import type { Course } from "../api.ts";
@@ -158,7 +159,7 @@ export function Composer({
 
     setDraft("");
     try {
-      await onSend?.(text, crypto.randomUUID());
+      await onSend?.(text, uuid());
     } catch (err) {
       setDraft(text);
       setSendError(err instanceof Error ? err.message : "Message not sent. Your text is back in the box.");
@@ -167,7 +168,7 @@ export function Composer({
 
   if (view === "session" && ended) {
     return (
-      <div className="mx-auto w-full max-w-[760px]">
+      <div className={view === "session" ? "w-full max-w-4xl" : "mx-auto w-full max-w-[760px]"}>
         <div className={`${PILL} flex items-center justify-between gap-3`}>
           <p className="type-body min-w-0 flex-1 py-1 text-text-muted">
             This session has ended. Resume it to keep going.
@@ -193,7 +194,7 @@ export function Composer({
   const canSend = draft.trim().length > 0 && !sending;
 
   return (
-    <div className="mx-auto w-full max-w-[760px]">
+    <div className={view === "session" ? "w-full max-w-4xl" : "mx-auto w-full max-w-[760px]"}>
       <div className={PILL}>
         <textarea
           ref={textareaRef}

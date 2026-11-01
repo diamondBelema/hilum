@@ -58,7 +58,7 @@ export function Notes({
           </Button>
         )}
       </div>
-      {course && (
+      {course && courses.length > 1 && (
         <Button variant="ghost" className="-ml-2 mt-1 px-2 text-text-muted" onClick={onClearCourse}>
           <ArrowLeft aria-hidden="true" className="size-4" />
           <span>All courses</span>

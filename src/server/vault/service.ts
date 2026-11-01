@@ -350,6 +350,26 @@ export class VaultService {
     }
   }
 
+  /**
+   * Load the per-course answer-style profile.
+   * Reads courses/<code>/answer-style.md, falling back to courses/_default/answer-style.md.
+   * Returns the raw markdown so the agent can parse headings, templates, and rubrics at prompt time.
+   * The profile is data, not code — no answer-style content is hardcoded in TS/JS.
+   */
+  loadAnswerStyle(course: string): { path: string; content: string; fallback: boolean } {
+    const rel = `courses/${course}/answer-style.md`;
+    const abs = resolveInside(this.root, rel);
+    if (existsSync(abs)) {
+      return { path: rel, content: readFileSync(abs, "utf8"), fallback: false };
+    }
+    const defaultRel = "courses/_default/answer-style.md";
+    const defaultAbs = resolveInside(this.root, defaultRel);
+    if (existsSync(defaultAbs)) {
+      return { path: defaultRel, content: readFileSync(defaultAbs, "utf8"), fallback: true };
+    }
+    return { path: defaultRel, content: "", fallback: true };
+  }
+
   private cachedWrite(requestId?: string): { path: string; bytes: number; mode: string } | null {
     if (!requestId) return null;
     const row = this.db

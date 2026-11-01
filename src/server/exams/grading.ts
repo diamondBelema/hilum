@@ -64,6 +64,159 @@ export type PendingItem = {
   submittedAt: number;
 };
 
+export type HeadingCheck = {
+  heading: string;
+  present: boolean;
+  excerpt?: string;
+};
+
+export type ProfileGradeResult = {
+  template: string;
+  headings_expected: string[];
+  headings_present: HeadingCheck[];
+  headings_missing: string[];
+  mark_estimate: number;
+  max_marks: number;
+  rubric_notes: string[];
+};
+
+/**
+ * Compare a student answer against a course answer-style profile.
+ * Extracts expected headings from the profile's question_types and structure_templates,
+ * checks which headings are present in the answer, and estimates a mark based on the rubric.
+ * Headings are data from the profile file — nothing is hardcoded here.
+ */
+export function gradeAgainstProfile(
+  profileContent: string,
+  studentAnswer: string,
+  questionType: string,
+  maxMarks: number,
+): ProfileGradeResult {
+  const headings = extractHeadings(profileContent, questionType);
+  const lower = studentAnswer.toLowerCase();
+  const present: HeadingCheck[] = [];
+  const missing: string[] = [];
+
+  for (const h of headings) {
+    // Build a probe from the heading: strip slashes, take first 3 significant words
+    const cleaned = h.toLowerCase().replace(/\//g, " ");
+    const headingWords = cleaned.split(/\s+/).filter((w) => w.length > 2);
+    const probeWords = headingWords.slice(0, 3);
+    // Match if all probe words appear in the answer (handles bold labels, slashes, etc.)
+    const found = probeWords.every((w) => lower.includes(w));
+    if (found) {
+      const idx = lower.indexOf(probeWords[0]);
+      const excerpt = idx >= 0 ? studentAnswer.slice(Math.max(0, idx - 10), idx + 120).trim() : undefined;
+      present.push({ heading: h, present: true, excerpt });
+    } else {
+      missing.push(h);
+    }
+  }
+
+  // Estimate marks: each heading worth roughly maxMarks / headings.length, rounded down
+  const perHeading = headings.length > 0 ? maxMarks / headings.length : 0;
+  const mark_estimate = Math.round(present.length * perHeading);
+
+  const rubricNotes: string[] = [];
+  if (missing.length > 0) {
+    rubricNotes.push(`Missing headings: ${missing.join(", ")}`);
+  }
+  if (lower.includes("usually") || lower.includes("generally") || lower.includes("sometimes")) {
+    rubricNotes.push("Vague filler detected — use specific values and named structures.");
+  }
+  if (!/\d+\s*(mL|min|mmHg|mEq|kg|%|mOsm|mg|mmol)/i.test(studentAnswer)) {
+    rubricNotes.push("No units found — values must carry units.");
+  }
+
+  return {
+    template: questionType,
+    headings_expected: headings,
+    headings_present: present,
+    headings_missing: missing,
+    mark_estimate,
+    max_marks: maxMarks,
+    rubric_notes: rubricNotes,
+  };
+}
+
+/**
+ * Extract ordered headings from a profile for a given question type.
+ * Looks at the `### <type>` section under `## question_types` first,
+ * then falls back to `## structure_templates` sub-types.
+ * Handles nested markdown: ### essay -> headings: -> - item
+ */
+function extractHeadings(profileContent: string, questionType: string): string[] {
+  const lines = profileContent.split("\n");
+  const headings: string[] = [];
+  let inQuestionTypes = false;
+  let inStructureTemplates = false;
+  let inTargetSection = false;
+  let collecting = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (line.startsWith("## question_types")) {
+      inQuestionTypes = true;
+      inStructureTemplates = false;
+      inTargetSection = false;
+      collecting = false;
+      continue;
+    }
+    if (line.startsWith("## structure_templates")) {
+      inQuestionTypes = false;
+      inStructureTemplates = true;
+      inTargetSection = false;
+      collecting = false;
+      continue;
+    }
+    if (line.startsWith("## ") && !line.startsWith("## question_types") && !line.startsWith("## structure_templates")) {
+      inQuestionTypes = false;
+      inStructureTemplates = false;
+      inTargetSection = false;
+      collecting = false;
+      continue;
+    }
+
+    // Check for ### <type> heading
+    if (line.startsWith("### ")) {
+      const sectionName = line.replace(/^###\s*/, "").trim();
+      inTargetSection = sectionName === questionType;
+      collecting = false;
+      continue;
+    }
+    if (line.startsWith("#### ")) {
+      const sectionName = line.replace(/^####\s*/, "").trim();
+      inTargetSection = sectionName === questionType;
+      collecting = false;
+      continue;
+    }
+
+    if (!inTargetSection) continue;
+
+    // Start collecting headings list
+    if (trimmed === "headings:") {
+      collecting = true;
+      continue;
+    }
+    if (collecting && (line.match(/^\s+-\s+/) || line.match(/^\s*\d+\.\s+/))) {
+      const h = line.replace(/^\s+/, "").replace(/^[-*\d]+\.\s*/, "").trim();
+      if (h && !h.startsWith("rules") && !h.startsWith("headings") && h !== ".") {
+        headings.push(h);
+      }
+      continue;
+    }
+    // Stop collecting when we hit rules: or another ### or blank line after headings
+    if (collecting && (trimmed === "rules:" || trimmed === "" || line.startsWith("###") || line.startsWith("##"))) {
+      collecting = false;
+      continue;
+    }
+  }
+
+  return headings;
+}
+
 export class GradingError extends Error {}
 
 type PendingRow = {
