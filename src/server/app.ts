@@ -37,6 +37,34 @@ function lanAddresses(port: number): string[] {
   return [...new Set(addresses)].sort();
 }
 
+function isAllowedOrigin(origin: string | undefined): origin is string {
+  if (!origin) return false;
+  if (
+    origin === "http://tauri.localhost" ||
+    origin === "https://tauri.localhost" ||
+    origin === "tauri://localhost"
+  ) {
+    return true;
+  }
+  try {
+    const url = new URL(origin);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      const host = url.hostname;
+      if (
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        host === "::1" ||
+        host.startsWith("127.")
+      ) {
+        return true;
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 function backupRootFor(config: Config): string {
   const dbDirectory = dirname(config.dbPath === ":memory:" ? join(config.vaultPath, "app.db") : config.dbPath);
   const vaultRoot = resolve(config.vaultPath);
@@ -84,13 +112,8 @@ export function createApp(deps: AppDeps = {}) {
 
   app.use("*", async (c, next) => {
     const origin = c.req.header("origin");
-    if (
-      origin === "http://tauri.localhost" ||
-      origin === "https://tauri.localhost" ||
-      origin === "tauri://localhost" ||
-      origin === "http://127.0.0.1:5173"
-    ) {
-      c.header("access-control-allow-origin", origin);
+    if (isAllowedOrigin(origin)) {
+      c.header("access-control-allow-origin", origin!);
       c.header("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
       c.header("access-control-allow-headers", "content-type,authorization");
       c.header("vary", "Origin");
