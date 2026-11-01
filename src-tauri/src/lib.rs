@@ -62,7 +62,11 @@ pub fn run() {
                     .app_data_dir()
                     .map_err(|error| error.to_string())?;
                 fs::create_dir_all(&app_data).map_err(|error| error.to_string())?;
-                let vault = app_data.join("hilum-vault");
+                let vault = app
+                    .path()
+                    .document_dir()
+                    .map_err(|error| error.to_string())?
+                    .join("hilum-vault");
                 fs::create_dir_all(&vault).map_err(|error| error.to_string())?;
                 app.shell()
                     .sidecar("hilum-server")

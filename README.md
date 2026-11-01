@@ -66,7 +66,7 @@ All optional; defaults are fine for local use.
 
 ## Vault
 
-Default vault: `learning-harness/vault/` (override with `HARNESS_VAULT`). It is
+Default vault: `~/Documents/hilum-vault` (override with `HARNESS_VAULT`). It is
 **not committed** — notes, concepts, past papers and attempts are personal data.
 
 ```
