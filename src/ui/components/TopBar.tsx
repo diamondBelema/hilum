@@ -1,5 +1,5 @@
-import { Menu, X, RefreshCw } from "lucide-react";
-import { Link } from "../lib/router.ts";
+import { ArrowLeft, Menu, X, RefreshCw } from "lucide-react";
+import { goBack, hasContextBack, Link } from "../lib/router.ts";
 import { AgentStatus } from "./AgentStatus.tsx";
 import { IconButton } from "./Button.tsx";
 
@@ -31,6 +31,17 @@ export function TopBar({
       >
         <Menu aria-hidden="true" className="size-5" />
       </IconButton>
+
+      {hasContextBack() && (
+        <IconButton
+          label="Go back"
+          onClick={() => goBack("/")}
+          variant="ghost"
+          size="icon-sm"
+        >
+          <ArrowLeft aria-hidden="true" className="size-5" />
+        </IconButton>
+      )}
 
       <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
         <ol className="flex min-w-0 items-center gap-2">
