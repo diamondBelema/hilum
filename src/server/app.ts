@@ -87,7 +87,8 @@ export function createApp(deps: AppDeps = {}) {
     if (
       origin === "http://tauri.localhost" ||
       origin === "https://tauri.localhost" ||
-      origin === "tauri://localhost"
+      origin === "tauri://localhost" ||
+      origin === "http://127.0.0.1:5173"
     ) {
       c.header("access-control-allow-origin", origin);
       c.header("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
