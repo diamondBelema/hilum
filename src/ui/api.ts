@@ -852,7 +852,7 @@ export const api = {
       correctCount: number;
     }>>(`/api/sessions/${encodeURIComponent(sessionId)}/concepts`),
   backupVault: async () => {
-    const res = await fetch(apiUrl("/api/vault/backup"), { method: "POST" });
+    const res = await fetch("/api/vault/backup", { method: "POST" });
     if (!res.ok) {
       const payload = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(payload.error ?? `Request failed: ${res.status}`);
@@ -876,6 +876,30 @@ export const api = {
         hasDatabase: boolean;
       }>;
     }>;
+  },
+  rescanVault: async () => {
+    const res = await fetch(apiUrl("/api/vault/rescan"), { method: "POST" });
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(payload.error ?? `Request failed: ${res.status}`);
+    }
+    return res.json() as Promise<{ ok: boolean; stats: { notes: number; courses: number } }>;
+  },
+  diagnostics: async () => {
+    const res = await fetch(apiUrl("/api/diagnostics"));
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(payload.error ?? `Request failed: ${res.status}`);
+    }
+    return res.json() as Promise<unknown>;
+  },
+  createDemoCourse: async () => {
+    const res = await fetch(apiUrl("/api/onboarding/demo"), { method: "POST" });
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(payload.error ?? `Request failed: ${res.status}`);
+    }
+    return res.json() as Promise<{ ok: boolean; created: boolean; course: string; message?: string }>;
   },
 };
 
