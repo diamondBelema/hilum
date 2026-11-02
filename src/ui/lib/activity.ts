@@ -21,9 +21,10 @@ export function initialValues(spec: ActivitySpec): unknown[] {
   });
 }
 
-export function buildResponse(spec: ActivitySpec, values: unknown[]): {
+export function buildResponse(spec: ActivitySpec, values: unknown[], confidences?: Record<number, Confidence>): {
   components: unknown[];
   confidence?: Confidence;
+  confidences?: Record<number, Confidence>;
   think_aloud?: string;
   idk?: number[];
 } {
@@ -40,6 +41,7 @@ export function buildResponse(spec: ActivitySpec, values: unknown[]): {
       confidence === "guessing" || confidence === "likely" || confidence === "sure"
         ? confidence
         : undefined,
+    confidences,
     think_aloud: typeof thinkAloud === "string" ? thinkAloud : undefined,
     idk,
   };

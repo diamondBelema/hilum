@@ -73,11 +73,11 @@ export const LibraryItemCard: React.FC<LibraryItemCardProps> = ({
 
       <div className={cn('flex items-center gap-3', isList ? 'shrink-0' : 'justify-between pt-2 border-t border-border/40')}>
         <div className="flex items-center gap-1.5 flex-wrap">
-          {item.tags?.slice(0, 2).map((tag) => (
-            <span key={tag} className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground">
-              #{tag}
-            </span>
-          ))}
+              {item.tags?.slice(0, 2).map((tag) => (
+                <span key={tag} className="rounded-full bg-secondary px-2 py-0.5 text-meta text-secondary-foreground">
+                  #{tag}
+                </span>
+              ))}
         </div>
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -86,7 +86,7 @@ export const LibraryItemCard: React.FC<LibraryItemCardProps> = ({
               {item.masteryScore}%
             </span>
           )}
-          <span className="text-[11px] whitespace-nowrap">{item.updatedAt}</span>
+          <span className="text-meta whitespace-nowrap">{item.updatedAt}</span>
         </div>
       </div>
     </div>

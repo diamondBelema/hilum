@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, Circle, Clock, Library, Plus, Radio, Search, Settings2 } from "lucide-react";
+import { Activity, Check, Circle, Clock, Library, Plus, Radio, Search, Settings2 } from "lucide-react";
 import type { Course, SessionSummary } from "../api.ts";
 import { Link } from "../lib/router.ts";
 import { cn } from "../lib/cn.ts";
@@ -138,6 +138,14 @@ export function Sidebar({
         >
           <Library aria-hidden="true" className="size-5" />
           Library
+        </Link>
+        <Link
+          to="/agent"
+          onClick={onNavigate}
+          className="type-body-sm flex min-h-11 items-center gap-2 rounded-control px-2 font-medium text-text-muted hover:bg-surface-2 hover:text-text"
+        >
+          <Activity aria-hidden="true" className="size-5" />
+          Agent activity
         </Link>
         <Link
           to="/settings"

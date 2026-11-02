@@ -37,6 +37,8 @@ type SessionRow = {
   goal_id: string | null;
   time_box_min: number | null;
   active_plan_item_id: string | null;
+  brief: string | null;
+  practice_concepts_json: string | null;
 };
 
 type ActivityRow = {
@@ -88,10 +90,12 @@ export type SessionDetail = {
   timeBoxMin: number | null;
   activePlanItemId: string | null;
   title: string | null;
+  brief: string | null;
   startedAt: number;
   endedAt: number | null;
   summary: string;
   notePath: string | null;
+  practiceConcepts: string[];
   agent: {
     state: "listening" | "connected" | "idle" | "none";
     clientName: string | null;
@@ -176,7 +180,7 @@ export class SessionService {
     goal = "learn",
     title: string | null = null,
     actor: "agent" | "app" = "app",
-    options: { goalId?: string | null; timeBoxMin?: number | null } = {},
+    options: { goalId?: string | null; timeBoxMin?: number | null; conceptIds?: string[] } = {},
   ): Promise<SessionDetail> {
     if (!course.trim()) throw new SessionError("course is required");
     const exists = (await this.vault.listCourses()).some((item) => item.code === course);
@@ -206,9 +210,19 @@ export class SessionService {
     const now = Date.now();
     this.db
       .query(
-        "INSERT INTO sessions (id, course, goal, title, goal_id, time_box_min, started_at, agent_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sessions (id, course, goal, title, goal_id, time_box_min, practice_concepts_json, started_at, agent_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(id, course, goal, title ?? null, options.goalId ?? null, options.timeBoxMin ?? null, now, null);
+      .run(
+        id,
+        course,
+        goal,
+        title ?? null,
+        options.goalId ?? null,
+        options.timeBoxMin ?? null,
+        options.conceptIds ? JSON.stringify(options.conceptIds) : null,
+        now,
+        null,
+      );
     if (options.goalId) {
       const goalRow = this.db
         .query("SELECT course FROM goals WHERE id = ?")
@@ -341,6 +355,19 @@ export class SessionService {
     });
   }
 
+  async setSessionBrief(sessionId: string, brief: string | null): Promise<void> {
+    const session = this.sessionRow(sessionId);
+    if (session.ended_at) throw new SessionError("session has ended");
+    this.db.query("UPDATE sessions SET brief = ? WHERE id = ?").run(brief ?? null, sessionId);
+    this.events.publish({
+      type: "session",
+      course: session.course,
+      sessionId,
+      state: "brief_changed",
+      at: Date.now(),
+    });
+  }
+
   active(course?: string): SessionDetail | null {
     const row = course
       ? (this.db
@@ -387,6 +414,8 @@ export class SessionService {
       timeBoxMin: row.time_box_min,
       activePlanItemId: row.active_plan_item_id,
       title: row.title,
+      brief: row.brief,
+      practiceConcepts: row.practice_concepts_json ? JSON.parse(row.practice_concepts_json) : [],
       startedAt: row.started_at,
       endedAt: row.ended_at,
       summary: row.summary,
@@ -1115,6 +1144,11 @@ export class SessionService {
         lastAt: number;
       }>;
     return rows;
+  }
+
+  practiceConcepts(sessionId: string): string[] {
+    const row = this.sessionRow(sessionId);
+    return row.practice_concepts_json ? JSON.parse(row.practice_concepts_json) : [];
   }
 
   sessionConcepts(sessionId: string): Array<{
