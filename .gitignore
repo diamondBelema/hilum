@@ -9,6 +9,7 @@ src-tauri/binaries/
 
 # Harness runtime state (never commit the database)
 state/
+state/agent-logs/
 
 # Personal vault (notes, concepts, past papers) is never committed
 vault/
@@ -25,3 +26,4 @@ __pycache__/
 
 # Converter intake scratch
 inbox/_unsorted/
+vault/inbox/_unsorted/

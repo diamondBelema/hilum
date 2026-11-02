@@ -20,6 +20,62 @@ function migrate(db: Db): void {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS jobs (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      executor TEXT NOT NULL DEFAULT 'agent',
+      priority INTEGER NOT NULL DEFAULT 50,
+      course TEXT,
+      payload_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'queued',
+      lease_owner TEXT,
+      lease_expires_at INTEGER,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      max_attempts INTEGER NOT NULL DEFAULT 3,
+      result_json TEXT,
+      error TEXT,
+      dedupe_key TEXT,
+      created_by TEXT NOT NULL DEFAULT 'server',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      done_at INTEGER
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS jobs_dedupe
+      ON jobs(dedupe_key) WHERE dedupe_key IS NOT NULL AND status IN ('queued','leased');
+    CREATE INDEX IF NOT EXISTS jobs_pick ON jobs(status, executor, priority, created_at);
+
+    CREATE TABLE IF NOT EXISTS inbox_items (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
+      sha256 TEXT NOT NULL UNIQUE,
+      size INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      course TEXT,
+      confidence REAL,
+      status TEXT NOT NULL DEFAULT 'new',
+      note_paths_json TEXT NOT NULL DEFAULT '[]',
+      error TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS course_aliases (
+      course TEXT NOT NULL,
+      alias TEXT NOT NULL,
+      source TEXT NOT NULL,
+      PRIMARY KEY (course, alias)
+    );
+
+    CREATE TABLE IF NOT EXISTS vision_queue (
+      id TEXT PRIMARY KEY,
+      course TEXT NOT NULL,
+      note_path TEXT NOT NULL,
+      page INTEGER,
+      png_path TEXT NOT NULL,
+      flag TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending'
+    );
+
     CREATE TABLE IF NOT EXISTS notes (
       path TEXT PRIMARY KEY,
       course TEXT,
@@ -367,6 +423,15 @@ function migrate(db: Db): void {
   if (!sessionColumns.some((column) => column.name === "active_plan_item_id")) {
     db.exec("ALTER TABLE sessions ADD COLUMN active_plan_item_id TEXT");
   }
+  if (!sessionColumns.some((column) => column.name === "mode")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'teach'");
+  }
+  if (!sessionColumns.some((column) => column.name === "brief")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN brief TEXT");
+  }
+  if (!sessionColumns.some((column) => column.name === "practice_concepts_json")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN practice_concepts_json TEXT");
+  }
 
   const requestColumns = db.query("PRAGMA table_info(agent_requests)").all() as { name: string }[];
   if (!requestColumns.some((column) => column.name === "client_id")) {
@@ -384,6 +449,6 @@ function migrate(db: Db): void {
 
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
-    "11",
+    "12",
   );
 }

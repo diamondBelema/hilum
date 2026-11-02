@@ -25,11 +25,15 @@ export function buildResponse(spec: ActivitySpec, values: unknown[]): {
   components: unknown[];
   confidence?: Confidence;
   think_aloud?: string;
+  idk?: number[];
 } {
   const confidenceIndex = componentValue(spec, "confidence_rating");
   const thinkIndex = componentValue(spec, "think_aloud");
   const confidence = typeof confidenceIndex === "number" ? values[confidenceIndex] : undefined;
   const thinkAloud = typeof thinkIndex === "number" ? values[thinkIndex] : undefined;
+  const idk = spec.components.flatMap((component, index) =>
+    (component.type === "mcq_single" && values[index] === "__idk__") ||
+    ((component.type === "mcq_multi" || component.type === "tf_multi") && values[index] === "__idk__") ? [index] : []);
   return {
     components: values,
     confidence:
@@ -37,6 +41,7 @@ export function buildResponse(spec: ActivitySpec, values: unknown[]): {
         ? confidence
         : undefined,
     think_aloud: typeof thinkAloud === "string" ? thinkAloud : undefined,
+    idk,
   };
 }
 
@@ -59,6 +64,7 @@ export function missingAnswers(spec: ActivitySpec, values: unknown[]): string[] 
                   ? "the confidence rating"
                   : component.type.replaceAll("_", " ");
     if (component.type === "mcq_single" && value === null) missing.push(label);
+    if ((component.type === "mcq_single" || component.type === "tf_multi") && value === "__idk__") return;
     if (component.type === "tf_multi" && Array.isArray(value) && value.some((item) => item === null)) {
       missing.push(label);
     }

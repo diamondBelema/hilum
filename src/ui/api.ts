@@ -12,6 +12,29 @@ export type Course = {
   concepts: number;
 };
 
+export type VaultStatus = {
+  path: string;
+  exists: boolean;
+  writable: boolean;
+  courses: string[];
+  freeBytes: number | null;
+};
+
+export type InboxItem = {
+  id: string;
+  path: string;
+  sha256: string;
+  size: number;
+  kind: string;
+  course: string | null;
+  confidence: number | null;
+  status: string;
+  note_paths: string[];
+  error: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
 export type Goal = {
   id: string;
   course: string;
@@ -300,7 +323,19 @@ async function getJson<T>(url: string): Promise<T> {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `Request failed: ${res.status}`);
   }
+
   return res.json() as Promise<T>;
+}
+
+async function uploadFile(file: File): Promise<unknown> {
+  const form = new FormData();
+  form.set("file", file);
+  const res = await fetch(apiUrl("/api/inbox/upload"), { method: "POST", body: form });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `Request failed: ${res.status}`);
+  }
+  return res.json();
 }
 
 export type ActivityType =
@@ -328,7 +363,8 @@ export type ActivityType =
   | "muddy_point"
   | "spot_the_error"
   | "teach_back"
-  | "case_vignette";
+  | "case_vignette"
+  | "demo";
 
 export type ActivityComponent = {
   type: ActivityType;
@@ -367,6 +403,8 @@ export type ActivityComponent = {
   image?: string;
   labels?: string[];
   question?: string;
+  height?: number;
+  html?: string;
 };
 
 export type ActivityCite = { note: string; anchor?: string; quote?: string };
@@ -588,6 +626,28 @@ export type ServerSettings = {
   vault: string;
   db: string;
   restartRequired?: boolean;
+  agent?: AgentStatus;
+  bindHost?: string;
+  configuredVault?: string;
+  mcpUrls?: string[];
+};
+
+export type AgentStatus = {
+  state: "not_configured" | "idle" | "starting" | "working" | "stopped" | "failed";
+  pid: number | null;
+  error: string | null;
+  config: { argv: string[]; cwd?: string; timeout_sec?: number; max_runs_per_hour?: number } | null;
+};
+
+export type Job = {
+  id: string;
+  type: string;
+  status: "queued" | "leased" | "done" | "failed" | "cancelled";
+  course: string | null;
+  payload: unknown;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
 };
 
 export const api = {
@@ -595,7 +655,22 @@ export const api = {
   settings: () => getJson<ServerSettings>("/api/settings"),
   updateSettings: (input: { lan?: boolean; regenerateToken?: boolean; vaultPath?: string }) =>
     sendJson<ServerSettings>("/api/settings", "POST", input),
+  agentStatus: () => getJson<AgentStatus>("/api/agent/status"),
+  startAgent: () => sendJson<AgentStatus>("/api/agent/start", "POST", {}),
+  stopAgent: () => sendJson<AgentStatus>("/api/agent/stop", "POST", {}),
+  jobs: (limit = 50) => getJson<Job[]>(`/api/jobs?limit=${limit}`),
+  cancelJob: (id: string) => sendJson<Job>(`/api/jobs/${encodeURIComponent(id)}/cancel`, "POST", {}),
+  research: (input: { topic: string; reason?: string; course?: string | null; preferred_sources?: string[] }) =>
+    sendJson<Job>("/api/research", "POST", input),
   courses: () => getJson<Course[]>("/api/courses"),
+  vaultStatus: () => getJson<VaultStatus>("/api/vault/status"),
+  scaffoldVault: () => sendJson<VaultStatus>("/api/vault/scaffold", "POST", {}),
+  createCourse: (input: { code: string; title: string; examDate?: string | null; answerStyle?: string | null }) =>
+    sendJson<{ code: string; created: boolean }>("/api/courses", "POST", input),
+  inbox: (status?: string) => getJson<InboxItem[]>(`/api/inbox${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  uploadInbox: (file: File) => uploadFile(file) as Promise<{ item: InboxItem; duplicate: boolean }>,
+  correctInbox: (id: string, course: string) =>
+    sendJson<InboxItem>(`/api/inbox/${encodeURIComponent(id)}/correct`, "POST", { course }),
   goals: (course?: string) =>
     getJson<Goal[]>(`/api/goals${course ? `?course=${encodeURIComponent(course)}` : ""}`),
   createGoal: (input: {

@@ -36,6 +36,35 @@ describe("vault service", () => {
     ).rejects.toThrow(/traversal/);
   });
 
+  test("scaffolds a vault and creates courses idempotently without overwriting", async () => {
+    const { app, vaultSetup } = createApp({ config: { vaultPath: root, dbPath: ":memory:" } });
+    const first = await vaultSetup.scaffold();
+    expect(first.exists).toBe(true);
+    expect(first.writable).toBe(true);
+    const indexPath = join(root, "INDEX.md");
+    await writeFile(indexPath, "# Custom vault\n", "utf8");
+
+    const created = await vaultSetup.createCourse({
+      code: "BCH-203",
+      title: "Biochemistry",
+      examDate: "2027-01-10",
+    });
+    expect(created).toEqual({ code: "bch-203", created: true });
+    const again = await vaultSetup.createCourse({ code: "bch-203", title: "Changed title" });
+    expect(again).toEqual({ code: "bch-203", created: false });
+    expect(await Bun.file(indexPath).text()).toBe("# Custom vault\n");
+    expect(await Bun.file(join(root, "courses/bch-203/course.md")).text()).toContain("title: Biochemistry");
+
+    const response = await app.request("/api/vault/status");
+    expect(response.status).toBe(200);
+    expect((await response.json()).courses).toContain("bch-203");
+  });
+
+  test("rejects unsafe course codes", async () => {
+    const { vaultSetup } = createApp({ config: { vaultPath: root, dbPath: ":memory:" } });
+    await expect(vaultSetup.createCourse({ code: "../escape", title: "Nope" })).rejects.toThrow(/invalid|safe slug/);
+  });
+
   test("writes, reads and searches notes", async () => {
     await writeNote(
       "courses/ana-211/notes/tubules.md",

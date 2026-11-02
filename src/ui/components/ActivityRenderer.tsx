@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Eye, RotateCcw } from "lucide-react";
 import type { ActivityComponent, ActivitySpec, Confidence } from "../api.ts";
 import { CONFIDENCE_LABELS } from "../lib/activity.ts";
+import { useDictation } from "../lib/dictation.ts";
 import { Chip } from "./ui.tsx";
 
 type Props = {
@@ -29,7 +30,7 @@ export function ActivityRenderer({
     <div className="space-y-4">
       {showTitle && spec.title && <h2 className="text-xl font-semibold tracking-tight">{spec.title}</h2>}
       {spec.instructions && <p className="reading text-sm text-text-muted">{spec.instructions}</p>}
-      {spec.components.map((component, index) => (
+      {spec.components.map((component, index) => component ? (
         <div key={`${component.type}-${index}`} className="rounded-panel border border-border-subtle bg-surface p-4">
           <ComponentView
             activityId={activityId}
@@ -43,7 +44,7 @@ export function ActivityRenderer({
             onRenderError={onRenderError}
           />
         </div>
-      ))}
+      ) : null)}
       {spec.cites.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {spec.cites.map((cite, index) => (
@@ -102,6 +103,7 @@ function ComponentView({
           value={typeof value === "number" ? value : null}
           onChange={onChange}
           disabled={disabled}
+          idk={value === "__idk__"}
         />
       );
     case "tf_multi":
@@ -112,6 +114,7 @@ function ComponentView({
           value={Array.isArray(value) ? value : []}
           onChange={onChange}
           disabled={disabled}
+          idk={value === "__idk__"}
         />
       );
     case "theory":
@@ -274,6 +277,19 @@ function ComponentView({
           disabled={disabled}
         />
       );
+    case "demo":
+      return (
+        <div>
+          <p className="text-sm font-medium">{component.title}</p>
+          <iframe
+            title={component.title}
+            sandbox="allow-scripts"
+            srcDoc={`<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'"><body>${component.html}`}
+            style={{ height: component.height ?? 240 }}
+            className="mt-3 w-full rounded-control border border-border-subtle bg-white"
+          />
+        </div>
+      );
     case "concept_map":
       return (
         <ConceptMap
@@ -406,12 +422,14 @@ function Mcq({
   value,
   onChange,
   disabled,
+  idk,
 }: {
   stem: string;
   options: string[];
   value: number | null;
   onChange: (value: unknown) => void;
   disabled?: boolean;
+  idk?: boolean;
 }) {
   const group = useId();
   return (
@@ -438,6 +456,9 @@ function Mcq({
             </span>
           </label>
         ))}
+        <button type="button" className={`min-h-11 rounded-control border px-3 text-sm ${idk ? "border-primary bg-primary-soft" : "border-border-subtle"}`} onClick={() => onChange("__idk__")}>
+          I don't know
+        </button>
       </div>
     </fieldset>
   );
@@ -449,12 +470,14 @@ function TrueFalse({
   value,
   onChange,
   disabled,
+  idk,
 }: {
   stem: string;
   statements: { text: string }[];
   value: unknown[];
   onChange: (value: unknown) => void;
   disabled?: boolean;
+  idk?: boolean;
 }) {
   return (
     <fieldset disabled={disabled}>
@@ -493,6 +516,9 @@ function TrueFalse({
           </li>
         ))}
       </ol>
+      <button type="button" className={`mt-3 min-h-11 rounded-control border px-3 text-sm ${idk ? "border-primary bg-primary-soft" : "border-border-subtle"}`} onClick={() => onChange("__idk__")}>
+        I don't know
+      </button>
     </fieldset>
   );
 }
@@ -946,6 +972,7 @@ function TeachBack({
   minWords?: number;
 }) {
   const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+  const dictation = useDictation(value, (next) => onChange(next));
   const target = minWords ?? 20;
   return (
     <div>
@@ -958,6 +985,11 @@ function TeachBack({
         placeholder="Explain as if teaching a peer…"
         className="reading mt-3 w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
       />
+      {dictation.supported && (
+        <button type="button" disabled={disabled} onClick={dictation.toggle} className="mt-2 min-h-10 rounded-control border border-border-subtle px-3 text-sm">
+          {dictation.listening ? "Stop dictation" : "Dictate"}
+        </button>
+      )}
       <p className={`mt-1 text-xs ${words < target ? "text-text-muted" : "text-correct"}`}>
         {words} / {target} words
       </p>

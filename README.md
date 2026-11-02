@@ -40,7 +40,7 @@ Builds the UI on first run, then serves the app and the MCP endpoint on
 | `bun run verify` | Typecheck + unit tests + localhost smoke + browser e2e |
 | `bun run test` | Unit tests |
 | `bun run smoke` | Health, UI shell, MCP initialize |
-| `bun run scripts/copy-db.ts` | Daily DB backup to `state/backups/` |
+| `bun run scripts/backup-db.ts` | Daily DB backup to `state/backups/` |
 | `bun run scripts/export-pack.ts` | Offline data bundle in `.study-pack/` |
 | `npm run tauri:dev` | Run the desktop shell around the local app |
 | `npm run tauri:build` | Build desktop installers (platform prerequisites required) |
@@ -78,12 +78,13 @@ vault/
   inbox/<course>/           slides/PDFs awaiting conversion
 ```
 
-Drop slides/PPTX/PDFs into `vault/inbox/<course>/`, then run the Lane A converter
-(`learning-harness-lane-a/tools/intake.py`, then `convert.py`) to produce notes, or
-write notes directly.
+Drop slides/PPTX/PDFs into `vault/inbox/<course>/`, then run the Lane A intake
+(`tools/intake.py`) and converter helpers under `tools/harness/` to produce notes,
+or write notes directly. The recovered Lane A implementation is intentionally
+kept separate from the TypeScript server.
 
 The database (`state/app.db`) holds attempts, grades, evidence and mastery. It is
-**not rebuildable from the vault** — back it up with `bun run scripts/copy-db.ts`.
+**not rebuildable from the vault** — back it up with `bun run scripts/backup-db.ts`.
 
 ## Sharing
 
@@ -122,6 +123,10 @@ Tool groups:
 - **Questions and exams:** `add_questions`, `import_past_paper`, `list_questions`, `get_question`, `update_question`, `verify_question`, `create_paper`, `list_papers`, `get_paper`, `get_attempt_results`
 - **Grading:** `get_pending_grading`, `submit_grade`
 - **Goals, plans, tasks and pacing:** `get_goal`, `update_goal`, `propose_plan`, `update_plan_item`, `propose_plan_change`, `get_coverage`, `get_pacing`, `add_task`, `update_task`, `list_tasks`
+
+The optional agent launcher is controlled from Settings. It reads a local
+`state/agent.json` argv configuration, never executes shell strings, and the app
+continues to work without an agent.
 
 Prompts: `run_session(course)`, `grade_theory_answer(answer_id)`, `exam_debrief(attempt_id)`.
 The full teaching playbook is available through `get_teaching_guide` and is

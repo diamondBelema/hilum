@@ -11,6 +11,8 @@ import type { PaperService } from "./exams/papers.ts";
 import type { SessionService } from "./sessions/service.ts";
 import type { ConceptService } from "./concepts/service.ts";
 import type { GoalService } from "./goals/service.ts";
+import type { JobService } from "./jobs/service.ts";
+import type { VisionService } from "./vision/service.ts";
 import { conceptInputSchema, conceptPatchSchema, EDGE_TYPES } from "./concepts/validation.ts";
 import {
   MISTAKE_TAGS,
@@ -120,6 +122,7 @@ Each course may set answer_style in course.md. session_start returns that file: 
 Always begin with get_active_session to learn which session the student has open, then use its session_id for all subsequent session tools.
 Call get_teaching_guide at the start of a teaching session when you need the full teaching playbook.
 Teaching protocol: get_active_session (or session_start if none), read the index, probe with activities, diagnose, teach, record evidence, session_end.
+Worker protocol: await_work -> perform the judgment task with normal MCP tools -> complete_job (or fail_job) -> await_work. Stop on idle or retire.
 Never invent content without citations; unverified content must be marked unverified.
 Exam simulations are deterministic and run without an agent.
 Theory answers wait in the grading queue: call get_pending_grading, grade against the supplied rubric and model answer, then call submit_grade with per-heading scores, feedback and mistake tags. Use the grade_theory_answer prompt when unsure.
@@ -137,6 +140,8 @@ export function createMcpServer(
   sessions: SessionService,
   concepts: ConceptService,
   goals?: GoalService,
+  jobs?: JobService,
+  vision?: VisionService,
 ): McpServer {
   const server = new McpServer(
     { name: "exam-harness", version: config.version },
@@ -174,6 +179,99 @@ export function createMcpServer(
       }
     },
   );
+
+  if (jobs) {
+    server.registerTool(
+      "enqueue_job",
+      {
+        description: "Queue an agent or server job. Duplicate active dedupe keys return the existing job.",
+        inputSchema: {
+          type: z.string().min(1),
+          executor: z.enum(["agent", "server"]).optional(),
+          priority: z.number().int().min(0).max(100).optional(),
+          course: z.string().nullable().optional(),
+          payload: z.record(z.unknown()).optional(),
+          dedupe_key: z.string().min(1).nullable().optional(),
+        },
+      },
+      async ({ type, executor, priority, course, payload, dedupe_key }) =>
+        json(jobs.enqueue({ type, executor, priority, course, payload, dedupeKey: dedupe_key })),
+    );
+    server.registerTool(
+      "await_work",
+      {
+        description: "Lease the next queued agent job for up to 25 seconds.",
+        inputSchema: {
+          worker_id: z.string().min(1),
+          types: z.array(z.string().min(1)).optional(),
+          timeout_seconds: z.number().int().min(0).max(25).optional(),
+        },
+      },
+      async ({ worker_id, types, timeout_seconds }) => {
+        const job = await jobs.awaitWork(worker_id, types, timeout_seconds ?? 0);
+        return json(job ? { kind: "job", job } : { kind: "idle", queue: { pending: jobs.list().filter((item) => item.status === "queued").length } });
+      },
+    );
+    server.registerTool(
+      "complete_job",
+      {
+        description: "Complete a leased job with a validated JSON result.",
+        inputSchema: {
+          job_id: z.string().min(1),
+          worker_id: z.string().min(1),
+          result: z.unknown(),
+        },
+      },
+      async ({ job_id, worker_id, result }) => {
+        try {
+          return json(jobs.complete(job_id, worker_id, result));
+        } catch (err) {
+          return fail(err);
+        }
+        if (vision) {
+          const visionService = vision as VisionService;
+          server.registerTool("vision_queue_list", {
+            description: "List pending vision queue items.",
+            inputSchema: { course: z.string().optional() },
+          }, async ({ course }) => json(visionService.list(course)));
+          server.registerTool("get_page_image", {
+            description: "Return a queued page image for a vision-capable agent.",
+            inputSchema: { queue_id: z.string().min(1) },
+          }, async ({ queue_id }) => {
+            try {
+              const image = await visionService.image(queue_id);
+              return { content: [{ type: "image" as const, data: image.data, mimeType: image.mimeType }] };
+            } catch (err) { return fail(err); }
+          });
+          server.registerTool("vision_resolve", {
+            description: "Resolve a vision queue item idempotently.",
+            inputSchema: { queue_id: z.string().min(1), text: z.string(), done_as: z.enum(["done", "done-image"]).optional() },
+          }, async ({ queue_id, text, done_as }) => {
+            try { return json(await visionService.resolve(queue_id, text, done_as ?? "done")); } catch (err) { return fail(err); }
+          });
+        }
+      },
+    );
+    server.registerTool(
+      "fail_job",
+      {
+        description: "Fail a leased job, optionally requeueing while attempts remain.",
+        inputSchema: {
+          job_id: z.string().min(1),
+          worker_id: z.string().min(1),
+          error: z.string().min(1),
+          retry: z.boolean().optional(),
+        },
+      },
+      async ({ job_id, worker_id, error, retry }) => {
+        try {
+          return json(jobs.fail(job_id, worker_id, error, retry ?? true));
+        } catch (err) {
+          return fail(err);
+        }
+      },
+    );
+  }
 
   const clientName = (): string => {
     const info = server.server.getClientVersion();
@@ -1417,8 +1515,10 @@ export async function handleMcpRequest(
   sessions: SessionService,
   concepts: ConceptService,
   goals: GoalService,
+  jobs?: JobService,
+  vision?: VisionService,
 ): Promise<Response> {
-  const server = createMcpServer(config, vault, questions, papers, runner, grading, sessions, concepts, goals);
+  const server = createMcpServer(config, vault, questions, papers, runner, grading, sessions, concepts, goals, jobs, vision);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
