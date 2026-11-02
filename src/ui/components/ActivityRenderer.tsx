@@ -3,14 +3,18 @@ import { ArrowLeft, ArrowRight, Eye, RotateCcw } from "lucide-react";
 import type { ActivityComponent, ActivitySpec, Confidence } from "../api.ts";
 import { CONFIDENCE_LABELS } from "../lib/activity.ts";
 import { useDictation } from "../lib/dictation.ts";
+import { sanitizeSvg } from "../lib/svg-sanitizer.ts";
 import { Chip } from "./ui.tsx";
 
 type Props = {
   activityId: string;
   spec: ActivitySpec;
   values: unknown[];
+  confidences?: Record<number, Confidence>;
+  lang?: string;
   showTitle?: boolean;
   onChange?: (index: number, value: unknown) => void;
+  onConfidenceChange?: (index: number, confidence: Confidence) => void;
   disabled?: boolean;
   onOpenNote?: (path: string, anchor?: string) => void;
   onRenderError?: (activityId: string, message: string) => void;
@@ -20,12 +24,25 @@ export function ActivityRenderer({
   activityId,
   spec,
   values,
+  confidences,
+  lang,
   showTitle = true,
   onChange,
+  onConfidenceChange,
   disabled,
   onOpenNote,
   onRenderError,
 }: Props) {
+  const hasConfidenceRating = spec.components.some((component) => component.type === "confidence_rating");
+  const [localConfidences, setLocalConfidences] = useState<Record<number, Confidence>>({});
+  const mergedConfidences = { ...confidences, ...localConfidences };
+
+  const gradedTypes = new Set([
+    "mcq_single", "mcq_multi", "tf_multi", "cloze", "matching", "ordering",
+    "theory", "calculation", "spot_the_error", "short_answer", "teach_back",
+    "case_vignette", "think_aloud", "muddy_point", "label_diagram", "spotter_station", "annotated_image",
+  ]);
+
   return (
     <div className="space-y-4">
       {showTitle && spec.title && <h2 className="text-xl font-semibold tracking-tight">{spec.title}</h2>}
@@ -40,9 +57,20 @@ export function ActivityRenderer({
               if (onChange) onChange(index, value);
             }}
             disabled={disabled}
+            lang={lang}
             onOpenNote={onOpenNote}
             onRenderError={onRenderError}
           />
+          {!hasConfidenceRating && !disabled && gradedTypes.has(component.type) && (
+            <ConfidenceRow
+              index={index}
+              value={mergedConfidences[index]}
+              onChange={(confidence) => {
+                setLocalConfidences((current) => ({ ...current, [index]: confidence }));
+                if (onConfidenceChange) onConfidenceChange(index, confidence);
+              }}
+            />
+          )}
         </div>
       ) : null)}
       {spec.cites.length > 0 && (
@@ -71,6 +99,7 @@ function ComponentView({
   value,
   onChange,
   disabled,
+  lang,
   onOpenNote,
   onRenderError,
 }: {
@@ -79,6 +108,7 @@ function ComponentView({
   value: unknown;
   onChange: (value: unknown) => void;
   disabled?: boolean;
+  lang?: string;
   onOpenNote?: (path: string, anchor?: string) => void;
   onRenderError?: (activityId: string, message: string) => void;
 }) {
@@ -125,6 +155,7 @@ function ComponentView({
           value={typeof value === "string" ? value : ""}
           onChange={onChange}
           disabled={disabled}
+          lang={lang}
         />
       );
     case "worked_example_stepper":
@@ -138,6 +169,7 @@ function ComponentView({
           value={typeof value === "string" ? value : ""}
           onChange={onChange}
           disabled={disabled}
+          lang={lang}
         />
       );
     case "compare_table":
@@ -196,6 +228,7 @@ function ComponentView({
           value={typeof value === "string" ? value : ""}
           onChange={onChange}
           disabled={disabled}
+          lang={lang}
         />
       );
     case "short_answer":
@@ -206,6 +239,7 @@ function ComponentView({
           onChange={onChange}
           disabled={disabled}
           modelAnswer={component.model_answer}
+          lang={lang}
         />
       );
     case "matching":
@@ -275,6 +309,7 @@ function ComponentView({
           value={typeof value === "object" && value !== null ? (value as Record<string, string>) : {}}
           onChange={onChange}
           disabled={disabled}
+          lang={lang}
         />
       );
     case "demo":
@@ -290,6 +325,8 @@ function ComponentView({
           />
         </div>
       );
+    case "figure":
+      return <FigureView figureId={component.figure_id} width={component.width} height={component.height} alt={component.alt} />;
     case "concept_map":
       return (
         <ConceptMap
@@ -344,11 +381,41 @@ function ComponentView({
           value={typeof value === "string" ? value : ""}
           onChange={onChange}
           disabled={disabled}
+          lang={lang}
         />
       );
     default:
       return null;
   }
+}
+
+function ConfidenceRow({
+  index,
+  value,
+  onChange,
+}: {
+  index: number;
+  value?: Confidence;
+  onChange: (confidence: Confidence) => void;
+}) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 pl-8">
+      <span className="type-meta text-text-muted text-xs">Confidence:</span>
+      {(Object.keys(CONFIDENCE_LABELS) as Confidence[]).map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onChange(option)}
+          aria-pressed={value === option}
+          className={`min-h-10 rounded-control border px-2 py-1 text-xs ${
+            value === option ? "border-primary bg-primary-soft font-semibold" : "border-border-subtle hover:bg-surface-2"
+          }`}
+        >
+          {CONFIDENCE_LABELS[option]}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function Flashcard({ front, back }: { front: string; back: string }) {
@@ -529,13 +596,17 @@ function Theory({
   value,
   onChange,
   disabled,
+  lang,
 }: {
   prompt: string;
   marks: number;
   value: string;
   onChange: (value: unknown) => void;
   disabled?: boolean;
+  lang?: string;
 }) {
+  const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+  const dictation = useDictation(value, (next) => onChange(next), lang);
   return (
     <div>
       <div className="flex items-start justify-between gap-3">
@@ -550,6 +621,12 @@ function Theory({
         className="reading mt-3 w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
         placeholder="Write your answer…"
       />
+      {dictation.supported && (
+        <button type="button" disabled={disabled} onClick={dictation.toggle} className="mt-2 min-h-10 rounded-control border border-border-subtle px-3 text-sm">
+          {dictation.listening ? "Stop dictation" : "Dictate"}
+        </button>
+      )}
+      <p className={`mt-1 text-xs text-text-muted`}>{words} words</p>
     </div>
   );
 }
@@ -604,6 +681,7 @@ function Predict({
   value,
   onChange,
   disabled,
+  lang,
 }: {
   prompt: string;
   reveal: string;
@@ -611,8 +689,10 @@ function Predict({
   value: string;
   onChange: (value: unknown) => void;
   disabled?: boolean;
+  lang?: string;
 }) {
   const [shown, setShown] = useState(false);
+  const dictation = useDictation(value, (next) => onChange(next), lang);
   return (
     <div>
       <p className="reading text-base font-medium">{prompt}</p>
@@ -625,6 +705,11 @@ function Predict({
         placeholder="Commit to a prediction first…"
         className="reading mt-3 w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
       />
+      {dictation.supported && (
+        <button type="button" disabled={disabled || shown} onClick={dictation.toggle} className="mt-2 min-h-10 rounded-control border border-border-subtle px-3 text-sm">
+          {dictation.listening ? "Stop dictation" : "Dictate"}
+        </button>
+      )}
       {shown ? (
         <div className="reading mt-3 rounded-control border border-correct/30 bg-correct-soft p-3 text-sm text-text">
           {reveal}
@@ -648,14 +733,17 @@ function ShortAnswer({
   onChange,
   disabled,
   modelAnswer,
+  lang,
 }: {
   stem: string;
   answer: string;
   onChange: (value: unknown) => void;
   disabled?: boolean;
   modelAnswer?: string;
+  lang?: string;
 }) {
   const [revealed, setRevealed] = useState(false);
+  const dictation = useDictation(answer, (next) => onChange(next), lang);
   return (
     <div>
       <p className="reading text-base font-medium">{stem}</p>
@@ -667,6 +755,11 @@ function ShortAnswer({
         placeholder="Type your answer…"
         className="reading mt-3 w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
       />
+      {dictation.supported && (
+        <button type="button" disabled={disabled || revealed} onClick={dictation.toggle} className="mt-2 min-h-10 rounded-control border border-border-subtle px-3 text-sm">
+          {dictation.listening ? "Stop dictation" : "Dictate"}
+        </button>
+      )}
       {revealed && modelAnswer && (
         <div className="mt-3 rounded-control border border-correct/30 bg-correct-soft p-3 text-sm text-text">
           <p className="text-xs font-semibold text-correct mb-1">Model answer</p>
@@ -964,15 +1057,17 @@ function TeachBack({
   onChange,
   disabled,
   minWords,
+  lang,
 }: {
   prompt: string;
   value: string;
   onChange: (value: unknown) => void;
   disabled?: boolean;
   minWords?: number;
+  lang?: string;
 }) {
   const words = value.trim() ? value.trim().split(/\s+/).length : 0;
-  const dictation = useDictation(value, (next) => onChange(next));
+  const dictation = useDictation(value, (next) => onChange(next), lang);
   const target = minWords ?? 20;
   return (
     <div>
@@ -997,41 +1092,140 @@ function TeachBack({
   );
 }
 
+function FigureView({
+  figureId,
+  width,
+  height,
+  alt,
+}: {
+  figureId?: string;
+  width?: number;
+  height?: number;
+  alt?: string;
+}) {
+  const [figure, setFigure] = useState<{ local_url: string | null; kind: string; caption: string | null; attribution_required: boolean; license: string | null; author: string | null } | null>(null);
+  const [svgContent, setSvgContent] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!figureId) return;
+    let cancelled = false;
+    fetch(`/api/figures/${encodeURIComponent(figureId)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("figure not found");
+        return res.json();
+      })
+      .then((data: { local_url: string | null; kind: string; caption: string | null; attribution_required: boolean; license: string | null; author: string | null }) => {
+        if (!cancelled) setFigure(data);
+        if (data.kind === "svg" && data.local_url) {
+          return fetch(data.local_url).then((r) => r.text()).then((svg) => {
+            if (!cancelled) setSvgContent(sanitizeSvg(svg));
+          });
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [figureId]);
+
+  if (error) {
+    return (
+      <div className="mt-3 rounded-control border border-incorrect/40 bg-incorrect-soft p-3 type-body-sm text-incorrect">
+        Figure error: {error}
+      </div>
+    );
+  }
+  if (!figure) return null;
+
+  const isSvg = figure.kind === "svg";
+  const src = figure.local_url ?? "";
+  const style: React.CSSProperties = {};
+  if (width) style.width = width;
+  if (height) style.height = height;
+  if (!style.width && !style.height) style.maxWidth = "100%";
+
+  return (
+    <div className="mt-3 rounded-panel border border-border-subtle bg-surface p-3">
+      {isSvg ? (
+        <div
+          className="mt-2 w-full overflow-auto"
+          style={style}
+          dangerouslySetInnerHTML={{ __html: svgContent ?? "" }}
+        />
+      ) : (
+        <img
+          src={src}
+          alt={alt ?? figure.caption ?? "Figure"}
+          style={style}
+          className="mt-2 rounded-control border border-border-subtle"
+          loading="lazy"
+        />
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {figure.caption && <p className="type-body-sm text-text">{figure.caption}</p>}
+        {figure.attribution_required && (
+          <p className="type-meta text-xs text-text-muted">
+            Attribution required · {figure.author ?? "Unknown author"} · {figure.license ?? "Unknown license"}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CaseVignette({
   stem,
   questions,
   value,
   onChange,
   disabled,
+  lang,
 }: {
   stem: string;
   questions: string[];
   value: Record<string, string>;
   onChange: (value: unknown) => void;
   disabled?: boolean;
+  lang?: string;
 }) {
   return (
     <div className="space-y-3">
       <div>
         <p className="reading text-base font-medium">{stem}</p>
       </div>
-      {questions.map((question, index) => (
-        <div key={index} className="rounded-control border border-border-subtle bg-surface p-3">
-          <p className="text-sm font-medium mb-2">{question}</p>
-          <textarea
-            value={value[index] ?? ""}
-            disabled={disabled}
-            onChange={(event) => {
-              const next = { ...value };
-              next[index] = event.target.value;
-              onChange(next);
-            }}
-            rows={3}
-            placeholder="Your answer…"
-            className="w-full rounded-control border border-border-subtle bg-bg p-2 text-sm"
-          />
-        </div>
-      ))}
+      {questions.map((question, index) => {
+        const answer = value[index] ?? "";
+        const dictation = useDictation(answer, (next) => {
+          const nextValue = { ...value };
+          nextValue[index] = next;
+          onChange(nextValue);
+        }, lang);
+        return (
+          <div key={index} className="rounded-control border border-border-subtle bg-surface p-3">
+            <p className="text-sm font-medium mb-2">{question}</p>
+            <textarea
+              value={answer}
+              disabled={disabled}
+              onChange={(event) => {
+                const next = { ...value };
+                next[index] = event.target.value;
+                onChange(next);
+              }}
+              rows={3}
+              placeholder="Your answer…"
+              className="w-full rounded-control border border-border-subtle bg-bg p-2 text-sm"
+            />
+            {dictation.supported && (
+              <button type="button" disabled={disabled} onClick={dictation.toggle} className="mt-2 min-h-10 rounded-control border border-border-subtle px-3 text-sm">
+                {dictation.listening ? "Stop dictation" : "Dictate"}
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1213,12 +1407,15 @@ function MuddyPoint({
   value,
   onChange,
   disabled,
+  lang,
 }: {
   prompt: string;
   value: string;
   onChange: (value: unknown) => void;
   disabled?: boolean;
+  lang?: string;
 }) {
+  const dictation = useDictation(value, (next) => onChange(next), lang);
   return (
     <div>
       <p className="reading text-base font-medium">{prompt}</p>
@@ -1227,9 +1424,14 @@ function MuddyPoint({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         rows={4}
-        placeholder="What don't you understand yet?…"
         className="reading w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
+        placeholder="What don't you understand yet?…"
       />
+      {dictation.supported && (
+        <button type="button" disabled={disabled} onClick={dictation.toggle} className="mt-2 min-h-10 rounded-control border border-border-subtle px-3 text-sm">
+          {dictation.listening ? "Stop dictation" : "Dictate"}
+        </button>
+      )}
     </div>
   );
 }
@@ -1273,14 +1475,18 @@ function ThinkAloud({
   value,
   onChange,
   disabled,
+  lang,
 }: {
   prompt: string;
   minWords: number;
   value: string;
   onChange: (value: unknown) => void;
   disabled?: boolean;
+  lang?: string;
 }) {
   const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+  const dictation = useDictation(value, (next) => onChange(next), lang);
+  const target = minWords ?? 20;
   return (
     <div>
       <p className="text-sm font-medium">{prompt}</p>
@@ -1292,6 +1498,11 @@ function ThinkAloud({
         className="reading mt-2 w-full rounded-control border border-border-subtle bg-bg p-3 text-sm"
         placeholder="Say what you notice, what you rule out, and why…"
       />
+      {dictation.supported && (
+        <button type="button" disabled={disabled} onClick={dictation.toggle} className="mt-2 min-h-10 rounded-control border border-border-subtle px-3 text-sm">
+          {dictation.listening ? "Stop dictation" : "Dictate"}
+        </button>
+      )}
       <p className={`mt-1 text-xs ${words < minWords ? "text-text-muted" : "text-correct"}`}>
         {words} / {minWords} words
       </p>

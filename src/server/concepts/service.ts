@@ -415,7 +415,7 @@ export class ConceptService {
     const cites = validateCites(this.vault, parsed.cites);
     this.assertRefs(
       parsed.course,
-      [parsed.parent, ...parsed.prerequisites, ...parsed.related, ...parsed.contrasts].filter(isString),
+      [parsed.parent, ...parsed.related, ...parsed.contrasts].filter(isString),
     );
     if (parsed.parent) this.assertNoParentCycle(id, parsed.parent);
     await this.writeFile(id, {
@@ -646,7 +646,9 @@ export class ConceptService {
       if (prereqIds.length === 0) rank += 4;
       if (examDays !== null && examDays <= 42) rank += Math.max(0, (42 - examDays) / 3);
       let reason = "Prerequisites done";
-      if (concept.status === "proposed") {
+      if (prereqIds.length === 0) {
+        reason = "Start here, no prerequisites";
+      } else if (concept.status === "proposed") {
         reason = "Unreviewed concept";
       } else if (concept.mastery.overdue) {
         reason = `Review due${concept.mastery.decayDueAt ? `, ${Math.max(1, Math.round((Date.now() - concept.mastery.decayDueAt) / DAY))} days overdue` : ""}`;

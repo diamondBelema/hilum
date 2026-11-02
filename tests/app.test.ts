@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { createApp } from "../src/server/app.ts";
 
@@ -46,7 +46,7 @@ describe("http api", () => {
     const res = await app.request("/api/meta");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { meta: { key: string; value: string }[] };
-    expect(body.meta).toEqual([{ key: "schema_version", value: "12" }]);
+    expect(body.meta).toEqual([{ key: "schema_version", value: "13" }]);
   });
 
   test("reads and updates LAN and MCP token settings", async () => {
@@ -137,6 +137,8 @@ describe("http api", () => {
     await mkdir(join(root, "courses/ana-211/notes"), { recursive: true });
     await writeFile(join(root, "courses/ana-211/notes/intro.md"), "# Intro\n\nBackup me.\n", "utf8");
     const dbPath = join(root, "state", "app.db");
+    // Clean shared backup root so this test is not affected by prior runs.
+    await rm(join(dirname(root), "hilum-backups"), { recursive: true, force: true });
     const { app } = createApp({ config: { dbPath, vaultPath: root } });
     const res = await app.request("/api/vault/backup", { method: "POST" });
     expect(res.status).toBe(200);
@@ -165,23 +167,23 @@ describe("http api", () => {
     const { app } = createApp({
       config: { dbPath: ":memory:", vaultPath: "/tmp/hilum-diagnostics-vault", mcpToken: "secret-token" },
     });
-
-    test("creates a deterministic demo course without overwriting it", async () => {
-      const root = await mkdtemp(join(tmpdir(), "harness-demo-"));
-      const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: root } });
-      const first = await app.request("/api/onboarding/demo", { method: "POST" });
-      expect(first.status).toBe(201);
-      expect((await first.json())).toMatchObject({ ok: true, created: true, course: "demo-101" });
-      const second = await app.request("/api/onboarding/demo", { method: "POST" });
-      expect(second.status).toBe(409);
-      await rm(root, { recursive: true, force: true });
-    });
     const res = await app.request("/api/diagnostics");
     expect(res.status).toBe(200);
     const body = JSON.stringify(await res.json());
     expect(body).not.toContain("secret-token");
     expect(body).not.toContain("courses/");
     expect(body).toContain("excludes MCP tokens");
+  });
+
+  test("creates a deterministic demo course without overwriting it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "harness-demo-"));
+    const { app } = createApp({ config: { dbPath: ":memory:", vaultPath: root } });
+    const first = await app.request("/api/onboarding/demo", { method: "POST" });
+    expect(first.status).toBe(201);
+    expect((await first.json())).toMatchObject({ ok: true, created: true, course: "demo-101" });
+    const second = await app.request("/api/onboarding/demo", { method: "POST" });
+    expect(second.status).toBe(409);
+    await rm(root, { recursive: true, force: true });
   });
 
   test("serves questions, updates content and verifies", async () => {

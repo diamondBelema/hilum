@@ -133,6 +133,8 @@ def split_sections(blocks, lecture_name: str, max_tokens: int = 1500) -> list[No
                 flush()
                 current_heading = f"{current_heading} (cont.)"
             add_text(block.text, tokens)
+            if current_tokens > max_tokens:
+                flush()
         elif block.kind == "table":
             md = table_to_md(block.rows)
             tokens = estimate_tokens(md)
@@ -140,10 +142,16 @@ def split_sections(blocks, lecture_name: str, max_tokens: int = 1500) -> list[No
                 flush()
             current_parts.append(md)
             current_tokens += tokens
+            if current_tokens > max_tokens:
+                flush()
         elif block.kind == "list":
             tokens = estimate_tokens(block.text)
+            if current_tokens + tokens > max_tokens and current_parts:
+                flush()
             current_parts.append(block.text)
             current_tokens += tokens
+            if current_tokens > max_tokens:
+                flush()
         elif block.kind == "image":
             img_ref = block.image_ref if hasattr(block, "image_ref") else ""
             if img_ref:

@@ -1,7 +1,7 @@
 import { ArrowRight, Check, Copy, MessageCircle, Network, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "../lib/router.ts";
-import { api, type Course, type SessionDetail, type SessionActivity, type Cite, type ActivitySpec, type Pacing } from "../api.ts";
+import { api, type Course, type SessionDetail, type SessionActivity, type Cite, type ActivitySpec, type Pacing, type Confidence } from "../api.ts";
 import { Button } from "../components/Button.tsx";
 import { Banner } from "../components/ui.tsx";
 import { ActivityRenderer } from "../components/ActivityRenderer.tsx";
@@ -14,6 +14,7 @@ import { navigate } from "../lib/router.ts";
 import { Composer } from "../components/Composer.tsx";
 import { GraphCanvas } from "../components/GraphCanvas.tsx";
 import { uuid } from "../lib/uuid.ts";
+import { useLanguage } from "../theme.ts";
 import type { ConceptSummary } from "../api.ts";
 
 const INTERACTIVE_TYPES = new Set([
@@ -97,6 +98,9 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
   const [valuesByActivity, setValuesByActivity] = useState<Record<string, unknown[]>>({});
   const valuesRef = useRef<Record<string, unknown[]>>({});
   const [submittingByActivity, setSubmittingByActivity] = useState<Record<string, boolean>>({});
+  const [confidencesByActivity, setConfidencesByActivity] = useState<Record<string, Record<number, Confidence>>>({});
+
+  const { language } = useLanguage();
 
   const [optimisticMessages, setOptimisticMessages] = useState<
     { id: string; text: string; createdAt: number; failed?: boolean }[]
@@ -268,6 +272,17 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
       if (changed) valuesRef.current = next;
       return changed ? next : current;
     });
+    setConfidencesByActivity((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const act of detail.activities) {
+        if (!current[act.id]) {
+          next[act.id] = {};
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
   };
 
   const currentCourse = courses.find((c) => c.code === session?.course) ?? null;
@@ -308,7 +323,7 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
         const updated = await api.respondActivity(
           session!.id,
           activity.id,
-          buildResponse(spec, values),
+          buildResponse(spec, values, confidencesByActivity[activity.id]),
           0,
         );
         setSession((current) =>
@@ -691,12 +706,21 @@ export function SessionScreen({ sessionId, onEndSession, onResume }: SessionScre
                         activityId={act.id}
                         spec={act.spec}
                         values={values}
+                        confidences={confidencesByActivity[act.id]}
+                        lang={language}
                         showTitle={specRepeatsTitle(act)}
                         onChange={(index, value) => {
                           const next = [...values];
                           next[index] = value;
                           setValues(act.id, next);
                           setError(null);
+                        }}
+                        onConfidenceChange={(index, confidence) => {
+                          setConfidencesByActivity((current) => {
+                            const next = { ...current };
+                            next[act.id] = { ...(next[act.id] ?? {}), [index]: confidence };
+                            return next;
+                          });
                         }}
                         disabled={submitting}
                         onOpenNote={(path, anchor) => navigate(`/library/notes?path=${encodeURIComponent(path)}${anchor ? `&anchor=${encodeURIComponent(anchor)}` : ""}`)}

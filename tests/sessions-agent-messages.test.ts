@@ -29,10 +29,10 @@ async function connect() {
   const app = createApp({
     config: { vaultPath: root, dbPath: ":memory:" },
   });
-  const { config, vault, indexer, questions, papers, runner, grading, sessions, concepts } = app;
+  const { config, vault, vaultSetup, indexer, questions, papers, runner, grading, sessions, concepts } = app;
   await indexer.reindexAll();
 
-  const server = createMcpServer(config, vault, questions, papers, runner, grading, sessions, concepts);
+  const server = createMcpServer(config, vault, vaultSetup, questions, papers, runner, grading, sessions, concepts);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
 

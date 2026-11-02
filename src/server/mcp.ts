@@ -4,6 +4,7 @@ import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import type { Config } from "./config.ts";
 import type { VaultService } from "./vault/service.ts";
+import type { VaultSetupService } from "./vaultsetup/service.ts";
 import type { QuestionBank } from "./questions/service.ts";
 import { questionInputSchema } from "./questions/validation.ts";
 import type { ExamRunner } from "./exams/attempts.ts";
@@ -13,6 +14,8 @@ import type { ConceptService } from "./concepts/service.ts";
 import type { GoalService } from "./goals/service.ts";
 import type { JobService } from "./jobs/service.ts";
 import type { VisionService } from "./vision/service.ts";
+import type { FiguresService } from "./figures/service.ts";
+import { resolveAll, searchAll } from "./figures/adapter.ts";
 import { conceptInputSchema, conceptPatchSchema, EDGE_TYPES } from "./concepts/validation.ts";
 import {
   MISTAKE_TAGS,
@@ -133,6 +136,7 @@ The concept graph is the map for mastery: find_concepts before adding, add_conce
 export function createMcpServer(
   config: Config,
   vault: VaultService,
+  vaultSetup: VaultSetupService,
   questions: QuestionBank,
   papers: PaperService,
   runner: ExamRunner,
@@ -142,6 +146,7 @@ export function createMcpServer(
   goals?: GoalService,
   jobs?: JobService,
   vision?: VisionService,
+  figures?: FiguresService,
 ): McpServer {
   const server = new McpServer(
     { name: "exam-harness", version: config.version },
@@ -965,22 +970,24 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
     "session_start",
     {
       description:
-        "Start or resume a live teaching session. Without course, returns the focused session or the newest open session across courses. With course, returns the newest open session for that course, or starts one if none is open. Optionally pass a title, goal_id and time_box_min for a new session.",
+        "Start or resume a live teaching session. Without course, returns the focused session or the newest open session across courses. With course, returns the newest open session for that course, or starts one if none is open. Optionally pass a title, goal_id, time_box_min and concept_ids for a practice session.",
       inputSchema: {
         course: z.string().optional(),
         goal: z.string().optional(),
         title: z.string().optional(),
         goal_id: z.string().nullable().optional(),
         time_box_min: z.number().int().positive().nullable().optional(),
+        concept_ids: z.array(z.string()).optional(),
       },
     },
-    withPresence(async ({ course, goal, title, goal_id, time_box_min }) => {
+    withPresence(async ({ course, goal, title, goal_id, time_box_min, concept_ids }) => {
       try {
         let session;
         if (course) {
           session = await sessions.start(course, goal ?? "learn", title ?? null, "agent", {
             goalId: goal_id,
             timeBoxMin: time_box_min,
+            conceptIds: concept_ids,
           });
         } else {
           const focused = sessions.focused();
@@ -1051,6 +1058,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
           session,
           session_id: session.id,
           title: session.title,
+          brief: session.brief,
           course: session.course,
           mode: "teach",
           started_at: session.startedAt,
@@ -1085,7 +1093,7 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
     "push_activity",
     {
       description:
-        "Push one validated ActivitySpec to the live session. Components: flashcard, cloze, mcq_single, mcq_multi, tf_multi, short_answer, matching, ordering, theory, calculation, worked_example_stepper, predict_reveal, compare_table, mermaid_diagram, concept_map, label_diagram, timeline, annotated_image, spotter_station, confidence_rating, think_aloud, muddy_point, spot_the_error, teach_back, case_vignette. Every component should carry concept_ids; every spec needs cites whose anchors and quotes exist in the vault.",
+        "Push one validated ActivitySpec to the live session. Components: flashcard, cloze, mcq_single, mcq_multi, tf_multi, short_answer, matching, ordering, theory, calculation, worked_example_stepper, predict_reveal, compare_table, mermaid_diagram, concept_map, label_diagram, timeline, annotated_image, spotter_station, confidence_rating, think_aloud, muddy_point, spot_the_error, teach_back, case_vignette, demo. Every component should carry concept_ids; every spec needs cites whose anchors and quotes exist in the vault.",
       inputSchema: {
         session_id: z.string().min(1),
         spec: z.unknown(),
@@ -1257,6 +1265,47 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
   );
 
   server.registerTool(
+    "set_session_brief",
+    {
+      description:
+        "Set a short one-line brief for a live session. The brief is returned by get_active_session and shown to the student as context for what this session is about.",
+      inputSchema: {
+        session_id: z.string().min(1),
+        brief: z.string().max(300).nullable().optional(),
+      },
+    },
+    withPresence(async ({ session_id, brief }) => {
+      try {
+        await sessions.setSessionBrief(session_id, brief ?? null);
+        return json({ ok: true });
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "create_course",
+    {
+      description:
+        "Create a new course in the vault. Idempotent: creating a course that already exists returns created: false. Validates the course code as a safe slug.",
+      inputSchema: {
+        code: z.string().min(1),
+        title: z.string().min(1),
+        exam_date: z.string().optional(),
+      },
+    },
+    withPresence(async ({ code, title, exam_date }) => {
+      try {
+        const result = await vaultSetup.createCourse({ code, title, examDate: exam_date ?? null });
+        return json(result);
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
     "find_concepts",
     {
       description:
@@ -1322,6 +1371,51 @@ Use the score, section rows, flagged accuracy, time per question and mistake tag
     withPresence(async ({ from_id, to_id, type }) => {
       try {
         return json(await concepts.link(from_id, to_id, type));
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "search_figures",
+    {
+      description:
+        "Search for figures across enabled sources (Wikimedia Commons, PubChem, RCSB). Returns candidates with title, thumbnail URL, file URL, kind (svg/raster), license, author and attribution requirement. The server resolves all sources; the agent only chooses from results.",
+      inputSchema: {
+        query: z.string().min(1),
+        limit: z.number().int().min(1).max(10).optional(),
+      },
+    },
+    withPresence(async ({ query, limit }) => {
+      try {
+        const results = await searchAll(query, limit);
+        return json({ query, results });
+      } catch (err) {
+        return fail(err);
+      }
+    }),
+  );
+
+  server.registerTool(
+    "add_figure",
+    {
+      description:
+        "Register a figure in Hilum's figure registry. Accepts a Commons page title (File:Name.svg), a Commons page URL, or a direct upload.wikimedia.org URL. The server resolves it through the Commons API, downloads metadata, and stores it in the figure registry. Returns the figure id for use in sessions.",
+      inputSchema: {
+        course: z.string().min(1),
+        id_or_url: z.string().min(1),
+        caption: z.string().optional(),
+      },
+    },
+    withPresence(async ({ course, id_or_url, caption }) => {
+      try {
+        const candidate = await resolveAll(id_or_url);
+        if (!candidate) {
+          return fail(new Error(`Could not resolve figure: ${id_or_url}`));
+        }
+        const figure = figures!.register(course, candidate, caption ?? null);
+        return json(figure);
       } catch (err) {
         return fail(err);
       }
@@ -1508,6 +1602,7 @@ export async function handleMcpRequest(
   request: Request,
   config: Config,
   vault: VaultService,
+  vaultSetup: VaultSetupService,
   questions: QuestionBank,
   papers: PaperService,
   runner: ExamRunner,
@@ -1517,8 +1612,9 @@ export async function handleMcpRequest(
   goals: GoalService,
   jobs?: JobService,
   vision?: VisionService,
+  figures?: FiguresService,
 ): Promise<Response> {
-  const server = createMcpServer(config, vault, questions, papers, runner, grading, sessions, concepts, goals, jobs, vision);
+  const server = createMcpServer(config, vault, vaultSetup, questions, papers, runner, grading, sessions, concepts, goals, jobs, vision, figures);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

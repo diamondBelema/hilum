@@ -353,7 +353,7 @@ describe("goals", () => {
         `INSERT INTO plan_items
          (id, goal_id, title, kind, position, est_min_low, est_min_high, actual_sec, status, plan_state, created_at, updated_at)
          VALUES (?, ?, ?, 'learn', ?, 10, 20, 1800, 'done', 'approved', ?, ?)`,
-      ).run(`done-${index}`, goal.id, `Done ${index}`, index, Date.now(), Date.now());
+      ).run(`done-${index}`, goal.id, `Done ${index}`, index + 10, Date.now(), Date.now());
     }
     expect(goals.calibrationFactor("ana-211")).toBe(2);
     const planned = await goals.proposePlan(goal.id as string, [{

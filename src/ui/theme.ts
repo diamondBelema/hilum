@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 export type Theme = "system" | "light" | "dark";
 
 const KEY = "eh-theme";
+const LANG_KEY = "eh-language";
 
 function read(): Theme {
   try {
@@ -79,4 +80,25 @@ export function useReaderPrefs() {
     size: SIZES[prefs.size] ?? SIZES[1],
     lineHeight: SPACING[prefs.spacing] ?? SPACING[1],
   };
+}
+
+export function useLanguage() {
+  const [language, setLanguageState] = useState<string>(() => {
+    try {
+      return localStorage.getItem(LANG_KEY) ?? (navigator.language || "en-US");
+    } catch {
+      return navigator.language || "en-US";
+    }
+  });
+
+  const setLanguage = useCallback((next: string) => {
+    setLanguageState(next);
+    try {
+      localStorage.setItem(LANG_KEY, next);
+    } catch {
+      /* ignore blocked storage */
+    }
+  }, []);
+
+  return { language, setLanguage };
 }

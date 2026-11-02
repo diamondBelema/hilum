@@ -46,6 +46,7 @@ const base: SessionSummary = {
   id: "s1",
   course: "ana-211",
   goal: "Teach me the nephron",
+  title: null,
   startedAt: Date.now() - 60_000,
   endedAt: null,
   summary: "",

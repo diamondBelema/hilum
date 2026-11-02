@@ -21,7 +21,7 @@ export function Settings({ open, onClose }: SettingsProps) {
   const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [agentState, setAgentState] = useState<"not_configured" | "idle" | "starting" | "working" | "stopped" | "failed">("not_configured");
+  const [agentState, setAgentState] = useState<"not_configured" | "idle" | "starting" | "working" | "stopped" | "failed" | "none">("not_configured");
   const [agentBusy, setAgentBusy] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
 

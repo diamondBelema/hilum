@@ -93,14 +93,22 @@ export class JobService {
   }
 
   lease(owner: string, types?: string[]): Job | null {
+    return this.leaseExecutor(owner, "agent", types);
+  }
+
+  leaseServer(owner: string, types?: string[]): Job | null {
+    return this.leaseExecutor(owner, "server", types);
+  }
+
+  private leaseExecutor(owner: string, executor: JobExecutor, types?: string[]): Job | null {
     const now = Date.now();
     this.db.query("UPDATE jobs SET status='queued', lease_owner=NULL, lease_expires_at=NULL, updated_at=? WHERE status='leased' AND lease_expires_at < ?")
       .run(now, now);
     const where = types?.length ? ` AND type IN (${types.map(() => "?").join(",")})` : "";
     const row = this.db.query(
-      `SELECT * FROM jobs WHERE status='queued' AND executor='agent'${where}
+      `SELECT * FROM jobs WHERE status='queued' AND executor = ?${where}
        ORDER BY priority ASC, created_at ASC LIMIT 1`,
-    ).get(...(types ?? [])) as Record<string, unknown> | null;
+    ).get(executor, ...(types ?? [])) as Record<string, unknown> | null;
     if (!row) return null;
     const updated = this.db.query(
       "UPDATE jobs SET status='leased', lease_owner=?, lease_expires_at=?, attempts=attempts+1, updated_at=? WHERE id=? AND status='queued'",

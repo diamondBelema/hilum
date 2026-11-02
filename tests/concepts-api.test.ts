@@ -80,8 +80,8 @@ describe("concept and mastery api", () => {
       edges: { from: string; to: string; type: string }[];
     };
     expect(graph.nodes.map((node) => node.id)).toEqual([
-      "ana-211-thorax",
       "ana-211-thoracic-wall",
+      "ana-211-thorax",
     ]);
     expect(graph.edges).toEqual([
       { from: "ana-211-thoracic-wall", to: "ana-211-thorax", type: "parent" },

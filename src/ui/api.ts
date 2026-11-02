@@ -65,6 +65,9 @@ export type PlanItem = {
   status: "todo" | "active" | "done" | "deferred" | "skipped";
   partial: number;
   plan_state: "draft" | "approved";
+  concept_id: string | null;
+  note_path: string | null;
+  note_anchor: string | null;
 };
 
 export type Task = {
@@ -99,6 +102,7 @@ export type NoteMeta = {
   title: string;
   summary: string;
   snippet: string;
+  section: string;
 };
 
 export type NoteDetail = {
@@ -364,7 +368,8 @@ export type ActivityType =
   | "spot_the_error"
   | "teach_back"
   | "case_vignette"
-  | "demo";
+  | "demo"
+  | "figure";
 
 export type ActivityComponent = {
   type: ActivityType;
@@ -405,6 +410,9 @@ export type ActivityComponent = {
   question?: string;
   height?: number;
   html?: string;
+  figure_id?: string;
+  width?: number;
+  alt?: string;
 };
 
 export type ActivityCite = { note: string; anchor?: string; quote?: string };
@@ -424,7 +432,9 @@ export type Confidence = "guessing" | "likely" | "sure";
 export type ActivityResponse = {
   components: unknown[];
   confidence?: Confidence;
+  confidences?: Record<number, Confidence>;
   think_aloud?: string;
+  idk?: number[];
 };
 
 export type SessionActivity = {
@@ -453,6 +463,8 @@ export type SessionDetail = {
   timeBoxMin: number | null;
   activePlanItemId: string | null;
   title: string | null;
+  brief: string | null;
+  practiceConcepts: string[];
   startedAt: number;
   endedAt: number | null;
   summary: string;
@@ -503,6 +515,7 @@ export type SessionSummary = {
   id: string;
   course: string;
   goal: string;
+  title: string | null;
   startedAt: number;
   endedAt: number | null;
   summary: string;
@@ -616,8 +629,16 @@ export type Health = {
   status: string;
   version: string;
   vault: string;
+  configuredVault: string;
   db: string;
   disk: { freeBytes: number; totalBytes: number; freePercent: number } | null;
+  readiness: {
+    vault: boolean;
+    database: boolean;
+    agent: string;
+    setupComplete: boolean;
+  };
+  stats: { notes: number; courses: number; tokens: number };
 };
 
 export type ServerSettings = {
@@ -629,26 +650,42 @@ export type ServerSettings = {
   restartRequired?: boolean;
   agent?: AgentStatus;
   bindHost?: string;
-  configuredVault?: string;
   mcpUrls?: string[];
 };
 
 export type AgentStatus = {
-  state: "not_configured" | "idle" | "starting" | "working" | "stopped" | "failed";
+  state: "not_configured" | "idle" | "starting" | "working" | "stopped" | "failed" | "none";
   pid: number | null;
   error: string | null;
-  config: { argv: string[]; cwd?: string; timeout_sec?: number; max_runs_per_hour?: number } | null;
+  clientName: string | null;
+  config: AgentConfig | null;
+  runCount: number;
+  consecutiveFailures: number;
+  lastRunAt: number | null;
+};
+
+export type AgentConfig = {
+  argv: string[];
+  cwd?: string;
+  timeout_sec?: number;
+  max_runs_per_hour?: number;
 };
 
 export type Job = {
   id: string;
   type: string;
+  executor: "agent" | "server";
+  priority: number;
   status: "queued" | "leased" | "done" | "failed" | "cancelled";
   course: string | null;
   payload: unknown;
   error: string | null;
+  attempts: number;
+  dedupeKey: string | null;
+  createdBy: string;
   created_at: number;
   updated_at: number;
+  done_at: number | null;
 };
 
 export const api = {
@@ -659,6 +696,7 @@ export const api = {
   agentStatus: () => getJson<AgentStatus>("/api/agent/status"),
   startAgent: () => sendJson<AgentStatus>("/api/agent/start", "POST", {}),
   stopAgent: () => sendJson<AgentStatus>("/api/agent/stop", "POST", {}),
+  saveAgentConfig: (input: AgentConfig) => sendJson<AgentStatus>("/api/agent/config", "POST", input),
   jobs: (limit = 50) => getJson<Job[]>(`/api/jobs?limit=${limit}`),
   cancelJob: (id: string) => sendJson<Job>(`/api/jobs/${encodeURIComponent(id)}/cancel`, "POST", {}),
   research: (input: { topic: string; reason?: string; course?: string | null; preferred_sources?: string[] }) =>
@@ -672,6 +710,12 @@ export const api = {
   uploadInbox: (file: File) => uploadFile(file) as Promise<{ item: InboxItem; duplicate: boolean }>,
   correctInbox: (id: string, course: string) =>
     sendJson<InboxItem>(`/api/inbox/${encodeURIComponent(id)}/correct`, "POST", { course }),
+  sortInbox: (id: string) =>
+    sendJson<{
+      item: InboxItem;
+      candidates: { course: string; score: number; evidence: string[] }[];
+      action: "sorted" | "review" | "unsorted";
+    }>(`/api/inbox/${encodeURIComponent(id)}/sort`, "POST", {}),
   goals: (course?: string) =>
     getJson<Goal[]>(`/api/goals${course ? `?course=${encodeURIComponent(course)}` : ""}`),
   createGoal: (input: {
@@ -827,11 +871,11 @@ export const api = {
     ),
   session: (id: string) => getJson<SessionDetail>(`/api/sessions/${encodeURIComponent(id)}`),
   pacing: (id: string) => getJson<Pacing>(`/api/sessions/${encodeURIComponent(id)}/pacing`),
-  startSession: async (course: string, goal = "learn", options?: { goalId?: string; timeBoxMin?: number | null }) => {
+  startSession: async (course: string, goal = "learn", options?: { goalId?: string; timeBoxMin?: number | null; conceptIds?: string[] }) => {
     const res = await fetch(apiUrl("/api/sessions"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ course, goal, goal_id: options?.goalId, time_box_min: options?.timeBoxMin }),
+      body: JSON.stringify({ course, goal, goal_id: options?.goalId, time_box_min: options?.timeBoxMin, concept_ids: options?.conceptIds }),
     });
     if (!res.ok) {
       const payload = (await res.json().catch(() => ({}))) as { error?: string; sessionId?: string };

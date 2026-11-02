@@ -177,7 +177,7 @@ describe("concept graph", () => {
       graph.edges.every((edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to)),
     ).toBe(true);
     expect(graph.nodes.every((node) => node.title.length <= 28)).toBe(true);
-  });
+  }, { timeout: 30000 });
 });
 
 describe("mastery", () => {

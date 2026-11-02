@@ -37,7 +37,7 @@ function parseFrontmatter(raw: string): { fm: PaperFrontmatter; body: string } {
       }
       val = items;
     }
-    (fm as Record<string, unknown>)[key] = val;
+    (fm as unknown as Record<string, unknown>)[key] = val;
   }
   return { fm, body };
 }

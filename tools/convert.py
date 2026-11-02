@@ -124,6 +124,25 @@ def flag_pdf_pages(source: Path, vault: Path, course: str, meta: dict, note_path
     return queue
 
 
+def split_section_body(body: str, max_tokens: int) -> list[str]:
+    """Split a section body into chunks that each fit under max_tokens."""
+    if estimate_tokens(body) <= max_tokens:
+        return [body]
+    words = body.split()
+    chunks: list[str] = []
+    chunk: list[str] = []
+    for word in words:
+        candidate = " ".join(chunk + [word])
+        if chunk and estimate_tokens(candidate) > max_tokens:
+            chunks.append(" ".join(chunk))
+            chunk = [word]
+        else:
+            chunk.append(word)
+    if chunk:
+        chunks.append(" ".join(chunk))
+    return chunks
+
+
 def convert(source: Path, vault: Path, course: str, max_tokens: int = MAX_TOKENS) -> dict:
     if source.suffix.lower() == ".pptx":
         blocks, meta = markdown_blocks_from_pptx(source, vault / "courses" / course / "assets")
@@ -142,24 +161,24 @@ def convert(source: Path, vault: Path, course: str, max_tokens: int = MAX_TOKENS
     queue_rows: list[dict] = []
     for index, section in enumerate(sections, 1):
         body = section.body
-        if estimate_tokens(body) > max_tokens:
-            raise ValueError(f"section exceeds token limit: {source} ({estimate_tokens(body)} > {max_tokens})")
-        note = Note(
-            path=f"notes/{slugify(source.stem)}-{index}.md",
-            title=source.stem if len(sections) == 1 else f"{source.stem} — Part {index}",
-            course=course,
-            topics=[],
-            source=str(source),
-            pages=str(section.anchor),
-            source_type=source_type,
-            trust="medium" if source.suffix.lower() == ".pdf" else "high",
-            ocr=any(getattr(block, "needs_ocr", False) for block in blocks),
-            summary=make_summary([body]),
-            sections=[section],
-        )
-        destination = write_note(vault, note)
-        notes.append(note)
-        emit("note", path=str(destination), tokens=estimate_tokens(note.to_markdown()))
+        chunks = split_section_body(body, max_tokens)
+        for chunk_index, chunk in enumerate(chunks):
+            note = Note(
+                path=f"notes/{slugify(source.stem)}-{index}-{chunk_index + 1}.md" if len(chunks) > 1 else f"notes/{slugify(source.stem)}-{index}.md",
+                title=source.stem if len(sections) == 1 and len(chunks) == 1 else f"{source.stem} — Part {index}" + (f" — Part {chunk_index + 1}" if len(chunks) > 1 else ""),
+                course=course,
+                topics=[],
+                source=str(source),
+                pages=str(section.anchor),
+                source_type=source_type,
+                trust="medium" if source.suffix.lower() == ".pdf" else "high",
+                ocr=any(getattr(block, "needs_ocr", False) for block in blocks),
+                summary=make_summary([chunk]),
+                sections=[NoteSection(section.heading, section.level, section.anchor, chunk)],
+            )
+            destination = write_note(vault, note)
+            notes.append(note)
+            emit("note", path=str(destination), tokens=estimate_tokens(note.to_markdown()))
 
     if source.suffix.lower() == ".pdf":
         queue_rows.extend(flag_pdf_pages(source, vault, course, meta, str((vault / "courses" / course / notes[0].path).relative_to(vault))))
