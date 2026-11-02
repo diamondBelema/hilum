@@ -66,12 +66,6 @@ export class InboxService {
     return this.get(item.id);
   }
 
-  async updateStatusAndNotes(id: string, status: string, notePaths: string[]): Promise<void> {
-    const now = Date.now();
-    this.db.query("UPDATE inbox_items SET status=?, note_paths_json=?, updated_at=? WHERE id=?")
-      .run(status, JSON.stringify(notePaths), now, id);
-  }
-
   async moveToUnsorted(id: string): Promise<InboxItem> {
     const item = this.get(id);
     const source = join(this.config.vaultPath, item.path);

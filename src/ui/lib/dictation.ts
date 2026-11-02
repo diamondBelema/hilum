@@ -11,11 +11,9 @@ type Recognition = {
   onerror: (() => void) | null;
 };
 
-export function useDictation(value: string, onChange: (value: string) => void, lang?: string) {
+export function useDictation(value: string, onChange: (value: string) => void) {
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
-  const valueRef = useRef(value);
-  valueRef.current = value;
   const recognition = useRef<Recognition | null>(null);
   useEffect(() => {
     const ctor = (window as Window & { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition }).SpeechRecognition
@@ -25,16 +23,16 @@ export function useDictation(value: string, onChange: (value: string) => void, l
     const next = new ctor();
     next.continuous = true;
     next.interimResults = true;
-    next.lang = (lang ?? navigator.language) || "en-US";
+    next.lang = navigator.language || "en-US";
     next.onresult = (event) => {
       const text = Array.from(event.results).map((result) => result[0]?.transcript ?? "").join("");
-      if (text) onChange(`${valueRef.current}${valueRef.current && !valueRef.current.endsWith(" ") ? " " : ""}${text}`);
+      if (text) onChange(`${value}${value && !value.endsWith(" ") ? " " : ""}${text}`);
     };
     next.onend = () => setListening(false);
     next.onerror = () => setListening(false);
     recognition.current = next;
     return () => next.stop();
-  }, [lang, onChange]);
+  }, []);
   return {
     supported,
     listening,

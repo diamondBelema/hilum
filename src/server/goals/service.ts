@@ -131,12 +131,7 @@ export class GoalService {
   }
 
   get(id: string) {
-    const goal = row(
-      this.db.query("SELECT * FROM goals WHERE id = ?").get(id) as
-        | { id: string; course: string; title: string; deadline: string | null; study_min_per_day: number | null; status: string; created_at: number; updated_at: number }
-        | null,
-      `goal not found: ${id}`,
-    );
+    const goal = row(this.db.query("SELECT * FROM goals WHERE id = ?").get(id) as Record<string, unknown> | null, `goal not found: ${id}`);
     const items = this.db.query(
       "SELECT * FROM plan_items WHERE goal_id = ? ORDER BY partial DESC, position ASC",
     ).all(id);
@@ -167,7 +162,7 @@ export class GoalService {
       if (fields.length) {
         fields.push("updated_at = ?");
         values.push(Date.now(), id);
-        this.db.query(`UPDATE goals SET ${fields.join(", ")} WHERE id = ?`).run(...(values as any[]));
+        this.db.query(`UPDATE goals SET ${fields.join(", ")} WHERE id = ?`).run(...values);
         this.events.publish({ type: "goal", course: current.course, goalId: id, state: "updated", at: Date.now() });
       }
       return this.get(id);
@@ -482,20 +477,18 @@ export class GoalService {
 
   getPlanChange(id: string) {
     const change = row(
-      this.db.query("SELECT * FROM plan_changes WHERE id = ?").get(id) as
-        | { id: string; goal_id: string; diff_json: string; status: string; created_at: number; applied_at: number | null }
-        | null,
+      this.db.query("SELECT * FROM plan_changes WHERE id = ?").get(id) as Record<string, unknown> | null,
       `plan change not found: ${id}`,
     );
     return { ...change, diff: JSON.parse(String(change.diff_json)) };
   }
 
   listPlanChanges(goalId: string) {
-    return (this.db.query(
+    return this.db.query(
       "SELECT * FROM plan_changes WHERE goal_id = ? ORDER BY created_at DESC",
-    ).all(goalId) as { id: string; goal_id: string; diff_json: string; status: string; created_at: number; applied_at: number | null }[]).map((change) => ({
+    ).all(goalId).map((change) => ({
       ...change,
-      diff: JSON.parse(String(change.diff_json)),
+      diff: JSON.parse(String((change as { diff_json: string }).diff_json)),
     }));
   }
 
@@ -563,7 +556,7 @@ export class GoalService {
       if (fields.length) {
         fields.push("updated_at = ?");
         values.push(Date.now(), id);
-        this.db.query(`UPDATE plan_items SET ${fields.join(", ")} WHERE id = ?`).run(...(values as any[]));
+        this.db.query(`UPDATE plan_items SET ${fields.join(", ")} WHERE id = ?`).run(...values);
         this.events.publish({ type: "plan", course: this.get(item.goal_id).course as string, goalId: item.goal_id, state: "updated", at: Date.now() });
       }
       return this.get(item.goal_id);

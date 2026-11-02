@@ -439,29 +439,7 @@ function migrate(db: Db): void {
   }
 
   db.exec(`
-    CREATE TABLE IF NOT EXISTS figures (
-    id TEXT PRIMARY KEY,
-    course TEXT NOT NULL,
-    title TEXT NOT NULL,
-    source TEXT NOT NULL,
-    source_id TEXT NOT NULL,
-    kind TEXT NOT NULL CHECK (kind IN ('svg', 'raster')),
-    width INTEGER,
-    height INTEGER,
-    license TEXT,
-    author TEXT,
-    attribution_required INTEGER NOT NULL DEFAULT 0,
-    local_path TEXT,
-    local_url TEXT,
-    caption TEXT,
-    created_at INTEGER NOT NULL,
-    UNIQUE (source, source_id)
-  );
-
-  CREATE INDEX IF NOT EXISTS figures_course ON figures(course);
-  CREATE UNIQUE INDEX IF NOT EXISTS figures_source ON figures(source, source_id);
-
-  CREATE TABLE IF NOT EXISTS agent_presence (
+    CREATE TABLE IF NOT EXISTS agent_presence (
       id TEXT PRIMARY KEY DEFAULT 'presence',
       client_name TEXT,
       last_seen_at INTEGER,
@@ -471,6 +449,6 @@ function migrate(db: Db): void {
 
   db.query("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
     "schema_version",
-    "13",
+    "12",
   );
 }

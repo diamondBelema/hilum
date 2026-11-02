@@ -22,10 +22,6 @@ import { resolveInside, VaultPathError } from "./vault/paths.ts";
 import { ZodError } from "zod";
 import { GoalError, GoalService } from "./goals/service.ts";
 import { JobService } from "./jobs/service.ts";
-import { JobRunner } from "./jobs/runner.ts";
-import { JobProducers } from "./jobs/producers.ts";
-import { FiguresService } from "./figures/service.ts";
-import { getAdapters, getSources, resolveAll, searchAll } from "./figures/adapter.ts";
 import { LauncherService } from "./launcher/service.ts";
 import { VaultSetupService } from "./vaultsetup/service.ts";
 import { InboxService } from "./inbox/service.ts";
@@ -120,16 +116,10 @@ export function createApp(deps: AppDeps = {}) {
   const sessions = new SessionService(db, vault, events, goals);
   const jobs = new JobService(db, events);
   const launcher = new LauncherService(config, events);
-  launcher.setDbQuery((sql) => db.query(sql).get());
-  launcher.startPollLoop();
   const vaultSetup = new VaultSetupService(config, vault);
   const inbox = new InboxService(db, config);
   const inboxSort = new InboxSortService(db, vault, inbox);
   const vision = new VisionService(db, config);
-  const jobsRunner = new JobRunner(db, jobs, inbox, config, events, launcher);
-  const jobProducers = new JobProducers(db, jobs, inbox, config, vision, papers, vault);
-  const figures = new FiguresService(db, config, events);
-  jobsRunner.start();
   const app = new Hono();
 
   app.use("*", async (c, next) => {
@@ -355,6 +345,7 @@ export function createApp(deps: AppDeps = {}) {
       dedupeKey: `convert:${item.sha256}`,
       createdBy: "user",
     });
+    app.get("/api/vision", (c) => c.json(vision.list(c.req.query("course"))));
     return c.json(item);
   });
 
@@ -364,116 +355,13 @@ export function createApp(deps: AppDeps = {}) {
   });
   app.post("/api/agent/config", async (c) => {
     try {
-      const forwardedFor = c.req.header("x-forwarded-for");
-      const realIp = c.req.header("x-real-ip");
-      const remoteAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : realIp ?? null;
-      return c.json(await launcher.saveConfig(await c.req.json(), remoteAddress));
+      return c.json(await launcher.saveConfig(await c.req.json(), c.req.header("origin") ?? null));
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
     }
   });
-  app.post("/api/agent/start", async (c) => {
-    try {
-      const forwardedFor = c.req.header("x-forwarded-for");
-      const realIp = c.req.header("x-real-ip");
-      const remoteAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : realIp ?? null;
-      return c.json(await launcher.start(remoteAddress));
-    } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
+  app.post("/api/agent/start", async (c) => c.json(await launcher.start()));
   app.post("/api/agent/stop", async (c) => c.json(await launcher.stop()));
-
-  app.post("/api/producers/run", async (c) => {
-    const results = jobProducers.runAll();
-    return c.json({ ok: true, producers: results });
-  });
-  app.post("/api/producers/map_concepts", async (c) => c.json({ ok: true, result: jobProducers.mapConcepts() }));
-  app.post("/api/producers/tag_questions", async (c) => c.json({ ok: true, result: jobProducers.tagQuestions() }));
-  app.post("/api/producers/write_questions", async (c) => c.json({ ok: true, result: jobProducers.writeQuestions() }));
-  app.post("/api/producers/vision_transcribe", async (c) => c.json({ ok: true, result: jobProducers.visionTranscribe() }));
-  app.post("/api/producers/find_image", async (c) => c.json({ ok: true, result: jobProducers.findImage() }));
-
-  app.post("/api/figures", async (c) => {
-    try {
-      const body = await c.req.json<{
-        course: string;
-        title: string;
-        source: string;
-        source_id: string;
-        kind: "svg" | "raster";
-        thumbnail_url?: string | null;
-        file_url?: string | null;
-        width?: number | null;
-        height?: number | null;
-        license?: string | null;
-        author?: string | null;
-        attribution_required?: boolean;
-        caption?: string | null;
-      }>();
-      const figure = figures.register(body.course, {
-        source: body.source,
-        source_id: body.source_id,
-        title: body.title,
-        thumbnail_url: body.thumbnail_url ?? null,
-        file_url: body.file_url ?? null,
-        kind: body.kind,
-        width: body.width ?? null,
-        height: body.height ?? null,
-        license: body.license ?? null,
-        author: body.author ?? null,
-        attribution_required: body.attribution_required ?? false,
-      }, body.caption ?? null);
-      return c.json(figure, 201);
-    } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
-
-  app.get("/api/figures", (c) => {
-    const course = c.req.query("course");
-    if (!course) return c.json({ error: "course is required" }, 400);
-    return c.json(figures.list(course));
-  });
-
-  app.get("/api/figures/:id", (c) => {
-    const figure = figures.get(c.req.param("id"));
-    if (!figure) return c.json({ error: "figure not found" }, 404);
-    return c.json(figure);
-  });
-
-  app.post("/api/figures/:id/download", async (c) => {
-    try {
-      const figure = await figures.download(c.req.param("id"));
-      if (!figure) return c.json({ error: "figure not found" }, 404);
-      return c.json(figure);
-    } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
-
-  app.get("/api/figures/:id/file", async (c) => {
-    const served = figures.serveFile(c.req.param("id"));
-    if (!served) return c.json({ error: "file not available" }, 404);
-    const content = await readFile(served.path);
-    return c.body(content, 200, { "content-type": served.contentType });
-  });
-
-  app.get("/api/figures/search", async (c) => {
-    const query = c.req.query("q");
-    if (!query) return c.json({ error: "q is required" }, 400);
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "10", 10), 10);
-    try {
-      const results = await searchAll(query, limit);
-      return c.json({ query, results });
-    } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
-
-  app.get("/api/figures/sources", (c) => {
-    return c.json(getSources());
-  });
 
   app.post("/api/vault/rescan", async (c) => {
     const stats = await indexer.reindexAll();
@@ -1096,13 +984,12 @@ export function createApp(deps: AppDeps = {}) {
   app.get("/api/sessions/history", (c) => c.json(sessions.history(c.req.query("course"))));
 
   app.post("/api/sessions", async (c) => {
-    const body = await c.req.json<{ course?: string; goal?: string; goal_id?: string | null; time_box_min?: number | null; concept_ids?: string[] }>();
+    const body = await c.req.json<{ course?: string; goal?: string; goal_id?: string | null; time_box_min?: number | null }>();
     try {
       return c.json(
         await sessions.start(String(body.course ?? ""), body.goal, null, "app", {
           goalId: body.goal_id,
           timeBoxMin: body.time_box_min,
-          conceptIds: body.concept_ids,
         }),
         201,
       );
@@ -1212,7 +1099,7 @@ export function createApp(deps: AppDeps = {}) {
   });
 
   app.all("/mcp", (c) =>
-    handleMcpRequest(c.req.raw, config, vault, vaultSetup, questions, papers, runner, grading, sessions, concepts, goals, jobs, vision, figures),
+    handleMcpRequest(c.req.raw, config, vault, questions, papers, runner, grading, sessions, concepts, goals, jobs, vision),
   );
 
   app.get("/_design", async (c) => c.html(await Bun.file(paths.uiIndex).text()));
@@ -1231,7 +1118,7 @@ export function createApp(deps: AppDeps = {}) {
     return c.html(await Bun.file(paths.uiIndex).text());
   });
 
-  return { app, config, db, vault, indexer, questions, papers, runner, grading, sessions, concepts, goals, vaultSetup, jobs, jobsRunner, inbox, inboxSort, vision };
+  return { app, config, db, vault, indexer, questions, papers, runner, grading, sessions, concepts, goals, vaultSetup, inbox, inboxSort, vision };
 }
 
 function zodMessage(err: ZodError): string {

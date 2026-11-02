@@ -1,25 +1,25 @@
 import React from 'react';
 import { Sheet } from './Sheet';
-import type { LibraryItem } from './LibraryItemCard';
+import { LibraryItem } from './LibraryItemCard';
 import { Button } from './Button';
 
 interface LibraryItemDrawerProps {
   item: LibraryItem | null;
-  open: boolean;
+  isOpen: boolean;
   onClose: () => void;
   onOpenFullEditor: (itemId: string) => void;
 }
 
 export const LibraryItemDrawer: React.FC<LibraryItemDrawerProps> = ({
   item,
-  open,
+  isOpen,
   onClose,
   onOpenFullEditor,
 }) => {
   if (!item) return null;
 
   return (
-    <Sheet open={open} onClose={onClose} title={item.title}>
+    <Sheet isOpen={isOpen} onClose={onClose} title={item.title}>
       <div className="flex flex-col h-full justify-between space-y-6 p-4">
         <div className="space-y-4">
           <div className="flex items-center justify-between border-b pb-3">
@@ -30,7 +30,7 @@ export const LibraryItemDrawer: React.FC<LibraryItemDrawerProps> = ({
           </div>
 
           <div className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Preview</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Preview</h4>
             <div className="rounded-lg bg-muted/40 p-3 text-sm text-foreground/90 leading-relaxed font-sans">
               {item.snippet || 'No preview text available for this item.'}
             </div>
@@ -38,7 +38,7 @@ export const LibraryItemDrawer: React.FC<LibraryItemDrawerProps> = ({
 
           {item.tags && item.tags.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tags</h4>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tags</h4>
               <div className="flex flex-wrap gap-1.5">
                 {item.tags.map((tag) => (
                   <span key={tag} className="rounded-md bg-secondary px-2 py-1 text-xs font-medium">

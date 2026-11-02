@@ -14,8 +14,6 @@ export type Route =
   | { name: "session"; id: string }
   | { name: "library"; section: string | null }
   | { name: "settings" }
-  | { name: "agent" }
-  | { name: "practice" }
   | { name: "not-found"; path: string };
 
 const NAVIGATE_EVENT = "hilum:navigate";
@@ -32,8 +30,6 @@ export function parseRoute(pathname: string): Route {
 
   if (path === "/") return { name: "home" };
   if (path === "/settings") return { name: "settings" };
-  if (path === "/agent") return { name: "agent" };
-  if (path === "/practice") return { name: "practice" };
 
   const session = /^\/sessions\/([^/]+)$/.exec(path);
   if (session?.[1]) return { name: "session", id: decodeURIComponent(session[1]) };

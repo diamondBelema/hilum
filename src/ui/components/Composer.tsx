@@ -1,14 +1,12 @@
 import { uuid } from "../lib/uuid.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUp, BookOpen, GraduationCap, ListChecks, Loader2, RotateCcw, Mic, MicOff } from "lucide-react";
+import { ArrowUp, BookOpen, GraduationCap, ListChecks, Loader2, RotateCcw } from "lucide-react";
 import type { Course, Goal } from "../api.ts";
 import { api } from "../api.ts";
 import { Button } from "./Button.tsx";
 import { CoursePicker } from "./CoursePicker.tsx";
 import { SegmentedControl } from "./SegmentedControl.tsx";
 import { cn } from "../lib/cn.ts";
-import { useDictation } from "../lib/dictation.ts";
-import { useLanguage } from "../theme.ts";
 
 export type ComposerMode = "teach" | "practice";
 
@@ -90,8 +88,6 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
   const storageKey = draftKey ? `hilum:draft:${draftKey}` : null;
-  const { language } = useLanguage();
-  const dictation = useDictation(draft, (next) => setDraft(next), language);
 
   // Course memory for the home screen.
   useEffect(() => {
@@ -244,11 +240,6 @@ export function Composer({
           }}
           className="type-body block w-full resize-none bg-transparent text-text outline-none placeholder:text-text-muted"
         />
-        {dictation.supported && view === "session" && (
-          <button type="button" disabled={sending} onClick={dictation.toggle} className="shrink-0 min-h-10 rounded-control border border-border-subtle px-3 text-sm">
-            {dictation.listening ? <MicOff aria-hidden="true" className="size-4" /> : <Mic aria-hidden="true" className="size-4" />}
-          </button>
-        )}
         {view === "session" && contextLabel && (
           <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-chip border border-primary/30 bg-primary-soft px-2.5 py-1 type-meta text-primary">
             <span className="truncate">{contextLabel}</span>

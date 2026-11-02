@@ -515,10 +515,7 @@ function requireMarkdown(path: string): void {
 function noteSection(path: string): string {
   const parts = path.split("/");
   const notesIndex = parts.indexOf("notes");
-  if (notesIndex >= 0) {
-    if (notesIndex + 1 === parts.length - 1) return "notes";
-    return parts[notesIndex + 1]!;
-  }
+  if (notesIndex >= 0 && parts[notesIndex + 1]) return parts[notesIndex + 1]!;
   const courseIndex = parts.indexOf("courses");
   if (courseIndex >= 0 && parts[courseIndex + 2]) return parts[courseIndex + 2]!;
   return "General";

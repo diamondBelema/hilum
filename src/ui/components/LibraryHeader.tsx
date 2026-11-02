@@ -54,7 +54,6 @@ export const LibraryHeader: React.FC<LibraryHeaderProps> = ({
 
       <div className="flex items-center gap-3">
         <SegmentedControl
-          label="Filter by type"
           value={filterType}
           onChange={onFilterTypeChange}
           options={[
