@@ -1,29 +1,88 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#315F87" />
-    <title>Hilum</title>
-    <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png" />
-    <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <script>
-      (function () {
-        try {
-          var stored = localStorage.getItem("eh-theme") || "system";
-          if (stored === "light" || stored === "dark") {
-            document.documentElement.dataset.theme = stored;
-          }
-        } catch (error) {
-          /* storage can be blocked; system theme still works */
-        }
-      })();
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/ui/main.tsx"></script>
-  </body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hilum: a study harness that tests what you actually know</title>
+<meta name="description" content="Hilum is a local-first study app. Your AI agent teaches, tests and plans through MCP. Mastery comes only from evidence. No accounts, no tracking.">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="wrap">
+<header class="top"><span class="brand">hilum</span><span class="chrome">Clinical note · v1</span></header>
+
+<dl class="note-head">
+<dt>Subject:</dt><dd><b>You, the night before the test</b></dd>
+<dt>Seen by:</dt><dd><b>Hilum</b> (local, no account)</dd>
+<dt>Source of truth:</dt><dd><b>Your notes, on your disk</b></dd>
+</dl>
+
+<h2>Presenting complaint</h2>
+<h1>You read it three times and still blanked.</h1>
+<p class="lead">Rereading feels like learning. Hilum finds out what you actually know, shows you the honest result, and plans the next hour around it.</p>
+
+<section class="panel" aria-labelledby="demo-h">
+<p class="chrome" id="demo-h">Try it · live session, 20 seconds</p>
+<p class="q">Which part of the nephron reabsorbs most of the filtered sodium?</p>
+<fieldset class="opts" style="border:0;padding:0;margin:0 0 var(--space-4)">
+<legend class="sr">Choose an answer</legend>
+<button class="opt" type="button" aria-pressed="false">Proximal tubule</button>
+<button class="opt" type="button" aria-pressed="false">Thick ascending limb of the loop of Henle</button>
+<button class="opt" type="button" aria-pressed="false">Distal convoluted tubule</button>
+<button class="opt" type="button" aria-pressed="false">Collecting duct</button>
+<button class="opt idk" type="button" aria-pressed="false">I don't know</button>
+</fieldset>
+<div id="conf">
+<p class="chrome" style="margin:0">How sure are you?</p>
+<div class="conf" role="group" aria-label="Confidence">
+<button class="chip" type="button" data-c="guess" aria-pressed="false">Guessing</button>
+<button class="chip" type="button" data-c="fairly" aria-pressed="false">Fairly sure</button>
+<button class="chip" type="button" data-c="sure" aria-pressed="false">Sure</button>
+</div></div>
+<div class="row">
+<svg class="ring" width="84" height="84" viewBox="0 0 84 84" role="img" aria-label="Mastery of proximal tubule reabsorption"><circle class="track" cx="42" cy="42" r="34" fill="none" stroke-width="8"/><circle class="fill" cx="42" cy="42" r="34" fill="none" stroke-width="8" stroke-linecap="round" transform="rotate(-90 42 42)" stroke-dasharray="0 214"/><text x="42" y="47" text-anchor="middle">40%</text></svg>
+<div><p class="chrome" style="margin:0">Mastery</p><p style="margin:0">Proximal tubule reabsorption</p></div>
+</div>
+<button class="reset" id="submit" type="button" disabled>Record my answer</button>
+<div id="dx" class="dx" hidden aria-live="polite"></div>
+<button class="reset" id="reset" type="button" hidden>Try again</button>
+</section>
+
+<h2>History</h2>
+<p>Most study tools score you on right and wrong. That misses the useful part: a confident wrong answer is a different problem from a lucky right one. And a tutor that forgets you between sessions, or invents a fact, is worse than a textbook.</p>
+
+<h2>Assessment</h2>
+<ul class="plain">
+<li><strong>Mastery comes only from recorded evidence.</strong> Not from the agent's opinion, and not from you saying "I get it".</li>
+<li><strong>Confidence and "I don't know" on every question.</strong> They change the score and the plan.</li>
+<li><strong>Every fact cites your notes.</strong> A note, a place in it, and a short quote, or it is marked unverified.</li>
+<li><strong>Goals with time.</strong> Set an exam date and Hilum paces the plan and tells you when you are behind.</li>
+<li><strong>Drop your files in, name your courses.</strong> Hilum sorts, converts and maps them to concepts. You approve the plan.</li>
+</ul>
+
+<h2>Plan: how it works</h2>
+<dl class="plan">
+<dt>1. Drop</dt><dd>Slides, PDFs and phone photos go in one inbox. Hilum files them by course and flags anything unclear for you.</dd>
+<dt>2. Teach</dt><dd>Your own AI agent teaches in a live session: explains, asks, listens to what you think, adjusts.</dd>
+<dt>3. Test</dt><dd>Questions, calculations and teach-back, graded, with evidence stored per concept.</dd>
+<dt>4. Review</dt><dd>Pick concepts on the knowledge graph to practise, or let decaying ones come back on schedule.</dd>
+</dl>
+
+<h2>Local-first and private</h2>
+<p>Hilum has no AI inside it. It is a server and a notes folder on your computer. Your agent connects over MCP and does the teaching. Nothing is uploaded to us, because there is no us: no accounts, no analytics, no hosted backend.</p>
+<p>Your notes are plain Markdown. If you stop using Hilum, you still have everything. One honest caveat: whichever model you connect receives what it needs to teach you, so choose one you trust. A local model keeps everything on your machine.</p>
+
+<h2>Plan: get started</h2>
+<pre>bun install
+bun run start</pre>
+<p>Then point your agent at the MCP endpoint and give it the teaching guide:</p>
+<pre>http://127.0.0.1:4747/mcp
+AGENTS.md</pre>
+<p>Open the app, add your courses, drop your files, and start a session.</p>
+
+<footer><span class="mono">hilum</span> · open source · works offline · no tracking, no cookies</footer>
+</div>
+<script src="demo.js"></script>
+</body>
 </html>
