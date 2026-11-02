@@ -6,6 +6,7 @@ import {
   Check,
   ClipboardList,
   Copy,
+  FileUp,
   FileText,
   FolderOpen,
   Library,
@@ -24,6 +25,7 @@ import { SegmentedControl } from "./components/SegmentedControl.tsx";
 import { DesignGallery } from "./screens/DesignGallery.tsx";
 import { EmptySession } from "./screens/EmptySession.tsx";
 import { SessionScreen } from "./screens/SessionScreen.tsx";
+import { InboxScreen } from "./screens/Inbox.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { graphHref, Link, navigate, goBack, useRoute, type Route } from "./lib/router.ts";
 import { cn } from "./lib/cn.ts";
@@ -350,6 +352,13 @@ function AppShell() {
 
 const LIBRARY_SECTIONS = [
   {
+    slug: "inbox",
+    title: "Inbox",
+    description: "Add source files and review where they belong.",
+    label: "Content",
+    icon: FileUp,
+  },
+  {
     slug: "notes",
     title: "Notes",
     description: "Read source material, images and cited passages.",
@@ -443,6 +452,10 @@ function LibraryScreen({
       ) : section === "notes" ? (
         <div className="w-full">
           <NotesRoute courses={courses} selectedCourse={selectedCourse} setSelectedCourse={setSelectedCourse} />
+        </div>
+      ) : section === "inbox" ? (
+        <div className="w-full">
+          <InboxScreen courses={courses} />
         </div>
       ) : section === "exams" ? (
         <div className="w-full">

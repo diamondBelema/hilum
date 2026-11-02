@@ -1,5 +1,18 @@
 # Decisions
 
+- **Agent launcher:** the launcher reads only `state/agent.json`, accepts argv arrays
+  rather than shell strings, and saves configuration only through loopback requests.
+  It exposes start/stop/status HTTP endpoints and passes the local MCP URL to the
+  configured child process.
+- **Vault setup:** scaffolding creates only missing root/course files and directories;
+  existing vault content is never replaced. Course codes are lowercase safe slugs,
+  and course creation is idempotent.
+
+- **Copilot setup:** repository instructions live in `.github/copilot-instructions.md`;
+  the manually triggered setup workflow installs Bun and the Python converter
+  environment with `uv sync`. `scripts/backup-db.ts` is the canonical backup
+  command, while `copy-db.ts` remains available for compatibility.
+
 - **The harness replaces ken.** ken is reference material only: no runtime proxy, no ken process, no reads or writes of `~/.local/share/ken`. The harness owns the vault, MCP surface, mastery and state.
 - **Bun install:** installed via the official installer to `~/.bun`; `bun`/`bunx` symlinked into `~/.local/bin` so package scripts work in bash and fish.
 - **MCP endpoint:** SDK `WebStandardStreamableHTTPServerTransport` in stateless JSON mode, so it runs natively on Bun without the Node adapter.

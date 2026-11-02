@@ -47,6 +47,7 @@ const COMPONENTS = {
   spot_the_error: { type: "spot_the_error", text: "Line one.\nLine two has an error." },
   teach_back: { type: "teach_back", prompt: "Teach it back." },
   case_vignette: { type: "case_vignette", stem: "A patient presents...", questions: ["What is the diagnosis?", "What is the treatment?"] },
+  demo: { type: "demo", title: "Demo", html: "<button>Run</button>" },
 } as const;
 
 let root: string;
@@ -74,7 +75,7 @@ afterEach(async () => {
 
 describe("ActivitySpec", () => {
   test("accepts every shipped component type", () => {
-    expect(ACTIVITY_TYPES).toHaveLength(25);
+    expect(ACTIVITY_TYPES).toHaveLength(26);
     for (const type of ACTIVITY_TYPES) {
       const spec = parseActivitySpec({ cites: [CITE], components: [COMPONENTS[type]] });
       expect(spec.components[0]?.type).toBe(type);

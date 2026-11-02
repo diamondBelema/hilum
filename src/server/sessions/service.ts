@@ -524,6 +524,16 @@ export class SessionService {
     const now = Date.now();
     for (const [index, component] of spec.components.entries()) {
       const value = response.components[index];
+      if (response.idk?.includes(index)) {
+        const ids = component.concept_ids.length ? component.concept_ids : spec.concept_ids;
+        for (const conceptId of ids) {
+          this.db.query(
+            `INSERT INTO evidence (session_id, activity_id, concept_id, kind, correct, confidence, time_sec, excerpt, created_at)
+             VALUES (?, ?, ?, ?, 0, NULL, ?, ?, ?)`,
+          ).run(sessionId, activityId, conceptId, `activity:${component.type}:idk`, timeSec, responseExcerpt(spec, component, value), now);
+        }
+        continue;
+      }
       const correct = componentCorrect(component, value);
       const excerpt = responseExcerpt(spec, component, value);
       const ids = component.concept_ids.length ? component.concept_ids : spec.concept_ids;

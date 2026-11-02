@@ -34,7 +34,7 @@ describe("goals", () => {
     legacy.exec("CREATE TABLE goals (id TEXT PRIMARY KEY, course TEXT NOT NULL, title TEXT NOT NULL, deadline TEXT, study_min_per_day INTEGER, status TEXT NOT NULL DEFAULT 'active', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
     legacy.close();
     const migrated = openDb(path);
-    expect(migrated.query("PRAGMA table_info(sessions)").all()).toHaveLength(12);
+    expect(migrated.query("PRAGMA table_info(sessions)").all()).toHaveLength(15);
     expect(migrated.query("SELECT name FROM sqlite_master WHERE name = 'tasks'").get()).toBeTruthy();
     migrated.close();
   });

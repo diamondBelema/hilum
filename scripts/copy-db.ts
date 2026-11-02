@@ -36,7 +36,7 @@ function count(db: Database, table: string): number | null {
   }
 }
 
-async function main() {
+export async function main() {
   const { db, dir, keep } = parseArgs(Bun.argv.slice(2));
   const repoRoot = join(import.meta.dir, "..");
   const dbPath = resolve(repoRoot, db);
@@ -87,7 +87,9 @@ async function main() {
   console.log(`kept ${Math.min(files.length, keep)} of ${files.length} copies in ${backupDir}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

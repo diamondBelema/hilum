@@ -21,6 +21,12 @@ import { VaultService } from "./vault/service.ts";
 import { resolveInside, VaultPathError } from "./vault/paths.ts";
 import { ZodError } from "zod";
 import { GoalError, GoalService } from "./goals/service.ts";
+import { JobService } from "./jobs/service.ts";
+import { LauncherService } from "./launcher/service.ts";
+import { VaultSetupService } from "./vaultsetup/service.ts";
+import { InboxService } from "./inbox/service.ts";
+import { InboxSortService } from "./inbox/sort.ts";
+import { VisionService } from "./vision/service.ts";
 
 export type AppDeps = {
   config?: Partial<Config>;
@@ -108,6 +114,12 @@ export function createApp(deps: AppDeps = {}) {
   const concepts = new ConceptService(db, vault);
   const goals = new GoalService(db, vault, events, concepts);
   const sessions = new SessionService(db, vault, events, goals);
+  const jobs = new JobService(db, events);
+  const launcher = new LauncherService(config, events);
+  const vaultSetup = new VaultSetupService(config, vault);
+  const inbox = new InboxService(db, config);
+  const inboxSort = new InboxSortService(db, vault, inbox);
+  const vision = new VisionService(db, config);
   const app = new Hono();
 
   app.use("*", async (c, next) => {
@@ -255,6 +267,101 @@ export function createApp(deps: AppDeps = {}) {
         : [`http://${config.hostname}:${config.port}/mcp`],
     }),
   );
+
+  app.get("/api/vault/status", async (c) => c.json(await vaultSetup.status()));
+  app.post("/api/vault/scaffold", async (c) => c.json(await vaultSetup.scaffold()));
+  app.post("/api/courses", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const result = await vaultSetup.createCourse({
+      code: String(body.code ?? ""),
+      title: String(body.title ?? ""),
+      examDate: body.examDate == null ? null : String(body.examDate),
+      answerStyle: body.answerStyle == null ? null : String(body.answerStyle),
+    });
+    await indexer.reindexAll();
+    return c.json(result, result.created ? 201 : 200);
+  });
+  app.get("/api/inbox", (c) => c.json(inbox.list(c.req.query("status"))));
+  app.get("/api/jobs", (c) => c.json(jobs.list(Number(c.req.query("limit") ?? 50))));
+  app.post("/api/jobs/:id/cancel", (c) => c.json(jobs.cancel(c.req.param("id"))));
+  app.post("/api/research", async (c) => {
+    const body = await c.req.json<{ topic?: string; reason?: string; course?: string | null; preferred_sources?: string[] }>();
+    const topic = body.topic?.trim();
+    if (!topic) return c.json({ error: "topic is required" }, 400);
+    const since = Date.now() - 86_400_000;
+    const count = (db.query("SELECT COUNT(*) AS count FROM jobs WHERE type='research' AND created_at >= ?").get(since) as { count: number }).count;
+    if (count >= 5) return c.json({ error: "research limit reached for today" }, 429);
+    const job = jobs.enqueue({
+      type: "research",
+      executor: "agent",
+      priority: 60,
+      course: body.course ?? null,
+      payload: { topic, reason: body.reason?.trim() ?? "", preferred_sources: body.preferred_sources ?? [] },
+      dedupeKey: `research:${topic.toLowerCase()}`,
+      createdBy: "user",
+    });
+    return c.json(job, 201);
+  });
+  app.post("/api/inbox/upload", async (c) => {
+    const form = await c.req.formData();
+    const file = form.get("file");
+    if (!(file instanceof File)) return c.json({ error: "file is required" }, 400);
+    const result = await inbox.register(file);
+    if (result.duplicate) return c.json(result);
+    const sorted = await inboxSort.sort(result.item.id);
+    if (sorted.action === "sorted") {
+      jobs.enqueue({
+        type: "convert",
+        executor: "server",
+        priority: 30,
+        course: sorted.item.course,
+        payload: { inboxItemId: sorted.item.id, path: sorted.item.path, course: sorted.item.course },
+        dedupeKey: `convert:${sorted.item.sha256}`,
+        createdBy: "server",
+      });
+    } else if (sorted.action === "review") {
+      jobs.enqueue({
+        type: "sort_file",
+        executor: "agent",
+        priority: 20,
+        payload: { inboxItemId: sorted.item.id, path: sorted.item.path, candidates: sorted.candidates },
+        dedupeKey: `sort_file:${sorted.item.sha256}`,
+        createdBy: "server",
+      });
+    }
+    return c.json({ ...result, sort: sorted }, 201);
+  });
+  app.post("/api/inbox/:id/sort", async (c) => c.json(await inboxSort.sort(c.req.param("id"))));
+  app.post("/api/inbox/:id/correct", async (c) => {
+    const body = await c.req.json<{ course?: string }>();
+    if (!body.course) return c.json({ error: "course is required" }, 400);
+    const item = await inboxSort.correct(c.req.param("id"), body.course);
+    jobs.enqueue({
+      type: "convert",
+      executor: "server",
+      priority: 30,
+      course: item.course,
+      payload: { inboxItemId: item.id, path: item.path, course: item.course },
+      dedupeKey: `convert:${item.sha256}`,
+      createdBy: "user",
+    });
+    app.get("/api/vision", (c) => c.json(vision.list(c.req.query("course"))));
+    return c.json(item);
+  });
+
+  app.get("/api/agent/status", async (c) => {
+    await launcher.load();
+    return c.json(launcher.getStatus());
+  });
+  app.post("/api/agent/config", async (c) => {
+    try {
+      return c.json(await launcher.saveConfig(await c.req.json(), c.req.header("origin") ?? null));
+    } catch (error) {
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
+  app.post("/api/agent/start", async (c) => c.json(await launcher.start()));
+  app.post("/api/agent/stop", async (c) => c.json(await launcher.stop()));
 
   app.post("/api/vault/rescan", async (c) => {
     const stats = await indexer.reindexAll();
@@ -992,7 +1099,7 @@ export function createApp(deps: AppDeps = {}) {
   });
 
   app.all("/mcp", (c) =>
-    handleMcpRequest(c.req.raw, config, vault, questions, papers, runner, grading, sessions, concepts, goals),
+    handleMcpRequest(c.req.raw, config, vault, questions, papers, runner, grading, sessions, concepts, goals, jobs, vision),
   );
 
   app.get("/_design", async (c) => c.html(await Bun.file(paths.uiIndex).text()));
@@ -1011,7 +1118,7 @@ export function createApp(deps: AppDeps = {}) {
     return c.html(await Bun.file(paths.uiIndex).text());
   });
 
-  return { app, config, db, vault, indexer, questions, papers, runner, grading, sessions, concepts, goals };
+  return { app, config, db, vault, indexer, questions, papers, runner, grading, sessions, concepts, goals, vaultSetup, inbox, inboxSort, vision };
 }
 
 function zodMessage(err: ZodError): string {

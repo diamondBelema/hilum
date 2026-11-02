@@ -27,6 +27,7 @@ export const ACTIVITY_TYPES = [
   "spot_the_error",
   "teach_back",
   "case_vignette",
+  "demo",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -205,6 +206,14 @@ const caseVignette = z
   })
   .strict();
 
+const demo = z.object({
+  type: z.literal("demo"),
+  title: z.string().min(1),
+  html: z.string().max(64 * 1024),
+  height: z.number().int().min(120).max(800).optional(),
+  concept_ids: conceptIds,
+}).strict();
+
 const conceptMap = z
   .object({
     type: z.literal("concept_map"),
@@ -280,6 +289,7 @@ const componentSchema = z.discriminatedUnion("type", [
   spotTheError,
   teachBack,
   caseVignette,
+  demo,
 ]);
 
 export const activitySpecSchema = z
@@ -307,6 +317,7 @@ export type ActivityResponse = {
   components: unknown[];
   confidence?: Confidence;
   think_aloud?: string;
+  idk?: number[];
 };
 
 export function validateSmilesBlocks(value: unknown): void {
@@ -378,14 +389,14 @@ function normalize(value: string): string {
 
 export function validateActivityResponse(spec: ActivitySpec, input: unknown): ActivityResponse {
   if (!input || typeof input !== "object") throw new ActivitySpecError("response must be an object");
-  const raw = input as { components?: unknown; confidence?: unknown; think_aloud?: unknown };
+  const raw = input as { components?: unknown; confidence?: unknown; think_aloud?: unknown; idk?: unknown };
   if (!Array.isArray(raw.components)) throw new ActivitySpecError("response.components must be an array");
   const components: unknown[] = [];
   for (const [index, component] of spec.components.entries()) {
     const value = raw.components[index];
     switch (component.type) {
       case "mcq_single": {
-        if (value === null || value === undefined) throw new ActivitySpecError(`component ${index + 1}: choose an option`);
+        if (value === null || value === undefined || value === "__idk__") throw new ActivitySpecError(`component ${index + 1}: choose an option or I don't know`);
         const answer = Number(value);
         if (!Number.isInteger(answer) || answer < 0 || answer >= component.options.length) {
           throw new ActivitySpecError(`component ${index + 1}: invalid option`);
@@ -394,6 +405,10 @@ export function validateActivityResponse(spec: ActivitySpec, input: unknown): Ac
         break;
       }
       case "tf_multi": {
+        if (value === "__idk__") {
+          components.push(component.statements.map(() => false));
+          break;
+        }
         if (!Array.isArray(value) || value.length !== component.statements.length) {
           throw new ActivitySpecError(`component ${index + 1}: mark every statement`);
         }
@@ -492,6 +507,9 @@ export function validateActivityResponse(spec: ActivitySpec, input: unknown): Ac
         components.push(value);
         break;
       }
+      case "demo":
+        components.push(null);
+        break;
       case "concept_map":
       case "label_diagram":
       case "timeline":
@@ -521,10 +539,14 @@ export function validateActivityResponse(spec: ActivitySpec, input: unknown): Ac
       : thinkAloudComponent
         ? String(components[spec.components.indexOf(thinkAloudComponent)] ?? "")
         : undefined;
+  const idk = Array.isArray(raw.idk)
+    ? raw.idk.filter((item): item is number => Number.isInteger(item) && item >= 0 && item < spec.components.length)
+    : [];
   return {
     components,
     confidence: confidence as Confidence | undefined,
     think_aloud: thinkAloud?.trim() || undefined,
+    idk: [...new Set(idk)],
   };
 }
 

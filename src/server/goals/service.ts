@@ -389,10 +389,12 @@ export class GoalService {
     const goal = row(this.db.query("SELECT * FROM goals WHERE id = ?").get(goalId) as { course: string } | null, `goal not found: ${goalId}`);
     const parsed = z.array(planItemInput).parse(items);
     const positions = new Set<number>();
+    const conceptPositions = new Map<string, number>();
     for (const item of parsed) {
       if (item.est_min_low > item.est_min_high) throw new GoalError("estimate low must not exceed estimate high");
       if (positions.has(item.position)) throw new GoalError(`duplicate plan position: ${item.position}`);
       positions.add(item.position);
+      if (item.concept_id) conceptPositions.set(item.concept_id, item.position);
       if (item.concept_id) {
         const concept = this.db.query("SELECT id FROM concepts WHERE id = ? AND course = ?").get(item.concept_id, goal.course);
         if (!concept) throw new GoalError(`concept not found in course: ${item.concept_id}`);
@@ -402,6 +404,17 @@ export class GoalService {
         validateCite(this.vault, { note: item.note_path, anchor: item.note_anchor });
       } else if (item.note_path || item.note_anchor) {
         throw new GoalError("note_path and note_anchor must be provided together");
+      }
+    }
+    for (const [conceptId, position] of conceptPositions) {
+      const prerequisites = this.db.query(
+        "SELECT to_id FROM edges WHERE from_id = ? AND type = 'prerequisite'",
+      ).all(conceptId) as { to_id: string }[];
+      for (const prerequisite of prerequisites) {
+        const prerequisitePosition = conceptPositions.get(prerequisite.to_id);
+        if (prerequisitePosition !== undefined && prerequisitePosition >= position) {
+          throw new GoalError(`prerequisite ${prerequisite.to_id} must precede ${conceptId}`);
+        }
       }
     }
     return this.idempotent("plan", requestId, () => {
@@ -624,7 +637,7 @@ export class GoalService {
          FROM evidence e
          JOIN sessions s ON s.id = e.session_id
          WHERE s.course = ? AND e.created_at >= ? ${conceptId ? "AND e.concept_id = ?" : ""}`,
-      ).get(...(conceptId ? [course, task.created_at, conceptId] : [course, task.created_at])) as {
+      ).get(...(conceptId ? [course, task.created_at - 1000, conceptId] : [course, task.created_at - 1000])) as {
         activities: number;
         correct: number;
       };
@@ -632,9 +645,7 @@ export class GoalService {
       if (task.kind === "practice") {
         complete = evidence.activities >= Math.max(1, target.questions ?? 1);
       } else if (conceptId) {
-        const mastery = this.concepts
-          ? this.concepts.get(conceptId).mastery
-          : this.db.query("SELECT state FROM mastery WHERE concept_id = ?").get(conceptId) as { state: string } | null;
+        const mastery = this.db.query("SELECT state FROM mastery WHERE concept_id = ?").get(conceptId) as { state: string } | null;
         complete = task.kind === "revisit"
           ? mastery?.state === "understood" || mastery?.state === "mastered"
           : Boolean(mastery && mastery.state !== "decayed" && mastery.state !== "unseen");
