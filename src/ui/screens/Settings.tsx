@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { FileText, Globe, Palette, Zap } from "lucide-react";
-import { api, type Health, type ServerSettings } from "../api.ts";
+import { Bot, FileText, Globe, Palette, Zap } from "lucide-react";
+import { api, type Health, type Job, type ServerSettings } from "../api.ts";
 import { cn } from "../lib/cn.ts";
 import { Button } from "../components/Button.tsx";
 import { Sheet } from "../components/Sheet.tsx";
@@ -21,23 +21,42 @@ export function Settings({ open, onClose }: SettingsProps) {
   const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [agentState, setAgentState] = useState<"not_configured" | "idle" | "starting" | "working" | "stopped" | "failed">("not_configured");
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [jobs, setJobs] = useState<Job[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.health(), api.settings()])
-      .then(([h, s]) => {
+    Promise.all([api.health(), api.settings(), api.agentStatus()])
+      .then(([h, s, agent]) => {
         if (cancelled) return;
         setHealth(h);
         setSettings(s);
         setLan(!!(s?.lan));
         setToken(s?.mcpToken ?? "");
         setTokenMasked(s?.mcpToken ? "••••••••" : "");
+        setAgentState(agent?.state ?? "not_configured");
       })
       .catch(() => {});
+    void api.jobs().then(setJobs).catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
+
+  async function toggleAgent() {
+    setAgentBusy(true);
+    setError(null);
+    try {
+      const next = agentState === "working" ? await api.stopAgent() : await api.startAgent();
+      setAgentState(next.state);
+      setNotice(next.state === "working" ? "Agent started" : "Agent stopped");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAgentBusy(false);
+    }
+  }
 
   async function toggleLan() {
     if (!settings) return;
@@ -92,6 +111,24 @@ export function Settings({ open, onClose }: SettingsProps) {
           </div>
         </section>
 
+        <section>
+          <div className="flex items-center gap-2">
+            <Bot className="size-5" aria-hidden="true" />
+            <h2 className="text-sm font-medium text-text">Agent activity</h2>
+          </div>
+          <p className="mt-0.5 text-xs text-text-muted">Queued research and intake work.</p>
+          <div className="mt-3 space-y-2">
+            {jobs.length === 0 ? <p className="text-sm text-text-muted">No queued jobs.</p> : jobs.slice(0, 8).map((job) => (
+              <div key={job.id} className="flex items-center justify-between gap-2 rounded-control border border-border-subtle p-2">
+                <span className="min-w-0 truncate text-sm text-text">{job.type} · {job.status}</span>
+                {(job.status === "queued" || job.status === "leased") && (
+                  <Button size="sm" variant="ghost" onClick={() => void api.cancelJob(job.id).then(() => api.jobs()).then(setJobs)}>Cancel</Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* LAN */}
         <section>
           <div className="flex items-center gap-2">
@@ -128,6 +165,23 @@ export function Settings({ open, onClose }: SettingsProps) {
               </Button>
               <Button variant="ghost" size="icon-xs" onClick={regenerateToken}>Regenerate</Button>
             </div>
+          </div>
+        </section>
+
+        {/* Theme */}
+        <section>
+          <div className="flex items-center gap-2">
+            <Bot className="size-5" aria-hidden="true" />
+            <h2 className="text-sm font-medium text-text">Agent launcher</h2>
+          </div>
+          <p className="mt-0.5 text-xs text-text-muted">
+            Runs only the command configured locally in state/agent.json.
+          </p>
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-sm text-text-muted">{agentState.replace("_", " ")}</span>
+            <Button variant={agentState === "working" ? "secondary" : "default"} size="sm" onClick={toggleAgent} loading={agentBusy}>
+              {agentState === "working" ? "Stop" : "Start"}
+            </Button>
           </div>
         </section>
 
